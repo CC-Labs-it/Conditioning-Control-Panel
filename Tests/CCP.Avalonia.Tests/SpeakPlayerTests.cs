@@ -114,69 +114,6 @@ public class SpeakPlayerTests
         finally { player.Close(); }
     });
 
-    [Fact]
-    public void OverlayBandsKeepVoiceAndOtherRuns() => AvaloniaTestDispatcher.Run(() =>
-    {
-        var host = new global::Avalonia.Controls.Window();
-        var first = new object(); var second = new object();
-        try
-        {
-            SpiralOverlay.SetVoiceHold(host, true);
-            PinkFilterOverlay.SetVoiceHold(host, true);
-            var spiralVoice = SpiralOverlay.VoiceOpacity;
-            var pinkVoice = PinkFilterOverlay.VoiceOpacity;
-            SpiralOverlay.SetSustained(null, first, "a", 0.8);
-            SpiralOverlay.SetSustained(null, second, "b", 0.4);
-            PinkFilterOverlay.SetSustained(null, first, "a", 0.8);
-            PinkFilterOverlay.SetSustained(null, second, "b", 0.4);
-            SpiralOverlay.SetSustained(null, first, "a", 0.2);
-            PinkFilterOverlay.SetSustained(null, first, "a", 0.2);
-            Assert.Equal(0.4, SpiralOverlay.DeeperOpacity);
-            Assert.Equal(0.4, PinkFilterOverlay.DeeperOpacity);
-            SpiralOverlay.SetSustained(null, second, "b", null);
-            PinkFilterOverlay.SetSustained(null, second, "b", null);
-            Assert.Equal(0.2, SpiralOverlay.DeeperOpacity);
-            Assert.Equal(0.2, PinkFilterOverlay.DeeperOpacity);
-            SpiralOverlay.SetSustained(null, first, "a", null);
-            PinkFilterOverlay.SetSustained(null, first, "a", null);
-            Assert.Null(SpiralOverlay.DeeperOpacity);
-            Assert.Null(PinkFilterOverlay.DeeperOpacity);
-            Assert.Equal(spiralVoice, SpiralOverlay.VoiceOpacity);
-            Assert.Equal(pinkVoice, PinkFilterOverlay.VoiceOpacity);
-            SpiralOverlay.SetSustained(null, first, "a", 0.3);
-            PinkFilterOverlay.SetSustained(null, first, "a", 0.3);
-            SpiralOverlay.Stop(); PinkFilterOverlay.Stop();
-            Assert.Null(SpiralOverlay.DeeperOpacity);
-            Assert.Null(PinkFilterOverlay.DeeperOpacity);
-        }
-        finally { SpiralOverlay.Stop(); PinkFilterOverlay.Stop(); host.Close(); }
-    });
-
-    [Fact]
-    public void DispatcherRampAndCleanupReleaseOnlyItsOwnBand() => AvaloniaTestDispatcher.Run(() =>
-    {
-        var host = new global::Avalonia.Controls.Window();
-        var first = new BrowserEnhancementDispatcher { OverlayHost = host };
-        var second = new BrowserEnhancementDispatcher { OverlayHost = host };
-        var effect = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = OverlayKinds.Spiral,
-            EffectId = "band", Phase = EffectPhase.Start, Opacity = 0.7 };
-        try
-        {
-            first.Overlay(effect, CancellationToken.None);
-            effect.Opacity = 0.4; second.Overlay(effect, CancellationToken.None);
-            effect.Phase = EffectPhase.Update; effect.Opacity = 0.2;
-            first.Overlay(effect, CancellationToken.None);
-            Assert.Equal(0.4, SpiralOverlay.DeeperOpacity);
-            second.ResetOverlayBands();
-            Assert.Equal(0.2, SpiralOverlay.DeeperOpacity);
-            first.ResetOverlayBands();
-            Assert.Null(SpiralOverlay.DeeperOpacity);
-            effect.Phase = EffectPhase.Start; first.Overlay(effect, CancellationToken.None);
-            Assert.Null(SpiralOverlay.DeeperOpacity);
-        }
-        finally { first.ResetOverlayBands(); second.ResetOverlayBands(); SpiralOverlay.Stop(); host.Close(); }
-    });
-
     // WPF OverlayService.cs:1247,1319-1362: a ramp Update only repaints a live hold, never re-opens a stopped overlay.
     [Theory]
     [InlineData(OverlayKinds.Spiral)]
@@ -187,15 +124,15 @@ public class SpeakPlayerTests
         var dispatcher = new BrowserEnhancementDispatcher { OverlayHost = host };
         var effect = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = kind,
             EffectId = "band", Phase = EffectPhase.Start, Opacity = 0.7 };
-        double? Deeper() => kind == OverlayKinds.Spiral ? SpiralOverlay.DeeperOpacity : PinkFilterOverlay.DeeperOpacity;
+        double? Held() => kind == OverlayKinds.Spiral ? SpiralOverlay.VoiceOpacity : PinkFilterOverlay.VoiceOpacity;
         try
         {
             dispatcher.Overlay(effect, CancellationToken.None);
-            Assert.Equal(0.7, Deeper());
+            Assert.Equal(0.7, Held());
             if (kind == OverlayKinds.Spiral) SpiralOverlay.Stop(); else PinkFilterOverlay.Stop();
             effect.Phase = EffectPhase.Update; effect.Opacity = 0.5;
             dispatcher.Overlay(effect, CancellationToken.None);
-            Assert.Null(Deeper());
+            Assert.Null(Held());
         }
         finally { dispatcher.ResetOverlayBands(); SpiralOverlay.Stop(); PinkFilterOverlay.Stop(); host.Close(); }
     });

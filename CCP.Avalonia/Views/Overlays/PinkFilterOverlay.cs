@@ -77,18 +77,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             AiStopGeneration++;
             // Stop the shared AI overlay immediately, including a gentle-fading spiral.
             if (AiHold) { SpiralOverlay.Stop(); SpiralOverlay.CloseAll(); }
-            AiHold = false; VoiceOpacity = null; DeeperHolds.Clear(); CloseAll();
+            AiHold = false; VoiceOpacity = null; CloseAll();
         }
         // WPF OverlayService.cs:1129,1189: a Deeper band shares the sustained hold at its own opacity.
-        private static readonly Dictionary<(object Owner, string Band), double> DeeperHolds = new();
-        internal static double? DeeperOpacity => DeeperHolds.Count == 0 ? null : DeeperHolds.Values.Max();
-        internal static void SetSustained(Visual? host, object owner, string band, double? opacity, bool updateOnly = false)
-        {
-            if (updateOnly && !DeeperHolds.ContainsKey((owner, band))) return; // WPF :1319-1362 ramp repaints, never shows
-            if (opacity is { } o) DeeperHolds[(owner, band)] = Math.Clamp(o, 0, 1);
-            else DeeperHolds.Remove((owner, band));
-            if (host != null) Refresh(host);
-        }
+        internal static void SetSustained(Visual host, double? opacity) { VoiceOpacity = opacity is { } o ? Math.Clamp(o, 0, 1) : null; Refresh(host); }
 
         private static bool _refused;
         internal static bool SkipPlatformChecksForTests;
@@ -103,7 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             get
             {
                 var s = CoreSettings.Current;
-                var steady = DeeperOpacity ?? VoiceOpacity ?? (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
+                var steady = VoiceOpacity ?? (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
                 return Math.Clamp(_pulseWeight is { } k ? _pulseBase + (_pulsePeak - _pulseBase) * k : steady, 0, 1);
             }
         }
@@ -178,7 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (RemoteCommands.OverlaysStopped && AiHold) Stop();
             var s = CoreSettings.Current;
-            if (VoiceOpacity == null && DeeperOpacity == null && !HasTimedPayload && (!s.PinkFilterEnabled || !ShouldShow())) { HideAll(); return; }
+            if (VoiceOpacity == null && !HasTimedPayload && (!s.PinkFilterEnabled || !ShouldShow())) { HideAll(); return; }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -190,7 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var opacity = PaintedOpacity;   // a session ramps it without writing it (#471)
             // WPF ResolveAdHocOverlayOpacity: an effect raises a live tint, never lowers it.
             if (HasTimedPayload)
-                opacity = DeeperOpacity != null || VoiceOpacity != null || (s.PinkFilterEnabled && ShouldShow()) ? Math.Max(opacity, PayloadHold.Opacity) : PayloadHold.Opacity;
+                opacity = VoiceOpacity != null || (s.PinkFilterEnabled && ShouldShow()) ? Math.Max(opacity, PayloadHold.Opacity) : PayloadHold.Opacity;
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.

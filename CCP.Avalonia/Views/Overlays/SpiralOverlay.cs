@@ -159,24 +159,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void Stop() { VoiceOpacity = null; DeeperHolds.Clear(); FadeOut(); }
+        internal static void Stop() { VoiceOpacity = null; FadeOut(); }
         // WPF OverlayService.cs:1129,1189: a Deeper band shares the sustained hold at its own opacity.
-        private static readonly Dictionary<(object Owner, string Band), double> DeeperHolds = new();
-        internal static double? DeeperOpacity => DeeperHolds.Count == 0 ? null : DeeperHolds.Values.Max();
-        internal static void SetSustained(Visual? host, object owner, string band, double? opacity, bool updateOnly = false)
-        {
-            if (updateOnly && !DeeperHolds.ContainsKey((owner, band))) return; // WPF :1319-1362 ramp repaints, never shows
-            if (opacity is { } o) DeeperHolds[(owner, band)] = Math.Clamp(o, 0, 1);
-            else DeeperHolds.Remove((owner, band));
-            if (host != null) Refresh(host);
-        }
+        internal static void SetSustained(Visual host, double? opacity) { VoiceOpacity = opacity is { } o ? Math.Clamp(o, 0, 1) : null; Refresh(host); }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
         // WPF ResolveAdHocOverlayOpacity: a bubble payload raises a live spiral, never lowers it.
         internal static double PaintedOpacity => SpiralFrames.Paint(HasTimedPayload
-            ? Math.Max(DeeperOpacity ?? VoiceOpacity ?? (CoreSettings.Current.SpiralEnabled && ShouldShow() ? SliderFraction : 0), PayloadHold.Opacity)
-            : DeeperOpacity ?? VoiceOpacity ?? SliderFraction);
+            ? Math.Max(VoiceOpacity ?? (CoreSettings.Current.SpiralEnabled && ShouldShow() ? SliderFraction : 0), PayloadHold.Opacity)
+            : VoiceOpacity ?? SliderFraction);
         private static double SliderFraction => Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1);
 
         private static double? _pulseWeight;
@@ -214,7 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (VoiceOpacity == null && DeeperOpacity == null && !HasTimedPayload && (!s.SpiralEnabled || !ShouldShow())) { FadeOut(); return; }
+            if (VoiceOpacity == null && !HasTimedPayload && (!s.SpiralEnabled || !ShouldShow())) { FadeOut(); return; }
 
             // No compositor means no per-pixel alpha; a recorded native refusal is permanent.
             // Gate before the timer and decode so unsupported platforms do no periodic work.
