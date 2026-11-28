@@ -326,6 +326,10 @@ jobs:
       - name: Check shared Loom renderer exports
         run: node --test Assets/web/dtrh/tests/loom-renderer-exports.test.mjs
 
+      - name: Fuzz sim tests
+        working-directory: Assets/web/fuzz
+        run: node --test tests/items.test.mjs tests/economy.test.mjs tests/routes.test.mjs tests/save.test.mjs tests/contract.test.mjs tests/pictures.test.mjs tests/kit.test.mjs tests/ads.test.mjs tests/bridge.test.mjs
+
       # HARD GATE. This started advisory - the suite is 254 files including WpfRenderHarness.cs
       # and PlayDoorRenderTests.cs, which do real WPF rendering, and nobody had confirmed it
       # green on a headless runner. The first CI run settled it: 4924 passed, 0 failed, in 45s,
@@ -442,6 +446,9 @@ jobs:
         shard: [0, 1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -505,6 +512,9 @@ jobs:
         shard: [0, 1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |

@@ -12,8 +12,8 @@ namespace ConditioningControlPanel.Tests;
 
 /// <summary>
 /// "What happened" in the drawer and the unread badge on the chip, against an in-memory feed:
-/// newest first, folded to a few lines plus every new one, read once shown in an open drawer (the
-/// dot stays until the drawer folds), "more" and "less", and no section at all while nothing
+/// newest first, folded to two recent lines, read once the drawer is open (the dot stays until
+/// the drawer folds), the open list in pages, the x, and no section at all while nothing
 /// happened. Shares the drawer suite's fake and helpers.
 /// </summary>
 public partial class FriendsDrawerTests
@@ -42,7 +42,7 @@ public partial class FriendsDrawerTests
     }
 
     [Fact]
-    public void Feed_is_drawn_newest_first_and_read_only_once_the_drawer_is_open()
+    public void Feed_folds_to_two_recent_lines_and_opening_the_drawer_reads_them_all()
     {
         WpfRenderHarness.OnStaThread(() =>
         {
@@ -50,63 +50,128 @@ public partial class FriendsDrawerTests
             WithFeed(feed, () =>
             {
                 var d = NewDrawer(new FakeFriends(Sample()));
-                // Built but folded: drawn, nothing read.
-                Assert.Equal(new[] { "k4", "k3", "k2", "k1", "k0" }, d.FeedLineKeys);
+                // Built but folded: two lines drawn, nothing read.
+                Assert.False(d.FeedOpen);
+                Assert.Equal(new[] { "k4", "k3" }, d.FeedLineKeys);
                 Assert.Equal(5, feed.Unread);
                 // The feed has no place in the friend sections.
                 Assert.Equal(new[] { "friends_section_online", "friends_section_requests", "friends_section_offline" }, d.SectionKeys);
 
+                // An open drawer reads every line; the two shown keep their dots, "3 more, 3 new" under them.
                 d.IsOpen = true;
                 d.Render();
                 Assert.Equal(0, feed.Unread);
-                Assert.Equal(5, Tags(d.FeedSection).Count(t => t == "friends-feed-new"));
+                Assert.Equal(2, Tags(d.FeedSection).Count(t => t == "friends-feed-new"));
                 Assert.NotNull(Find(d.FeedSection, "friends-feed-count"));
+                var more = (Button)Find(d.FeedSection, "friends-feed-more")!;
+                Assert.Equal(Loc.GetF("friends_feed_more_new", 3, 3), more.Content);
 
-                // Still open: the dots stay on a repaint, the lines stay put.
-                d.Render();
+                // "more" opens the section: every line, newest first, dots on the new ones.
+                d.ToggleFeed();
+                Assert.True(d.FeedOpen);
+                Assert.Equal(new[] { "k4", "k3", "k2", "k1", "k0" }, d.FeedLineKeys);
                 Assert.Equal(5, Tags(d.FeedSection).Count(t => t == "friends-feed-new"));
-                Assert.Equal(5, d.FeedLineKeys.Count);
+                Assert.Null(Find(d.FeedSection, "friends-feed-more"));
 
-                // Folded and opened again: read, no dots, back to three lines and "2 more".
+                // Folded again and the drawer reopened: read, no dots, two lines and "3 more".
+                d.ToggleFeed();
                 d.FeedFolded();
                 d.Render();
-                Assert.Equal(new[] { "k4", "k3", "k2" }, d.FeedLineKeys);
+                Assert.Equal(new[] { "k4", "k3" }, d.FeedLineKeys);
                 Assert.DoesNotContain("friends-feed-new", Tags(d.FeedSection));
                 Assert.Null(Find(d.FeedSection, "friends-feed-count"));
-                var more = (Button)Find(d.FeedSection, "friends-feed-more")!;
-                Assert.Equal(Loc.GetF("friends_feed_more", 2), more.Content);
+                Assert.NotNull(Find(d.FeedSection, "friends-feed-total"));
+                more = (Button)Find(d.FeedSection, "friends-feed-more")!;
+                Assert.Equal(Loc.GetF("friends_feed_more", 3), more.Content);
                 Layout(d);
             });
         });
     }
 
     [Fact]
-    public void Feed_shows_every_new_line_up_to_eight_and_more_reads_the_rest()
+    public void The_open_feed_pages_ten_at_a_time_and_less_goes_back()
     {
         WpfRenderHarness.OnStaThread(() =>
         {
-            var feed = FeedWith(12);
+            var feed = FeedWith(25);
             WithFeed(feed, () =>
             {
                 var d = NewDrawer(new FakeFriends(Sample()));
+                FriendsFold.Update(s => s.FeedOpen = true);
                 d.IsOpen = true;
                 d.Render();
-                Assert.Equal(FriendsFeedRules.FoldMax, d.FeedLineKeys.Count);
-                Assert.Equal(4, feed.Unread);
+                Assert.Equal(FriendsFeedRules.MoreStep, d.FeedLineKeys.Count);
+                Assert.Equal(0, feed.Unread);
                 var more = (Button)Find(d.FeedSection, "friends-feed-more")!;
-                Assert.Equal(Loc.GetF("friends_feed_more_new", 4, 4), more.Content);
+                Assert.Equal(Loc.GetF("friends_feed_more_new", 15, 15), more.Content);
 
                 d.ShowMoreFeed();
-                Assert.Equal(12, d.FeedLineKeys.Count);
-                Assert.Equal(0, feed.Unread);
-                Assert.Null(Find(d.FeedSection, "friends-feed-more"));
+                Assert.Equal(20, d.FeedLineKeys.Count);
                 Assert.NotNull(Find(d.FeedSection, "friends-feed-less"));
+                d.ShowMoreFeed();
+                Assert.Equal(25, d.FeedLineKeys.Count);
+                Assert.Null(Find(d.FeedSection, "friends-feed-more"));
 
                 d.ShowLessFeed();
-                // Twelve lines are new this open, so the fold still holds eight.
-                Assert.Equal(FriendsFeedRules.FoldMax, d.FeedLineKeys.Count);
+                Assert.Equal(FriendsFeedRules.MoreStep, d.FeedLineKeys.Count);
             });
         });
+    }
+
+    [Fact]
+    public void Old_read_lines_leave_the_preview_and_the_x_hides_the_rest()
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            var now = DateTime.UtcNow;
+            var feed = new FriendsFeed(() => "me");
+            feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "sam", "Sam", now.AddDays(-3), "old1", null, "hi"));
+            feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "sam", "Sam", now.AddDays(-2), "old2", null, "hi"));
+            feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "sam", "Sam", now.AddHours(-2), "recent", null, "hi"));
+            feed.MarkAllRead();
+            WithFeed(feed, () =>
+            {
+                var d = NewDrawer(new FakeFriends(Sample()));
+                // Read and older than a day: out of the preview, still in the count.
+                Assert.Equal(new[] { "recent" }, d.FeedLineKeys);
+                Assert.Equal(Loc.GetF("friends_feed_more", 2), ((Button)Find(d.FeedSection, "friends-feed-more")!).Content);
+
+                // An old line nobody has seen yet still shows.
+                feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "kit", "Kit", now.AddHours(-30), "late", null, "hi"));
+                d.Render();
+                Assert.Equal(new[] { "recent", "late" }, d.FeedLineKeys);
+
+                // The x empties the preview; the section stays, and opening it shows everything.
+                Assert.NotNull(Find(d.FeedSection, "friends-feed-clear"));
+                d.ClearFeedPreview(animate: false);
+                Assert.Empty(d.FeedLineKeys);
+                Assert.Equal(Visibility.Visible, d.FeedSection.Visibility);
+                Assert.Null(Find(d.FeedSection, "friends-feed-clear"));
+                d.ToggleFeed();
+                Assert.Equal(new[] { "recent", "late", "old2", "old1" }, d.FeedLineKeys);
+
+                // Folded again, a line landing after the clear shows.
+                d.ToggleFeed();
+                feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "kit", "Kit", now, "fresh", null, "hi"));
+                d.Render();
+                Assert.Equal(new[] { "fresh" }, d.FeedLineKeys);
+            });
+        });
+    }
+
+    [Fact]
+    public void Feed_preview_rule_keeps_two_new_or_recent_lines_after_the_clear()
+    {
+        var now = DateTime.UtcNow;
+        FeedEntry E(string k, double hoursAgo, bool read) =>
+            new(new FriendEvent(FriendEventKind.PokeReceived, "sam", "Sam", now.AddHours(-hoursAgo), k, null, "hi"), read);
+        var lines = new[] { E("a", 1, true), E("b", 2, false), E("c", 3, true), E("d", 30, false), E("e", 40, true) };
+        Assert.Equal(new[] { "a", "b" }, FriendsFold.FeedPreviewLines(lines, l => !l.Read, now, null).Select(l => l.Key));
+        // An unread line stays however old; a read one leaves after a day.
+        Assert.Equal(new[] { "c", "d" }, FriendsFold.FeedPreviewLines(lines.Skip(2).ToArray(), l => !l.Read, now, null).Select(l => l.Key));
+        // Nothing at or before the clear mark.
+        Assert.Equal(new[] { "a" }, FriendsFold.FeedPreviewLines(lines, l => !l.Read, now, now.AddHours(-1.5)).Select(l => l.Key));
+        Assert.Empty(FriendsFold.FeedPreviewLines(lines, l => !l.Read, now, now));
     }
 
     [Fact]

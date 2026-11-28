@@ -128,6 +128,42 @@ public sealed class AudioSettingsTests
     }
 
     [Fact]
+    public async Task LoadingPresetRepaintsBothAudioSurfaces()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var s = CoreSettings.Current;
+            s.MasterVolume = 37; s.AudioDuckingEnabled = true; s.DuckingLevel = 61;
+            var preset = ConditioningControlPanel.Models.Preset.FromSettings(s, "audio");
+            s.MasterVolume = 80; s.AudioDuckingEnabled = false; s.DuckingLevel = 20;
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show();
+                shell.ShowTab("appsettings");
+                Dispatcher.UIThread.RunJobs();
+                var audio = shell.AppSettingsPage!.FindControl<AudioSettingsSection>("SectionAudio")!;
+                var home = shell.Named<SettingsTabView>("SettingsTab")!;
+                Assert.True(shell.Named<PresetsTabView>("PresetsTab")!.LoadPreset(preset));
+                Assert.Equal(37, audio.FindControl<Slider>("SliderMaster")!.Value);
+                Assert.Equal(61, audio.FindControl<Slider>("SliderDuck")!.Value);
+                Assert.True(audio.FindControl<CheckBox>("ChkAudioDuck")!.IsChecked);
+                Assert.Equal(37, home.FindControl<Slider>("HomeSliderMaster")!.Value);
+                Assert.Equal(61, home.FindControl<Slider>("HomeSliderDuck")!.Value);
+                Assert.True(home.FindControl<CheckBox>("HomeChkAudioDuck")!.IsChecked);
+            }
+            finally { shell.Close(); CoreSettings.ServiceProvider = null; }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public void UntickingDashboardDuckRestoresDuckedAppsNow()
     {
         AvaloniaTestDispatcher.Run(() =>

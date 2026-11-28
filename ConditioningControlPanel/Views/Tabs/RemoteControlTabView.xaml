@@ -6,6 +6,8 @@
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
 
@@ -26,7 +28,8 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <!-- Root grid: the gate is its LAST sibling so the scrim covers the hero AND both columns
              (a free user must not be able to drive the pairing console around the edge of it). -->
-        <Grid Margin="36,28,36,28" MaxWidth="1280" HorizontalAlignment="Center">
+        <Grid Margin="36,28,36,28" MaxWidth="1280" HorizontalAlignment="Center"
+              Grid.IsSharedSizeScope="True" rows:RowHue.Hue="#5ED4E8">
             <StackPanel>
 
                 <!-- ============================ HERO ============================
@@ -285,10 +288,12 @@
                                         Background="{StaticResource TabHueBrush}"/>
                                 <StackPanel Margin="16,12,16,12">
                                     <CheckBox x:Name="ChkOptIntoDirectory" x:FieldModifier="internal"
-                                              Foreground="{StaticResource TextLightBrush}" FontSize="13.5"
-                                              Content="{loc:Str chk_optin_directory}" FontWeight="Bold"
+                                              Foreground="{StaticResource TextLightBrush}" FontSize="13.5" FontWeight="Bold"
                                               Checked="ChkOptIntoDirectory_Changed"
-                                              Unchecked="ChkOptIntoDirectory_Changed"/>
+                                              Unchecked="ChkOptIntoDirectory_Changed" VerticalContentAlignment="Center">
+                                        <rows:RowLabel Text="{loc:Str chk_optin_directory}" Emblem="Link"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkOptIntoDirectory}"/>
+                                    </CheckBox>
                                     <TextBlock Foreground="{DynamicResource TextMutedBrush}" FontSize="12"
                                                Text="{loc:Str desc_optin_directory_consent}" TextWrapping="Wrap"
                                                Margin="0,6,0,0" LineHeight="17"/>
@@ -349,8 +354,10 @@
 
                                         <CheckBox x:Name="ChkRememberOptInDetails" x:FieldModifier="internal"
                                                   Foreground="{StaticResource TextLightBrush}" FontSize="12"
-                                                  Margin="0,10,0,0"
-                                                  Content="{loc:Str chk_remember_optin_details}"/>
+                                                  Margin="0,10,0,0" VerticalContentAlignment="Center">
+                                            <rows:RowLabel Text="{loc:Str chk_remember_optin_details}" Emblem="Stay"
+                                                           IsOn="{Binding IsChecked, ElementName=ChkRememberOptInDetails}"/>
+                                        </CheckBox>
 
                                         <TextBlock x:Name="TxtOptInFeedback" x:FieldModifier="internal"
                                                    Foreground="{StaticResource TabHueBrush}" FontSize="11"
@@ -566,15 +573,14 @@
                                         Background="{StaticResource TabHueBrush}"/>
                                 <StackPanel Margin="16,8,16,8">
 
-                                    <Grid Height="34" Background="Transparent"
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                           ToolTip="{loc:Str desc_remote_stop_on_disconnect}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{loc:Str label_remote_stop_on_disconnect}"
-                                                   FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_remote_stop_on_disconnect}" Emblem="Safe"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkStopEffectsOnRemoteDisconnect}"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkStopEffectsOnRemoteDisconnect" x:FieldModifier="internal"
                                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                   Margin="16,0,0,0"
@@ -584,15 +590,14 @@
 
                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                    <Grid Height="34" Background="Transparent"
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                           ToolTip="{loc:Str desc_remote_share_avatar}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{loc:Str label_remote_share_avatar}"
-                                                   FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_remote_share_avatar}" Emblem="Safe"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkRemoteShareAvatar}"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkRemoteShareAvatar" x:FieldModifier="internal"
                                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                   Margin="16,0,0,0"
@@ -602,15 +607,14 @@
 
                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                    <Grid Height="34" Background="Transparent"
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                           ToolTip="{loc:Str desc_remote_share_media_sources}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{loc:Str label_remote_share_media_sources}"
-                                                   FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_remote_share_media_sources}" Emblem="Safe"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkRemoteShareMediaSources}"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkRemoteShareMediaSources" x:FieldModifier="internal"
                                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                   Margin="16,0,0,0"

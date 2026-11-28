@@ -49,7 +49,7 @@ public sealed class FlashDecodeBudgetTests
 
     /// <summary>A looping GIF with a <paramref name="width"/> x <paramref name="height"/> screen and
     /// <paramref name="count"/> one-pixel frames, frame i lasting <paramref name="delayCs"/>(i) centiseconds.</summary>
-    private static string WriteGif(int width, int height, int count, Func<int, int> delayCs, out string dir)
+    internal static string WriteGif(int width, int height, int count, Func<int, int> delayCs, out string dir)
     {
         var b = new List<byte>();
         b.AddRange("GIF89a"u8.ToArray());

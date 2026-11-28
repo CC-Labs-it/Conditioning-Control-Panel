@@ -161,12 +161,12 @@ public partial class InstallerHandoffContractTests
         Assert.Matches(@"if not WizardIsTaskSelected\('fileassoc'\) then\s+CleanupFileAssociations\(\);", ava);
     }
 
-    // WPF csproj:146,945-953 ships LibVLC 3.0.21 under {app}\libvlc; Avalonia
-    // csproj:81,311-315 ships 3.0.24 there. These are the old-only publish paths.
+    // WPF shipped LibVLC 3.0.21 under {app}\libvlc up to 7.4.0 and 3.0.24 since 7.4.1 (main 4c5994c7d7);
+    // Avalonia csproj:81,311-315 ships 3.0.24 there. These are the 3.0.21-only publish paths an upgrade still finds.
     [Fact]
     public void UpgradeRemovesOnlyRetiredWpfLibVlcFiles()
     {
-        Assert.Contains("VideoLAN.LibVLC.Windows\" Version=\"3.0.21\"", Read("ConditioningControlPanel/ConditioningControlPanel.csproj"));
+        Assert.Contains("VideoLAN.LibVLC.Windows\" Version=\"3.0.24\"", Read("ConditioningControlPanel/ConditioningControlPanel.csproj"));
         Assert.Contains("VideoLAN.LibVLC.Windows\" Version=\"3.0.24\"", Read("CCP.Avalonia/CCP.Avalonia.csproj"));
         var installer = Read("installer-avalonia.iss");
         var section = installer.Replace("\r\n", "\n").Split("\n[InstallDelete]\n")[1].Split("\n[Icons]\n")[0];

@@ -104,23 +104,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF OpenDeeperEditor: one editor per file (re-activated, not duplicated); closing
         /// it refreshes the hub list.</summary>
+        private static readonly HashSet<MessageDialog> DeeperEditorErrors = new();
+
+        internal static void CloseDeeperEditorErrors()
+        {
+            foreach (var dialog in DeeperEditorErrors.ToArray()) dialog.Close();
+        }
+
         internal void OpenDeeperEditor(Models.Deeper.Enhancement enhancement, string? filePath)
         {
-            string? key = filePath is null ? null : DeeperTabViewModel.FullPath(filePath);
-            if (key != null && _deeperOpenEditors.TryGetValue(key, out var existing))
+            try
             {
-                if (existing.WindowState == WindowState.Minimized) existing.WindowState = WindowState.Normal;
-                existing.Activate();
-                return;
+                string? key = filePath is null ? null : DeeperTabViewModel.FullPath(filePath);
+                if (key != null && _deeperOpenEditors.TryGetValue(key, out var existing))
+                {
+                    if (existing.WindowState == WindowState.Minimized) existing.WindowState = WindowState.Normal;
+                    existing.Activate();
+                    return;
+                }
+                var window = new DeeperEditorWindow(enhancement, filePath);
+                if (key != null) _deeperOpenEditors[key] = window;
+                window.Closed += (_, _) =>
+                {
+                    if (key != null) _deeperOpenEditors.Remove(key);
+                    ReloadDeeperLibraryFromDisk();
+                };
+                if (IsVisible) window.Show(this); else window.Show();
             }
-            var window = new DeeperEditorWindow(enhancement, filePath);
-            if (key != null) _deeperOpenEditors[key] = window;
-            window.Closed += (_, _) =>
+            catch (Exception ex)
             {
-                if (key != null) _deeperOpenEditors.Remove(key);
-                ReloadDeeperLibraryFromDisk();
-            };
-            if (IsVisible) window.Show(this); else window.Show();
+                Log.Warning(ex, "Failed to open Deeper editor");
+                var dialog = new MessageDialog("Deeper", ex.Message, showCancel: false);
+                DeeperEditorErrors.Add(dialog);
+                dialog.Closed += (_, _) => DeeperEditorErrors.Remove(dialog);
+                _ = dialog.ShowDialogSafe<bool?>(this);
+            }
         }
 
         /// <summary>WPF EnhancementPlayerWindow.ShowOrActivate: one player window, reused.</summary>

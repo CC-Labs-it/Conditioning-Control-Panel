@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d" d:DesignWidth="312">
 
     <!-- ================================================================
@@ -62,7 +64,7 @@
         <!-- ========== the intensity dial (Awareness v2) ========== -->
         <Border x:Name="AwarenessIntensityPanel" x:FieldModifier="internal" Margin="0,0,0,9">
             <StackPanel>
-                <TextBlock Text="{loc:Str companion_awareness_intensity_head}" Style="{StaticResource CmpCellLabelStyle}"
+                <rows:RowLabel Text="{loc:Str companion_awareness_intensity_head}" Emblem="Much"
                            Margin="0,0,0,6"/>
 
                 <RadioButton x:Name="RadioIntensityOff" x:FieldModifier="internal"
@@ -104,18 +106,18 @@
         <!-- ========== legacy cooldowns (only while UseAwarenessV2 is off) ========== -->
         <Border x:Name="AwarenessSettingsPanel" x:FieldModifier="internal" Visibility="Collapsed" Margin="0,0,0,7">
             <StackPanel>
-                <Grid>
-                    <TextBlock Text="{loc:Str label_reaction_cooldown}" Style="{StaticResource CmpCellLabelStyle}"/>
-                    <TextBlock x:Name="TxtAwarenessCooldown" x:FieldModifier="internal" Text="{loc:Str label_90s}"
-                               Style="{StaticResource CmpCellValueStyle}"/>
+                <Grid Style="{StaticResource OptionRow}">
+                    <rows:RowLabel Text="{loc:Str label_reaction_cooldown}" Emblem="Often" HorizontalAlignment="Left"/>
+                    <rows:RowValue x:Name="TxtAwarenessCooldown" x:FieldModifier="internal" Text="{loc:Str label_90s}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
                 </Grid>
                 <Slider x:Name="SliderAwarenessCooldown" x:FieldModifier="internal" Style="{DynamicResource PinkSlider}"
                         Minimum="10" Maximum="300" Value="90" Margin="0,4,0,8"
                         ValueChanged="SliderAwarenessCooldown_ValueChanged"/>
-                <Grid>
-                    <TextBlock Text="{loc:Str label_reaction_cooldown_max}" Style="{StaticResource CmpCellLabelStyle}"/>
-                    <TextBlock x:Name="TxtAwarenessCooldownMax" x:FieldModifier="internal" Text="{loc:Str label_cooldown_off}"
-                               Style="{StaticResource CmpCellValueStyle}"/>
+                <Grid Style="{StaticResource OptionRow}">
+                    <rows:RowLabel Text="{loc:Str label_reaction_cooldown_max}" Emblem="Often" HorizontalAlignment="Left"/>
+                    <rows:RowValue x:Name="TxtAwarenessCooldownMax" x:FieldModifier="internal" Text="{loc:Str label_cooldown_off}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
                 </Grid>
                 <Slider x:Name="SliderAwarenessCooldownMax" x:FieldModifier="internal" Style="{DynamicResource PinkSlider}"
                         Minimum="0" Maximum="300" Value="0" Margin="0,4,0,3"

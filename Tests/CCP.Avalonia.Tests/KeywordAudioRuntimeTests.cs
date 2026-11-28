@@ -101,6 +101,40 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:763: the scanner's delivery reads the foreground app for the app scope
+    public Task OcrScopeReadsLinuxForegroundAndFeedsRecentApps() => RunAsync(async (_, s, played) =>
+    {
+        if (OperatingSystem.IsWindows()) Assert.Skip("Windows reads user32 GetForegroundWindow, not the X11 seam");
+        var source = KeywordTriggerHead.LinuxForegroundSource;
+        var recent = KeywordTriggerHead.Engine.GetRecentForegroundApps();
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.KeywordTriggerApps, s.ScreenOcrIntervalMs, s.AwarenessIgnoreOwnUi);
+        var foreground = "gedit";
+        KeywordTriggerHead.LinuxForegroundSource = () => foreground;
+        KeywordTriggerHead.OcrSource = _ => Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([new("sit", new(20, 20, 20, 20))]);
+        try
+        {
+            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 1; s.ScreenOcrIntervalMs = 60000; s.AwarenessIgnoreOwnUi = false;
+            s.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed; s.KeywordTriggerApps = ["firefox"];
+            KeywordTriggerHead.Sync();
+            await KeywordTriggerHead.TickOcrForTest();
+            Assert.Empty(played);   // blocked app
+            Assert.Equal("gedit", KeywordTriggerHead.Engine.GetRecentForegroundApps()[0]);
+            foreground = "";
+            await KeywordTriggerHead.TickOcrForTest();
+            Assert.Empty(played);   // no X11 foreground is not in the list
+            foreground = "firefox";
+            await KeywordTriggerHead.TickOcrForTest();
+            Assert.Single(played);
+            Assert.Equal("firefox", KeywordTriggerHead.Engine.GetRecentForegroundApps()[0]);
+        }
+        finally
+        {
+            KeywordTriggerHead.LinuxForegroundSource = source; KeywordTriggerHead.OcrSource = null;
+            KeywordTriggerHead.Engine.RestoreRecentAppsForTest(recent);   // the singleton's chips outlive the test
+            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.KeywordTriggerApps, s.ScreenOcrIntervalMs, s.AwarenessIgnoreOwnUi) = saved;
+        }
+    });
+
     [Fact]
     public void X11SourceDeliversKeywordsAndPanicDropsQueuedKeys() => Run((_, s, played) =>
     {

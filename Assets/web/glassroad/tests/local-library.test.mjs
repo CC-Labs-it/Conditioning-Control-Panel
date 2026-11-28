@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pickFiles, createLocalLibrary, feedSwitch, sourceMode, nextSource, sourceLabel, loadFilesChoice, saveFilesChoice,
-  MEDIA_SOURCE_KEY, MAX_LIBRARY_FILES, SOURCES } from '../host/localLibrary.js';
+  MEDIA_SOURCE_KEY, MAX_LIBRARY_FILES, SOURCES, libraryRows } from '../host/localLibrary.js';
 
 const src = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const file = (name, type, size = 10) => ({ name, type, size });
@@ -72,4 +72,28 @@ test('own files never leave the page: no fetch, no bridge, no upload; Scrolller 
   assert.match(boot, /if \(!shared\.filesOn\) \{ library\.clear\(\)/);
   for (const l of [...lib.split('\n'), ...src('hud/cards.js').split('\n')].filter((x) => /My files|Your files|this device|'Choose'|'Change'/.test(x)))
     assert.doesNotMatch(l, /[—–!]/, l);
+});
+
+test('desktop library rows: only the host media origin, images and clips, deduped, sampled to the cap', () => {
+  const O = 'https://ccp.assets';
+  const msg = { v: 1, rows: [
+    { url: O + '/images/a.jpg', kind: 'image' }, { url: O + '/images/a.jpg', kind: 'image' }, { url: O + '/videos/b.mp4', kind: 'video' },
+    { url: 'https://scrolller.com/x.jpg', kind: 'image' }, { url: 'https://u:p@ccp.assets/c.jpg', kind: 'image' },
+    { url: O + '/d.svg', kind: 'image' }, { url: O + '/e.jpg', kind: 'audio' }, { url: 42, kind: 'image' }, null] };
+  assert.deepEqual(libraryRows(msg, O), [{ url: O + '/images/a.jpg', kind: 'image' }, { url: O + '/videos/b.mp4', kind: 'video' }]);
+  assert.deepEqual(libraryRows({ ...msg, v: 2 }, O), []);
+  assert.deepEqual(libraryRows(msg, 'http://ccp.assets'), [], 'https origins only');
+  assert.deepEqual(libraryRows(null, O), []);
+  const many = { v: 1, rows: Array.from({ length: 60 }, (_, i) => ({ url: O + '/p' + i + '.jpg', kind: 'image' })) };
+  const picked = libraryRows(many, O, { rng: () => 0.5 });
+  assert.equal(picked.length, MAX_LIBRARY_FILES);
+  assert.notDeepEqual(picked, many.rows.slice(0, MAX_LIBRARY_FILES), 'a mix, not the first files');
+});
+
+test('library rows show as elements and are never revoked (they are the host files, not blobs)', () => {
+  const revoked = [];
+  const lib = createLocalLibrary({ makeImage: () => fakeEl('IMG'), makeVideo: () => fakeEl('VIDEO'), revokeURL: (u) => revoked.push(u) });
+  assert.equal(lib.setRows([{ url: 'https://ccp.assets/a.jpg', kind: 'image' }, { url: 'https://ccp.assets/b.mp4', kind: 'video' }, { url: 'x', kind: 'audio' }]), 2);
+  assert.equal(lib.stillCount, 1); assert.equal(lib.sourceFor(1).src, 'https://ccp.assets/b.mp4');
+  lib.clear(); assert.deepEqual(revoked, []); assert.equal(lib.count, 0);
 });

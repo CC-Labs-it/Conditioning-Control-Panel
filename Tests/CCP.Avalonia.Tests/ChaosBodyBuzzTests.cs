@@ -83,7 +83,12 @@ public class ChaosBodyBuzzTests
             field.SetValue(null, state);
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
+            // A previous ambient or chaos run may leave bubbles and effect timers behind.
+            BubbleOverlay.EndChaos();
             BubbleOverlay.BeginChaos(new Border(), _ => { });
+            BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Popping = true });
+            BubbleOverlay.ClearChaos();
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
             var targets = Enumerable.Range(1, 10).Select(i => new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() }).ToArray();
             BubbleOverlay.Field.Bubbles.AddRange(targets);

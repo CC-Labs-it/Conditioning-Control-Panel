@@ -184,7 +184,8 @@ public partial class LauncherWindow
         // LauncherGridLayout's, which is also what sizes the grid.
         var text = new StackPanel
         {
-            Margin = new Thickness(16, LauncherGridLayout.TextPadTop, 16, LauncherGridLayout.TextPadBottom),
+            Margin = new Thickness(LauncherGridLayout.TextPadSide, LauncherGridLayout.TextPadTop,
+                LauncherGridLayout.TextPadSide, LauncherGridLayout.TextPadBottom),
             Height = LauncherGridLayout.TextHeight - LauncherGridLayout.TextPadTop - LauncherGridLayout.TextPadBottom,
         };
         Grid.SetRow(text, 1);
@@ -201,7 +202,7 @@ public partial class LauncherWindow
         text.Children.Add(new TextBlock
         {
             Text = revealed ? entry.Blurb : Loc.Get("launcher_mystery_blurb"),
-            FontSize = 14, Margin = new Thickness(0, LauncherGridLayout.BlurbGap, 0, 0),
+            FontSize = LauncherGridLayout.BlurbFontSize, Margin = new Thickness(0, LauncherGridLayout.BlurbGap, 0, 0),
             TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = (Brush)FindResource("TextSecondaryBrush"),
             Height = LauncherGridLayout.BlurbHeight,

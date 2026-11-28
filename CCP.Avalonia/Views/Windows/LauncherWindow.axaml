@@ -237,6 +237,21 @@
                                    FontFamily="Fredoka, Segoe UI" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextLightBrush}" VerticalAlignment="Center"/>
                     </StackPanel>
+                    <Rectangle x:Name="WordmarkSheen" Width="70" HorizontalAlignment="Left" Opacity="0" IsHitTestVisible="False">
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                                <GradientStop Color="Transparent" Offset="0"/>
+                                <GradientStop Color="{DynamicResource FxGlowColor}" Offset="0.5"/>
+                                <GradientStop Color="Transparent" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                        <Rectangle.RenderTransform>
+                            <TransformGroup>
+                                <SkewTransform AngleX="-18"/>
+                                <TranslateTransform X="-90"/>
+                            </TransformGroup>
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
                 </Grid>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="UpdateChip" Theme="{StaticResource LauncherBarPill}" IsVisible="False"

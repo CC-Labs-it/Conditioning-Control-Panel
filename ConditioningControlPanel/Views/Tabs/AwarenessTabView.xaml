@@ -8,6 +8,8 @@
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:cmp="clr-namespace:ConditioningControlPanel.Views.Controls.Companion"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
 
@@ -142,7 +144,7 @@
                         <ColumnDefinition Width="2*"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0">
+                    <StackPanel Grid.Column="0" Grid.IsSharedSizeScope="True" rows:RowHue.Hue="#FFB84E">
 
                         <ContentControl x:Name="CompanionPrivacyHost" Margin="0,0,0,14"/>
                         <!-- ==================== LIVE PULSE ====================
@@ -203,7 +205,7 @@
                                         Background="{StaticResource TabHueBrush}"/>
                                 <StackPanel Margin="16,8,16,8">
 
-                                    <Grid Height="36" Background="Transparent">
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                         <Grid.ToolTip>
                                             <ToolTip>
                                                 <StackPanel MaxWidth="340">
@@ -218,24 +220,21 @@
                                             </ToolTip>
                                         </Grid.ToolTip>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                            <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto" MinWidth="56"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Cooldown between effects" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <rows:RowLabel Grid.Column="0" Text="Cooldown between effects" Emblem="Often"/>
                                         <Slider Grid.Column="1" x:Name="SliderAwarenessGlobalCooldown" x:FieldModifier="internal"
                                                 Minimum="0" Maximum="73" TickFrequency="1" IsSnapToTickEnabled="True"
                                                 VerticalAlignment="Center" Margin="14,0"
                                                 ValueChanged="SliderAwarenessGlobalCooldown_ValueChanged"/>
-                                        <TextBlock Grid.Column="2" x:Name="TxtAwarenessGlobalCooldown" x:FieldModifier="internal" Text="10s"
-                                                   HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                   Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold"/>
+                                        <rows:RowValue Grid.Column="2" x:Name="TxtAwarenessGlobalCooldown" x:FieldModifier="internal" Text="10s"/>
                                     </Grid>
 
                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                    <Grid Height="36" Background="Transparent">
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                         <Grid.ToolTip>
                                             <ToolTip>
                                                 <StackPanel MaxWidth="340">
@@ -250,19 +249,16 @@
                                             </ToolTip>
                                         </Grid.ToolTip>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                            <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto" MinWidth="56"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Same-word cooldown" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <rows:RowLabel Grid.Column="0" Text="Same-word cooldown" Emblem="Often"/>
                                         <Slider Grid.Column="1" x:Name="SliderAwarenessSameWordCooldown" x:FieldModifier="internal"
                                                 Minimum="0" Maximum="73" TickFrequency="1" IsSnapToTickEnabled="True"
                                                 VerticalAlignment="Center" Margin="14,0"
                                                 ValueChanged="SliderAwarenessSameWordCooldown_ValueChanged"/>
-                                        <TextBlock Grid.Column="2" x:Name="TxtAwarenessSameWordCooldown" x:FieldModifier="internal" Text="15s"
-                                                   HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                   Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold"/>
+                                        <rows:RowValue Grid.Column="2" x:Name="TxtAwarenessSameWordCooldown" x:FieldModifier="internal" Text="15s"/>
                                     </Grid>
                                 </StackPanel>
                             </Grid>
@@ -281,7 +277,7 @@
                                     <TextBlock Text="SIGNAL SOURCES" Foreground="{StaticResource TabHueBrush}" FontSize="10" FontWeight="Bold"
                                                Margin="0,0,0,4"/>
 
-                                    <Grid Height="34" Background="Transparent">
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                         <Grid.ToolTip>
                                             <ToolTip>
                                                 <StackPanel MaxWidth="340">
@@ -299,12 +295,8 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Image Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"
-                                                   Source="{Binding Source='🖥', Converter={StaticResource EmojiToImageSource}}"/>
-                                            <TextBlock Text="Screen OCR" FontSize="13" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                        </StackPanel>
+                                        <rows:RowLabel Grid.Column="0" Text="Screen OCR" Emblem="Eye"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkAwarenessOcr}"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkAwarenessOcr" x:FieldModifier="internal"
                                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                   Checked="ChkAwarenessOcr_Changed" Unchecked="ChkAwarenessOcr_Changed"/>
@@ -312,7 +304,7 @@
 
                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                    <Grid Height="34" Background="Transparent">
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                         <Grid.ToolTip>
                                             <ToolTip>
                                                 <StackPanel MaxWidth="340">
@@ -330,12 +322,8 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Image Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"
-                                                   Source="{Binding Source='⌨', Converter={StaticResource EmojiToImageSource}}"/>
-                                            <TextBlock Text="Keyboard" FontSize="13" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                        </StackPanel>
+                                        <rows:RowLabel Grid.Column="0" Text="Keyboard" Emblem="Words"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkAwarenessKeyboard}"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkAwarenessKeyboard" x:FieldModifier="internal"
                                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                   Checked="ChkAwarenessKeyboard_Changed" Unchecked="ChkAwarenessKeyboard_Changed"/>
@@ -358,7 +346,7 @@
                                     <TextBlock Text="SAFETY" Foreground="{StaticResource TabHueBrush}" FontSize="10" FontWeight="Bold"
                                                Margin="0,0,0,4"/>
 
-                                    <Grid Height="34" Background="Transparent">
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                         <Grid.ToolTip>
                                             <ToolTip>
                                                 <StackPanel MaxWidth="340">
@@ -376,8 +364,8 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Ignore CCP's own windows" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <rows:RowLabel Grid.Column="0" Text="Ignore CCP's own windows" Emblem="Keepout"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkAwarenessIgnoreOwnUi}"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkAwarenessIgnoreOwnUi" x:FieldModifier="internal"
                                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                   Checked="ChkAwarenessIgnoreOwnUi_Changed" Unchecked="ChkAwarenessIgnoreOwnUi_Changed"/>
@@ -385,7 +373,7 @@
 
                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                    <Grid Height="34" Background="Transparent">
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                         <Grid.ToolTip>
                                             <ToolTip>
                                                 <StackPanel MaxWidth="340">
@@ -403,8 +391,8 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Loop protection" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <rows:RowLabel Grid.Column="0" Text="Loop protection" Emblem="Loop"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkAwarenessLoopProtection}"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkAwarenessLoopProtection" x:FieldModifier="internal"
                                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                   Checked="ChkAwarenessLoopProtection_Changed" Unchecked="ChkAwarenessLoopProtection_Changed"/>
@@ -415,7 +403,7 @@
                                     <!-- On-screen highlight: toggle + swatch row + capture toggle. The swatch
                                          row keeps its layout (and its name - TutorialService spotlights
                                          AwarenessHighlightColorPanel by name). -->
-                                    <Grid Height="34" Background="Transparent">
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                         <Grid.ToolTip>
                                             <ToolTip>
                                                 <StackPanel MaxWidth="340">
@@ -433,8 +421,8 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Highlight matched words on screen" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <rows:RowLabel Grid.Column="0" Text="Highlight matched words on screen" Emblem="Glow"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkAwarenessHighlight}"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkAwarenessHighlight" x:FieldModifier="internal"
                                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                   Checked="ChkAwarenessHighlight_Changed" Unchecked="ChkAwarenessHighlight_Changed"/>
@@ -482,7 +470,7 @@
                                                  KeyDown="TxtAwarenessHighlightHex_KeyDown"/>
                                     </StackPanel>
 
-                                    <Grid Height="34" Background="Transparent">
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                         <Grid.ToolTip>
                                             <ToolTip>
                                                 <StackPanel MaxWidth="340">
@@ -500,8 +488,8 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Visible in screen capture / streams" FontSize="12"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                        <rows:RowLabel Grid.Column="0" Text="Visible in screen capture / streams" Emblem="Cam"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkAwarenessHighlightVisibleInCapture}"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkAwarenessHighlightVisibleInCapture" x:FieldModifier="internal"
                                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                   Checked="ChkAwarenessHighlightVisibleInCapture_Changed"
@@ -519,15 +507,13 @@
                                     <Border Background="{DynamicResource DarkerBgBrush}" BorderBrush="{DynamicResource GlassBorderBrush}"
                                             BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,2,0,0">
                                         <StackPanel>
-                                            <TextBlock Text="Where she may notice" Foreground="{StaticResource TextLightBrush}"
-                                                       FontSize="13" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                            <rows:RowLabel Text="Where she may notice" Emblem="Where" Margin="0,0,0,4"/>
                                             <TextBlock Text="Triggers normally fire in whatever app you're in. Narrow that here — it applies to typing, OCR and clipboard alike."
                                                        Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
                                                        TextWrapping="Wrap" Margin="0,0,0,8"/>
                                             <ComboBox x:Name="CmbAwarenessAppScope" x:FieldModifier="internal"
-                                                      Style="{DynamicResource DarkComboBoxStyle}"
-                                                      SelectionChanged="CmbAwarenessAppScope_SelectionChanged"
-                                                      FontSize="11" Padding="6,4" HorizontalAlignment="Left" MinWidth="210">
+                                                      Style="{DynamicResource RowComboBoxStyle}"
+                                                      SelectionChanged="CmbAwarenessAppScope_SelectionChanged" Padding="6,4" HorizontalAlignment="Left" MinWidth="210">
                                                 <ComboBox.ToolTip>
                                                     <ToolTip>
                                                         <StackPanel MaxWidth="340">
@@ -568,7 +554,7 @@
                                                 <WrapPanel x:Name="AwarenessSeenAppsPanel" x:FieldModifier="internal"/>
                                             </StackPanel>
 
-                                            <Grid Height="34" Background="Transparent" Margin="0,4,0,0">
+                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" Margin="0,4,0,0">
                                                 <Grid.ToolTip>
                                                     <ToolTip>
                                                         <StackPanel MaxWidth="340">
@@ -586,9 +572,8 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="Stay quiet while Control Panel has focus"
-                                                           FontSize="12" TextWrapping="Wrap"
-                                                           Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                <rows:RowLabel Grid.Column="0" Text="Stay quiet while Control Panel has focus" Emblem="Keepout"
+                                                               IsOn="{Binding IsChecked, ElementName=ChkAwarenessIgnoreOwnFocus}"/>
                                                 <CheckBox Grid.Column="1" x:Name="ChkAwarenessIgnoreOwnFocus" x:FieldModifier="internal"
                                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           Checked="ChkAwarenessIgnoreOwnFocus_Changed"

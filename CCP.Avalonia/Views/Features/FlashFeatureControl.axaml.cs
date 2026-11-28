@@ -33,6 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // InitializeComponent, not AvaloniaXamlLoader.Load: only the generated one assigns the
             // x:Name fields, and everything below reads them.
             InitializeComponent();
+            SuperBoxMain.Body = global::ConditioningControlPanel.Avalonia.Controls.Super.SuperPageRows.Deck();   // the gold box's own rows (WPF SuperRows)
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             BtnTestFlash.Click += (_, _) => Overlays.FlashOverlay.TriggerOnce(this);
