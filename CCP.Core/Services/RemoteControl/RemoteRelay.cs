@@ -402,12 +402,14 @@ namespace ConditioningControlPanel.Services
                     var allowed = reason == "not while on a leash" || action == "play_hypnotube"
                             && Helpers.HtUrlHelper.IsEligibleHtUrl(parameters?["url"]?.ToString())
                         || action == "trigger_haptic" && reason == "no_device"
+                        || action is "haptic_pattern" or "haptic_level"
                         || action is "start_session" or "resume_session" && reason == "panic"
                         || action == "disable_strict_lock" && reason == "the Lockdown holds the strict lock"
                         || action == "disable_panic";
                     if (allowed)
                     {
-                        var prefix = reason == "panic" || reason == "the Lockdown holds the strict lock"
+                        var prefix = action is "haptic_pattern" or "haptic_level" ? "Not played"
+                            : reason == "panic" || reason == "the Lockdown holds the strict lock"
                             || action == "disable_panic" ? "Not allowed" : "Can't open that";
                         _ = SendEmoteAsync($"{prefix}: {reason}", "🚫", "custom");
                     }
