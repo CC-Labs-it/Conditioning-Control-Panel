@@ -86,6 +86,8 @@ public sealed class PanicKeyRebindTests
             PortalPanicShortcut.BindForTests = null;
             PortalPanicShortcut.UnbindAsync().GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
+            MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
+            Dispatcher.UIThread.RunJobs();
         }
         return Task.CompletedTask;
     });
@@ -115,6 +117,8 @@ public sealed class PanicKeyRebindTests
             CoreEngine.Stop();
             shell.Close();
             PortalPanicShortcut.UnbindAsync().GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
             Dispatcher.UIThread.RunJobs();
         }
         return Task.CompletedTask;
@@ -159,6 +163,8 @@ public sealed class PanicKeyRebindTests
             shell?.Close();
             PortalPanicShortcut.BindForTests = null;
             PortalPanicShortcut.UnbindAsync().GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
         }
         return Task.CompletedTask;
     });
