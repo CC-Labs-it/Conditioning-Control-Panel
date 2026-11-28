@@ -1,0 +1,1 @@
+ocr-test-noto-sans-sc.otf - Noto Sans CJK SC Regular (© 2014-2021 Adobe), SIL Open Font License 1.1 (https://openfontlicense.org, full text in its name table), subset with fonttools pyftsubset to RapidScreenOcrEngineTests' strings.

@@ -27,6 +27,49 @@ public sealed class EmiGifRainTests
     }
 
     [Fact]
+    public async Task GenericRainOfferRequiresImagesAndStartsCancellableCascade()
+    {
+        var root = Directory.CreateTempSubdirectory("emi-offer-rain-").FullName;
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                var previous = CorePaths.EffectiveAssetsProvider;
+                try
+                {
+                    CorePaths.EffectiveAssetsProvider = () => root;
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    Assert.False(EmiOffers.EffectFeasible("rain"));
+                    var images = Directory.CreateDirectory(Path.Combine(root, "images"));
+                    File.WriteAllBytes(Path.Combine(images.FullName, "a.gif"), Convert.FromBase64String(TinyGif));
+                    Assert.True(EmiOffers.EffectFeasible(" RAIN "));
+                    EmiOffers.Run("rain", true);
+                    Assert.NotNull(EmiGifRain.LastPick);
+                    await EmiGifRain.LastPick!;
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.NotNull(ChaosGifCascadeOverlay.Active);
+                    EmiGifRain.Stop();
+                    Assert.Null(ChaosGifCascadeOverlay.Active);
+                }
+                finally
+                {
+                    EmiGifRain.Stop();
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                    CorePaths.EffectiveAssetsProvider = previous;
+                }
+            });
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task GlassClickRainsAndDismissalStopsIt()
     {
         var root = Directory.CreateTempSubdirectory("emi-rain-").FullName;

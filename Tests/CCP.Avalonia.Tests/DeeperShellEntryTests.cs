@@ -213,6 +213,25 @@ public sealed partial class DeeperFollowupTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task EditorFailureShowsDeeperError() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.OpenDeeperEditor(null!, null);
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+            Assert.Equal("Deeper", dialog.Title);
+            Assert.False(string.IsNullOrWhiteSpace(dialog.FindControl<TextBlock>("TxtMessage")!.Text));
+            PanicSurfaces.All.Single(surface => surface.Id == "deeper-editor-error").Stop(shell);
+            Assert.False(dialog.IsVisible);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("en")]
     [InlineData("de")]

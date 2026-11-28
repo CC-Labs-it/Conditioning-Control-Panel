@@ -34,6 +34,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtBalance.Foreground = FigureBrush(balance);
             TxtBalanceCaption.Text = Loc.Get(balance < 0 ? "chaster_credit_caption" : "chaster_balance_caption");
 
+            RefreshDay(animate);
+
+            var net = chaster.Bill().NetSeconds;
+            TxtRun.Text = net == 0 ? CircesTab.Format(0, signed: false) : CircesTab.Format(net);
+            TxtRun.Foreground = FigureBrush(net);
+            if (_billOpen) Receipt.Show(chaster.Bill());
+        }
+
+        internal void RefreshDay(bool animate = true)
+        {
+            var chaster = ChasterHead.Service;
+            if (chaster == null) return;
             var today = chaster.TodayAddedSeconds;
             var capSeconds = chaster.Caps.DailySeconds;
             var cap = CircesTab.Format(capSeconds, signed: false);
@@ -43,10 +55,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _capFraction = TabPageText.CapFraction(today, capSeconds);
             LayoutCap(animate);
 
-            var net = chaster.Bill().NetSeconds;
-            TxtRun.Text = net == 0 ? CircesTab.Format(0, signed: false) : CircesTab.Format(net);
-            TxtRun.Foreground = FigureBrush(net);
-            if (_billOpen) Receipt.Show(chaster.Bill());
+            // WPF xaml.cs:862-864: return to the slow cadence when the hold expires.
+            var wanted = TimeSpan.FromSeconds(chaster.SafetyHoldRemaining > TimeSpan.Zero ? 1 : 30);
+            if (SlowTick.Interval != wanted) SlowTick.Interval = wanted;
         }
 
         internal void LayoutCap(bool animate = true)

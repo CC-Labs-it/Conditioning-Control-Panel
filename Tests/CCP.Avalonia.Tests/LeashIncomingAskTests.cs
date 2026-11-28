@@ -10,6 +10,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 using ConditioningControlPanel.Services.UI;
@@ -73,6 +74,53 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void UnopenedShellDoesNotQueueDuplicateIncomingOffers() =>
+        LeashGateCardTests.Run(false, (shell, launcher, _) =>
+        {
+            var service = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            LeashHead.Service = service;
+            shell.RebindLeashAsks();
+            MainShellWindow? unopened = null;
+            try
+            {
+                service.ApplyBlock(Block((First, "juno")));
+                launcher.Show(); shell.RebindLeashAsks();
+                var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:juno", ask.Card.Tag);
+                unopened = new MainShellWindow();
+                ask.Card.Dismiss(); Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                unopened?.Close(); LeashHead.Service = null; shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent(); Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheOffer() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            shell.Show();
+            var service = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            service.ApplyBlock(Block((First, "juno")));
+            LeashHead.Service = service;
+            try
+            {
+                var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Open(service.Snapshot.Offers.Single(), () => service, shell));
+                shell.RebindLeashAsks();
+                ask.Card.Dismiss(); Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null; shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent(); Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void WithdrawnOffersAndOldServiceCannotOpenAfterRebind() =>
         LeashGateCardTests.Run(false, (shell, _, oldService) =>
         {
@@ -123,6 +171,64 @@ public sealed class LeashIncomingAskTests
             {
                 LeashHead.Service = null;
                 shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
+    public void LookBeforeServiceRebindDoesNotRequeueTheShownOffer()
+        => LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            shell.Show();
+            shell.RebindLeashAsks(); // Still bound to the old service.
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+            LeashHead.Service = replacement;
+            try
+            {
+                var offer = replacement.Snapshot.Offers.Single(o => o.From.Id == "juno");
+                var manual = LeashAskWindow.Open(offer, () => replacement, shell)!;
+                shell.RebindLeashAsks(); // The timer sees the new snapshot while Look is open.
+                manual.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("leash-ask:vex", LeashAskWindow.Current!.Card.Tag);
+                LeashAskWindow.Current.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                shell.RebindLeashAsks();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
+    public void LookBeforeSnapshotDoesNotRequeueTheShownOffer()
+        => LeashGateCardTests.Run(false, (shell, _, service) =>
+        {
+            shell.Show();
+            shell.RebindLeashAsks();
+            var source = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            source.ApplyBlock(Block((First, "juno")));
+            try
+            {
+                var manual = LeashAskWindow.Open(source.Snapshot.Offers.Single(), () => service, shell)!;
+                service.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+                manual.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("leash-ask:vex", LeashAskWindow.Current!.Card.Tag);
+                LeashAskWindow.Current.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                service.ApplyBlock(Block());
                 LeashAskWindow.CloseCurrent();
                 Dispatcher.UIThread.RunJobs();
             }

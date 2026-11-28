@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Ocr;
 using ConditioningControlPanel.Services.ScreenCapture;
 using SkiaSharp;
 using Tmds.DBus.Protocol;
@@ -12,8 +14,14 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-public class ScreenFrameSourceTests
+// PortalScreenFrames.Refused is process-wide and KeywordTriggersPanelTests flips it too: no concurrent test may see it.
+[Collection(RunsAloneCollection.Name)]
+public class ScreenFrameSourceTests : IDisposable
 {
+    private readonly bool _savedRefused = PortalScreenFrames.Refused;
+
+    public void Dispose() => PortalScreenFrames.Refused = _savedRefused;
+
     [Fact]
     public async Task CapturesEachMonitorWithItsPhysicalOriginAndScale()
     {
@@ -30,16 +38,114 @@ public class ScreenFrameSourceTests
     }
 
     [Fact]
-    public async Task AFailedMonitorIsUnavailableRatherThanPartial()
+    public async Task AFailedMonitorIsSkippedAndTheOthersStillCapture()
     {
-        var source = new DesktopScreenFrames(_ => null, () => Task.FromResult<IReadOnlyList<CaptureMonitor>>(
-            [new("screen", new Rectangle(0, 0, 1, 1), 1)]));
+        CaptureMonitor[] monitors = [new("null", new Rectangle(0, 0, 1, 1), 1), new("throws", new Rectangle(1, 0, 1, 1), 1),
+            new("ok", new Rectangle(2, 0, 1, 1), 1), new("short", new Rectangle(3, 0, 2, 1), 1)];
+        var source = new DesktopScreenFrames(m => m.Name switch
+        {
+            "null" => null, "throws" => throw new InvalidOperationException("XGetImage failed"), _ => new byte[4], // "short" needs 8
+        }, () => Task.FromResult<IReadOnlyList<CaptureMonitor>>(monitors));
         var result = await source.CaptureAsync(CancellationToken.None);
-        Assert.Equal(ScreenFrameStatus.Unavailable, result.Status);
-        Assert.Empty(result.Frames);
+        Assert.Equal(ScreenFrameStatus.Available, result.Status);
+        Assert.Equal(["ok"], result.Frames.Select(f => f.Screen));
+        var none = await new DesktopScreenFrames(_ => null, () => Task.FromResult<IReadOnlyList<CaptureMonitor>>(monitors[..1])).CaptureAsync(CancellationToken.None);
+        Assert.Equal(ScreenFrameStatus.Unavailable, none.Status);
+        Assert.Empty(none.Frames);
     }
 
-    // Portal tests share the session-wide PortalScreenFrames.Refused flag; xunit runs one class's tests in sequence.
+    private sealed class FakeEngine : IScreenOcrEngine
+    {
+        public bool IsAvailable => true;
+        public IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default) =>
+            [new(frame.Screen + "-word", new Rectangle(1, 0, 1, 1))];
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public async Task ScanReadsEveryMonitorAndMapsWordsToTheDesktop()
+    {
+        var source = new DesktopScreenFrames(m => new byte[m.Bounds.Width * m.Bounds.Height * 4],
+            () => Task.FromResult<IReadOnlyList<CaptureMonitor>>([new("left", new Rectangle(-2, 0, 2, 1), 1), new("right", new Rectangle(0, 0, 2, 1), 2)]));
+        var words = await ScreenOcrService.Scan(source, new FakeEngine())(CancellationToken.None);
+        Assert.Equal([new ScreenOcrService.Word("left-word", new Rectangle(-1, 0, 1, 1), "left"),
+            new ScreenOcrService.Word("right-word", new Rectangle(1, 0, 1, 1), "right")], words);
+        Assert.Empty(await ScreenOcrService.Scan(new UnavailableScreenFrames(), new FakeEngine())(CancellationToken.None));
+    }
+
+    private sealed class CountingEngine : IScreenOcrEngine
+    {
+        public readonly List<string> Calls = [];
+        public string Recognizers { get; set; } = "latin";
+        public bool IsAvailable => true;
+        public bool Fail;
+        public IReadOnlyList<OcrWord>? Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
+        {
+            Calls.Add(frame.Screen);
+            return Fail ? null : [new($"{frame.Screen}-{Calls.Count}", new Rectangle(0, 0, 1, 1))];
+        }
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public async Task UnchangedMonitorsReuseTheirWordsUntilTheScannerStops()
+    {
+        byte left = 0;
+        var source = new DesktopScreenFrames(m => { var px = new byte[m.Bounds.Width * m.Bounds.Height * 4]; if (m.Name == "left") px[0] = left; return px; },
+            () => Task.FromResult<IReadOnlyList<CaptureMonitor>>([new("left", new Rectangle(0, 0, 2, 1), 1), new("right", new Rectangle(2, 0, 2, 1), 1)]));
+        var engine = new CountingEngine();
+        var scan = ScreenOcrService.Scan(source, engine);
+        using CancellationTokenSource first = new(), second = new(); // one token per scanner run, as ScreenOcrService.Sync makes
+        Assert.Equal(["left-1", "right-2"], (await scan(first.Token)).Select(w => w.Text));
+        Assert.Equal(["left-1", "right-2"], (await scan(first.Token)).Select(w => w.Text)); // same words re-delivered
+        Assert.Equal(2, engine.Calls.Count);
+        left = 9; // only the left monitor changed
+        Assert.Equal(["left-3", "right-2"], (await scan(first.Token)).Select(w => w.Text));
+        Assert.Equal(["left", "right", "left"], engine.Calls);
+        await scan(second.Token);
+        Assert.Equal(5, engine.Calls.Count); // a restarted scanner drops the cache: both monitors are read again
+        engine.Recognizers = "latin|ch"; // a language change: unchanged monitors are read with the new recognizers
+        Assert.Equal(["left-6", "right-7"], (await scan(second.Token)).Select(w => w.Text));
+        (engine.Fail, left) = (true, 1); // a failed read delivers nothing and is read again next scan (WPF re-reads every scan)
+        Assert.Equal(["right-7"], (await scan(second.Token)).Select(w => w.Text)); engine.Fail = false;
+        Assert.Equal(["left-9", "right-7"], (await scan(second.Token)).Select(w => w.Text));
+    }
+
+    [Fact]
+    public void WindowsUserLanguagesComeFirst() => Assert.Equal(["latin", "korean"], RapidScreenOcrEngine.RecognizerSet(
+        ScreenOcrService.Languages(["en-US", "ko-KR"])).Select(r => r.Rec.Split('_')[0]));
+
+    private sealed class NoModels : IScreenOcrEngine
+    {
+        public bool IsAvailable => false;
+        public IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default) => [];
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public void WaylandGetsThePortalSourceAndOnlyMissingCaptureOrModelsLeaveItNull()
+    {
+        var saved = (Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"), KeywordTriggerHead.OcrSource, ScreenOcrService._reasonKey);
+        try
+        {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "wayland-0");
+            var frames = ScreenFrameSourceFactory.Create();
+            if (OperatingSystem.IsLinux()) Assert.IsType<PortalScreenFrames>(frames); // also under the test sandbox (Flatpak-like)
+            Assert.NotNull(ScreenOcrService.CreateSource(new PortalScreenFrames(), new FakeEngine()));
+            Assert.Null(ScreenOcrService.CreateSource(new PortalScreenFrames(), new NoModels()));
+            KeywordTriggerHead.OcrSource = null;
+            Assert.Equal("ocr_unavailable_models", ScreenOcrService.UnavailableReasonKey());
+            Assert.Null(ScreenOcrService.CreateSource(new UnavailableScreenFrames(), new FakeEngine()));
+            Assert.Equal("ocr_unavailable_capture", ScreenOcrService.UnavailableReasonKey());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", saved.Item1);
+            (KeywordTriggerHead.OcrSource, ScreenOcrService._reasonKey) = (saved.OcrSource, saved._reasonKey);
+        }
+    }
+
+    // Portal tests share the session-wide PortalScreenFrames.Refused flag; Dispose restores it after each test.
     private static Task<IReadOnlyList<CaptureMonitor>> TwoMonitors() => Task.FromResult<IReadOnlyList<CaptureMonitor>>(
         [new("left", new Rectangle(0, 0, 2, 2), 1), new("right", new Rectangle(2, 1, 1, 1), 2)]);
 
@@ -199,6 +305,24 @@ public class ScreenFrameSourceTests
         answer.SetResult((0u, Uri(path)));
         for (int i = 0; i < 100 && File.Exists(path); i++) await Task.Delay(20);
         Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task StoppingTheScannerCancelsItsPendingPortalRequest()
+    {
+        PortalScreenFrames.Refused = false;
+        var asked = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new PortalScreenFrames(ct => { asked.SetResult(ct);
+            return new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>().Task.WaitAsync(ct); }, TwoMonitors, TimeSpan.FromMinutes(1));
+        using var service = new ScreenOcrService(ScreenOcrService.Scan(source, new FakeEngine()), () => true, (_, _) => Task.FromResult(true));
+        service.Sync(true, true, int.MaxValue - 1); // started, but only this test ticks it
+        var tick = service.TickAsync();
+        var request = await asked.Task;
+        Assert.False(request.IsCancellationRequested);
+        service.Stop(); // panic and the OCR switch both stop here
+        Assert.True(request.IsCancellationRequested);
+        await tick;
+        Assert.False(PortalScreenFrames.Refused);
     }
 
     [Fact]

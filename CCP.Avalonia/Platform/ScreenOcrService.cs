@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Ocr;
+using ConditioningControlPanel.Services.ScreenCapture;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -20,6 +23,69 @@ internal sealed class ScreenOcrService : IDisposable
     private CancellationTokenSource? _run;
     private int _scanning;
     internal int IntervalMs { get; private set; }
+
+    /// <summary>The live <see cref="KeywordTriggerHead.OcrSource"/>: X11/GDI or, on Wayland and Flatpak, the
+    /// Screenshot portal, through the Core engine. Null only where nothing can capture (not Windows or Linux)
+    /// or the OCR models are missing; <see cref="UnavailableReasonKey"/> then says which.</summary>
+    internal static Func<CancellationToken, Task<IReadOnlyList<Word>>>? CreateSource(IScreenFrameSource? frames = null, IScreenOcrEngine? engine = null)
+    {
+        frames ??= ScreenFrameSourceFactory.Create();
+        if (frames is UnavailableScreenFrames) { _reasonKey = "ocr_unavailable_capture"; return null; }
+        engine ??= new RapidScreenOcrEngine(languages: () => Languages(WindowsLanguages())); // one per process; its ORT sessions live until exit
+        if (!engine.IsAvailable) { _reasonKey = "ocr_unavailable_models"; return null; }
+        _reasonKey = null;
+        return Scan(frames, engine);
+    }
+
+    // WPF ScreenOcrService.cs:41 reads the Windows user language list (not .NET's display-language UI culture): it goes first.
+    internal static IEnumerable<string?> Languages(string[]? windows) => (windows ?? []).Concat(RapidScreenOcrEngine.OsLanguages())
+        .Append(ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage);
+    private static string[]? WindowsLanguages() => OperatingSystem.IsWindows() ? Microsoft.Win32.Registry.GetValue(
+        @"HKEY_CURRENT_USER\Control Panel\International\User Profile", "Languages", null) as string[] : null;
+
+    internal static volatile string? _reasonKey; // internal: tests save and restore it
+    /// <summary>Raised off the UI thread when a scan finds capture refused (the portal answer ends it for the session).</summary>
+    internal static event Action? UnavailableChanged;
+
+    /// <summary>Localization key for why Screen OCR reads nothing, or null when it can run. WPF has no such line:
+    /// its ScreenOcrService.cs:41-43 only logs a missing OCR language pack and Start (:55) silently does nothing.</summary>
+    internal static string? UnavailableReasonKey() =>
+        PortalScreenFrames.Refused ? "ocr_unavailable_refused" : KeywordTriggerHead.OcrSource == null ? _reasonKey : null;
+
+    // Every monitor's frame through the engine, mapped to desktop pixels. Recognition is CPU-bound: off the UI thread.
+    // An unchanged monitor re-delivers its last words without recognition: WPF ScreenOcrService.cs:128-140 re-reads
+    // every screen each scan, so the quick confirmations (:85-115) see the same words either way.
+    internal static Func<CancellationToken, Task<IReadOnlyList<Word>>> Scan(IScreenFrameSource frames, IScreenOcrEngine engine)
+    {
+        var changes = new ScreenFrameChanges();
+        var cache = new Dictionary<string, Word[]>();
+        var run = CancellationToken.None; // each start of the scanner has a new token: a new run drops the cache
+        var readers = ""; // so do new recognizers (a language change): unchanged screens must be read with them
+        return async token =>
+        {
+            var result = await frames.CaptureAsync(token).ConfigureAwait(false);
+            if (result.Status != ScreenFrameStatus.Available)
+            {
+                if (PortalScreenFrames.Refused) UnavailableChanged?.Invoke();
+                return [];
+            }
+            return await Task.Run<IReadOnlyList<Word>>(() =>
+            {
+                lock (cache)
+                {
+                    var now = engine.Recognizers;
+                    if (token != run || now != readers) { changes.Reset(); cache.Clear(); run = token; readers = now; }
+                    return result.Frames.SelectMany(f =>
+                    {
+                        if (!changes.Changed(f) && cache.TryGetValue(f.Screen, out var last)) return last;
+                        cache.Remove(f.Screen); // a cancelled or failed (null) read leaves no words: the next scan reads it again
+                        if (engine.Recognize(f, token) is not { } words) return [];
+                        return cache[f.Screen] = words.Select(w => new Word(w.Text, f.ToScreen(w.Bounds), f.Screen)).ToArray();
+                    }).ToArray();
+                }
+            }, token).ConfigureAwait(false);
+        };
+    }
 
     internal ScreenOcrService(Func<CancellationToken, Task<IReadOnlyList<Word>>> scan,
         Func<bool> hasAccess, Func<IReadOnlyList<Word>, CancellationToken, Task<bool>> deliver,

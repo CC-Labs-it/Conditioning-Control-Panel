@@ -17,11 +17,32 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// grab, and the compositor (KDE: kglobalaccel) may show the user a confirmation dialog and lets
 /// them rebind or refuse it. WHEN to bind is therefore the caller's policy
 /// (docs/avalonia-decisions.html, panic key row); this class only binds and unbinds.</para>
+///
+/// <para><b>One shortcut id per key (ccp-bugs #1752).</b> GNOME and KDE remember the trigger a shortcut id
+/// was first given and treat <c>preferred_trigger</c> as a hint for a NEW id only, so re-binding the one id
+/// "panic" after a rebind kept the old Escape there. Each key therefore binds its own id
+/// (<see cref="IdFor"/>), <see cref="Route"/> answers only the id of the open session, and the caller checks
+/// the trigger the desktop reports with <see cref="MatchTrigger"/>.</para>
 /// </summary>
 internal static class PortalPanicShortcut
 {
     internal const string Portal = "org.freedesktop.portal.Desktop", DesktopPath = "/org/freedesktop/portal/desktop";
+    /// <summary>The id before #1752, kept as the test seam's default; real binds use <see cref="IdFor"/>.</summary>
     internal const string Iface = "org.freedesktop.portal.GlobalShortcuts", Id = "panic";
+
+    /// <summary>The shortcut id for one stored key name: "panic-" and the name in lower case letters and digits.
+    /// A new key is a new id, so the desktop takes its <c>preferred_trigger</c> instead of an old one.</summary>
+    internal static string IdFor(string? key)
+    {
+        var b = new System.Text.StringBuilder("panic-");
+        foreach (var c in key ?? "")
+            if (c < 128 && char.IsLetterOrDigit(c)) b.Append(char.ToLowerInvariant(c));
+        return b.Length == 6 ? "panic-none" : b.ToString();
+    }
+
+    // The id the open (or test) session listens for.
+    private static volatile string _boundId = Id;
+    internal static string BoundId => _boundId;
 
     private static string? _session;
     private static IDisposable? _activated, _deactivated;
@@ -33,9 +54,10 @@ internal static class PortalPanicShortcut
     internal static bool ReportsRelease => _reportsRelease;
 
     /// <summary>Test seam: a bound session without D-Bus.</summary>
-    internal static void SetSessionForTests(string? session, Action? onReleased)
+    internal static void SetSessionForTests(string? session, Action? onReleased, string id = Id)
     {
         (_session, _onReleased, _held, _reportsRelease) = (session, onReleased, false, false);
+        _boundId = id;
     }
     internal static Func<Action, Action, Task<string?>>? BindForTests;
     private static DBusConnection? _bus;
@@ -50,6 +72,7 @@ internal static class PortalPanicShortcut
     {
         if (BindForTests != null) return await BindForTests(onActivated, onDeactivated);
         if (!OperatingSystem.IsLinux() || _session != null) return null;
+        var id = _boundId = IdFor(key);
         _onReleased = onDeactivated;
         _reportsRelease = false;
         _session = "";   // claimed: a second caller while this one waits gets null, not a second session
@@ -98,7 +121,7 @@ internal static class PortalPanicShortcut
                 w.WriteObjectPath(session);
                 var shortcuts = w.WriteArrayStart(DBusType.Struct);
                 w.WriteStructureStart();
-                w.WriteString(Id);
+                w.WriteString(id);
                 w.WriteDictionary(new Dictionary<string, VariantValue>
                 {
                     ["description"] = description,
@@ -109,8 +132,8 @@ internal static class PortalPanicShortcut
                 w.WriteDictionary(new Dictionary<string, VariantValue> { ["handle_token"] = token });
             });
             if (code != 0) { await UnbindAsync(); return Fail($"BindShortcuts answered {code} (refused or cancelled)"); }
-            var trigger = TriggerOf(results);
-            Log.Information("Panic key: bound '{Key}' through the GlobalShortcuts portal, trigger '{Trigger}'", key, trigger);
+            var trigger = TriggerOf(results, id);
+            Log.Information("Panic key: bound '{Key}' as '{Id}' through the GlobalShortcuts portal, trigger '{Trigger}'", key, id, trigger);
             return trigger;
         }
         catch (Exception ex)
@@ -131,7 +154,8 @@ internal static class PortalPanicShortcut
     // Deactivated was lost, so the panic key never goes dead.
     internal static bool Route(string session, string id, bool pressed, Action down, Action up, DateTime? now = null)
     {
-        if (string.IsNullOrEmpty(_session) || session != _session || id != Id) return false;
+        // Only the open session's own id: an id bound for an earlier key is never a panic (#1752).
+        if (string.IsNullOrEmpty(_session) || session != _session || id != _boundId) return false;
         var t = now ?? DateTime.UtcNow;
         if (pressed)
         {
@@ -218,6 +242,108 @@ internal static class PortalPanicShortcut
         }
         return "";
     }
+
+    internal enum TriggerMatch { Unknown, Chosen, Other }
+
+    /// <summary>Whether the trigger_description the desktop reported is the chosen <paramref name="key"/>
+    /// (#1752). <see cref="TriggerMatch.Other"/> only when it names a key we recognise that is not the chosen
+    /// one, or the chosen key under a modifier (the panic key is one bare key); a label we cannot read
+    /// ("", a glyph, another language) is <see cref="TriggerMatch.Unknown"/>, so a wording we do not know never
+    /// costs the user a working grab. Several triggers ("Esc, Num Lock") are Other when any one is.</summary>
+    internal static TriggerMatch MatchTrigger(string? key, string? trigger)
+    {
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(trigger)) return TriggerMatch.Unknown;
+        var chosen = new HashSet<string>(StringComparer.Ordinal) { Canon(key) };
+        var x = X11PanicKey.XKeyName(key);
+        if (x.Length > 0) chosen.Add(Canon(x));
+        chosen.Remove("");
+        var result = TriggerMatch.Unknown;
+        foreach (var part in trigger.Split(", ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var one = MatchOne(part, chosen);
+            if (one == TriggerMatch.Other) return TriggerMatch.Other;
+            if (one == TriggerMatch.Chosen) result = TriggerMatch.Chosen;
+        }
+        return result;
+    }
+
+    private static TriggerMatch MatchOne(string trigger, HashSet<string> chosen)
+    {
+        var bare = trigger;
+        bool modified = false;
+        // GTK accelerator syntax: "<Control>Escape".
+        if (bare.StartsWith('<') && bare.LastIndexOf('>') is var gt and > 1 && gt < bare.Length - 1)
+        {
+            modified = true;
+            bare = bare[(gt + 1)..];
+        }
+        // "Ctrl+Esc", "Shift+Num Lock": only when every part before the key is a modifier we know.
+        var cut = bare.LastIndexOf('+', bare.Length - 2 < 0 ? 0 : bare.Length - 2);
+        if (cut > 0)
+        {
+            var mods = bare[..cut].Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (mods.Length > 0 && Array.TrueForAll(mods, m => Modifiers.Contains(Norm(m))))
+            {
+                modified = true;
+                bare = bare[(cut + 1)..];
+            }
+        }
+        var c = Canon(bare);
+        if (c.Length == 0) return TriggerMatch.Unknown;
+        if (!modified && chosen.Contains(c)) return TriggerMatch.Chosen;
+        return modified || Known(c) ? TriggerMatch.Other : TriggerMatch.Unknown;
+    }
+
+    private static readonly HashSet<string> Modifiers = new(StringComparer.Ordinal)
+    {
+        "ctrl", "control", "primary", "alt", "altgr", "shift", "super", "meta", "win", "logo", "hyper", "cmd",
+        "mod1", "mod2", "mod3", "mod4", "mod5",
+    };
+
+    // Spellings of one key (stored Key names, X keysym names, KDE and GNOME labels) to one form.
+    private static readonly Dictionary<string, string> Aliases = new(StringComparer.Ordinal)
+    {
+        ["esc"] = "escape", ["return"] = "enter", ["back"] = "backspace", ["del"] = "delete", ["ins"] = "insert",
+        ["prior"] = "pageup", ["pgup"] = "pageup", ["next"] = "pagedown", ["pgdn"] = "pagedown", ["pgdown"] = "pagedown",
+        ["scroll"] = "scrolllock", ["capital"] = "capslock", ["snapshot"] = "print", ["printscreen"] = "print",
+        ["prtsc"] = "print", ["prtscr"] = "print", ["sysrq"] = "print", ["apps"] = "menu", ["cancel"] = "break",
+        ["spacebar"] = "space",
+    };
+
+    private static readonly HashSet<string> Named = new(StringComparer.Ordinal)
+    {
+        "escape", "enter", "backspace", "delete", "insert", "pageup", "pagedown", "scrolllock", "capslock", "numlock",
+        "print", "menu", "break", "pause", "space", "tab", "home", "end", "up", "down", "left", "right",
+        // Keypad keys as X keysyms ("KP_Add") or labels ("KP Add") write them (#1752 review): a grab on one of
+        // these for another chosen key is another key, so it is released.
+        "kpadd", "kpsubtract", "kpmultiply", "kpdivide", "kpdecimal", "kpseparator", "kpenter", "kpequal",
+        "kpdelete", "kpinsert", "kphome", "kpend", "kpprior", "kpnext", "kppageup", "kppagedown",
+        "kpup", "kpdown", "kpleft", "kpright", "kpbegin", "kpspace", "kptab",
+    };
+
+    private static string Norm(string s)
+    {
+        var b = new System.Text.StringBuilder(s.Length);
+        foreach (var ch in s.Trim())
+            if (ch != ' ' && ch != '_' && ch != '-') b.Append(char.ToLowerInvariant(ch));
+        return b.ToString();
+    }
+
+    private static string Canon(string s)
+    {
+        var n = Norm(s);
+        if (Aliases.TryGetValue(n, out var a)) return a;
+        if (n.Length == 2 && n[0] == 'd' && char.IsAsciiDigit(n[1])) return n[1..];          // D1 -> 1
+        if (n.Length == 7 && n.StartsWith("numpad", StringComparison.Ordinal)) return "kp" + n[6];   // NumPad0 -> kp0
+        return n;
+    }
+
+    private static bool Known(string c) =>
+        Named.Contains(c)
+        || (c.Length == 1 && char.IsAsciiLetterOrDigit(c[0]))
+        || (c.Length == 3 && c.StartsWith("kp", StringComparison.Ordinal) && char.IsAsciiDigit(c[2]))
+        || (c.Length is 2 or 3 && c[0] == 'f' && int.TryParse(c[1..], out var f) && f is >= 1 and <= 35)
+        || (char.IsAsciiLetter(c[0]) && Enum.TryParse<global::Avalonia.Input.Key>(c, true, out _));
 
     /// <summary>Closes the portal session, which releases the compositor grab.</summary>
     internal static async Task UnbindAsync()

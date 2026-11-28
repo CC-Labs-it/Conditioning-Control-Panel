@@ -1,0 +1,161 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading;
+using ConditioningControlPanel.Services.ScreenCapture;
+using RapidOcrNet;
+using Serilog;
+using SkiaSharp;
+
+namespace ConditioningControlPanel.Services.Ocr;
+
+/// <param name="Bounds">Frame pixels; <see cref="ScreenFrame.ToScreen"/> maps them to the desktop.</param>
+public readonly record struct OcrWord(string Text, Rectangle Bounds);
+
+public interface IScreenOcrEngine : IDisposable
+{
+    /// <summary>False once the models are missing or failed to load; <see cref="Recognize"/> then returns no words.</summary>
+    bool IsAvailable { get; }
+    /// <summary>CPU-bound: call off the UI thread. Never throws except for cancellation; null when reading failed.</summary>
+    IReadOnlyList<OcrWord>? Recognize(ScreenFrame frame, CancellationToken cancellationToken = default);
+    /// <summary>Changes when the recognizers <see cref="Recognize"/> would read with change; scan caches key on it.</summary>
+    string Recognizers => "";
+}
+
+/// <summary>PP-OCRv5 through RapidOcrNet (https://github.com/BobLd/RapidOcrNet), CPU only, with the recognizer for the
+/// user's languages (WPF reads with the user-profile OCR languages: ScreenOcrService.cs:41 TryCreateFromUserProfileLanguages).
+/// Models load on the first <see cref="Recognize"/> and on a language change, from &lt;app dir&gt;/models/v5 (CCP.Core.csproj).</summary>
+public sealed class RapidScreenOcrEngine : IScreenOcrEngine
+{
+    // Two intra-op threads: a scan must never compete with the UI for every core.
+    private const int Threads = 2;
+    // DoAngle off: screen text is upright, so the 180 degree classifier per crop is wasted work (README "Key options":
+    // "Disable if you know your text is upright"). RecMaxDegreeOfParallelism stays at its default 1.
+    private static readonly RapidOcrOptions Options = RapidOcrOptions.Default with { ReturnWordBox = true, DoAngle = false };
+    private readonly string _modelDir;
+    private readonly Func<IEnumerable<string?>> _languages;
+    private readonly object _gate = new();
+    private RapidOcr[] _ocr = [];
+    private string? _loaded;
+    private bool _failed, _disposed;
+
+    /// <param name="languages">Language codes; defaults to the OS languages then <see cref="Localization.LocalizationManager"/>'s.</param>
+    public RapidScreenOcrEngine(string? modelDir = null, Func<IEnumerable<string?>>? languages = null)
+    {
+        _modelDir = Path.GetFullPath(modelDir ?? Path.Combine(AppContext.BaseDirectory, RapidOcr.ModelsFolderName, RapidOcr.ModelsVersion));
+        _languages = languages ?? (() => OsLanguages().Append(Localization.LocalizationManager.Instance.CurrentLanguage));
+    }
+
+    // The user's languages: the Linux locale list, then the OS display language. The Windows user language list WPF's OCR
+    // reads is in the registry, which Core cannot use: the head prepends it (ScreenOcrService.Languages).
+    internal static IEnumerable<string?> OsLanguages(Func<string, string?>? env = null)
+    {
+        foreach (var name in new[] { "LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG" })
+            foreach (var l in (env ?? Environment.GetEnvironmentVariable)(name)?.Split(':') ?? []) yield return l;
+        yield return System.Globalization.CultureInfo.CurrentUICulture.Name;
+    }
+
+    // Latin always, plus the first non-Latin script wanted: at most two recognizers per scan.
+    internal static (string Rec, string Keys)[] RecognizerSet(IEnumerable<string?> languages) =>
+        languages.Select(Recognizer).Where(r => r.Rec != RapidOcr.DefaultRecModelPath).Take(1).Prepend(Recognizer(null)).ToArray();
+
+    // PP-OCRv5 per-script recognizers (RapidOCR default_models.yaml): "ch" reads Chinese and Japanese, "eslav" Russian;
+    // the multilingual PP-OCRv6 has no Korean or Cyrillic. Det and cls are shared; every other UI language reads Latin.
+    internal static (string Rec, string Keys) Recognizer(string? language) => language?.Split('-', '_', '.')[0].ToLowerInvariant() switch
+    {
+        "zh" or "ja" => ("ch_PP-OCRv5_rec_mobile.onnx", "ppocrv5_dict.txt"),
+        "ko" => ("korean_PP-OCRv5_rec_mobile.onnx", "ppocrv5_korean_dict.txt"),
+        "ru" or "uk" or "be" or "bg" => ("eslav_PP-OCRv5_rec_mobile.onnx", "ppocrv5_eslav_dict.txt"),
+        _ => (RapidOcr.DefaultRecModelPath, RapidOcr.DefaultKeysFilePath),
+    };
+
+    private string[] ModelPaths => RecognizerSet(_languages()).SelectMany(r => new[] { r.Rec, r.Keys })
+        .Prepend(RapidOcr.DefaultClsModelPath).Prepend(RapidOcr.DefaultDetModelPath).Select(f => Path.Combine(_modelDir, f)).ToArray();
+
+    public string Recognizers => string.Join("|", ModelPaths);
+
+    public bool IsAvailable { get { lock (_gate) return !_failed && !_disposed && ModelPaths.All(File.Exists); } }
+
+    public IReadOnlyList<OcrWord>? Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
+    {
+        if (frame.Width <= 0 || frame.Height <= 0 || frame.Stride < (long)frame.Width * 4 ||
+            frame.Pixels.Length < (long)frame.Stride * frame.Height) return Array.Empty<OcrWord>();
+        // One engine, one detect at a time: RapidOcr reuses its ORT sessions and buffers.
+        lock (_gate)
+        {
+            if (!EnsureLoaded()) return Array.Empty<OcrWord>();
+            try
+            {
+                // Wraps the capture buffer (no copy unless it is not array-backed); Detect only reads it while pinned.
+                var segment = MemoryMarshal.TryGetArray(frame.Pixels, out var s) ? s : new ArraySegment<byte>(frame.Pixels.ToArray());
+                var pin = GCHandle.Alloc(segment.Array!, GCHandleType.Pinned);
+                IEnumerable<TextBlock> blocks;
+                try
+                {
+                    using var bitmap = new SKBitmap();
+                    var info = new SKImageInfo(frame.Width, frame.Height,
+                        frame.Format == ScreenPixelFormat.Bgra32 ? SKColorType.Bgra8888 : SKColorType.Rgba8888, SKAlphaType.Unpremul);
+                    if (!bitmap.InstallPixels(info, pin.AddrOfPinnedObject() + segment.Offset, frame.Stride)) return null;
+                    // Every recognizer sees the same det boxes: per line keep the most confident reading, so nothing doubles.
+                    blocks = _ocr.SelectMany(o => o.Detect(bitmap, Options, cancellationToken).TextBlocks).ToArray()
+                        .GroupBy(b => string.Join(",", b.BoxPoints)).Select(g => g.MaxBy(b => b.CharScores.DefaultIfEmpty().Average())!);
+                }
+                finally { pin.Free(); }
+                var words = new List<OcrWord>();
+                foreach (var block in blocks)
+                    foreach (var (text, box) in block.WordResults is { Length: > 0 } w
+                                 ? w.Select(x => (x.Text, x.BoxPoints)) : new[] { (block.Text, block.BoxPoints) })
+                    {
+                        var rect = Bounds(box, frame.Width, frame.Height);
+                        if (!string.IsNullOrWhiteSpace(text) && rect.Width > 0 && rect.Height > 0) words.Add(new OcrWord(text.Trim(), rect));
+                    }
+                return words;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { Log.Debug(ex, "Screen OCR recognition failed"); return null; }
+        }
+    }
+
+    private bool EnsureLoaded()
+    {
+        if (_failed || _disposed) return false;
+        var paths = ModelPaths;
+        if (_loaded == string.Join("|", paths)) return true;
+        Unload(); // the languages changed: load their recognizers
+        if (!paths.All(File.Exists))
+        {
+            _failed = true;
+            Log.Warning("Screen OCR unavailable: models missing in {Dir}", _modelDir);
+            return false;
+        }
+        var loaded = new List<RapidOcr>();
+        try
+        {
+            foreach (var rec in paths.Skip(2).Chunk(2)) { loaded.Add(new RapidOcr()); loaded[^1].InitModels(paths[0], paths[1], rec[0], rec[1], Threads); }
+            _ocr = loaded.ToArray(); _loaded = string.Join("|", paths); return true;
+        }
+        catch (Exception ex)
+        {
+            foreach (var o in loaded) o.Dispose(); _failed = true;
+            Log.Warning(ex, "Screen OCR unavailable: models failed to load from {Dir}", _modelDir);
+            return false;
+        }
+    }
+
+    private static Rectangle Bounds(SKPointI[] box, int width, int height)
+    {
+        if (box.Length == 0) return Rectangle.Empty;
+        int left = Math.Clamp(box.Min(p => p.X), 0, width), top = Math.Clamp(box.Min(p => p.Y), 0, height);
+        int right = Math.Clamp(box.Max(p => p.X), 0, width), bottom = Math.Clamp(box.Max(p => p.Y), 0, height);
+        return Rectangle.FromLTRB(left, top, right, bottom);
+    }
+
+    private void Unload() { foreach (var o in _ocr) o.Dispose(); _ocr = []; _loaded = null; }
+    public void Dispose()
+    {
+        lock (_gate) { _disposed = true; Unload(); }
+    }
+}

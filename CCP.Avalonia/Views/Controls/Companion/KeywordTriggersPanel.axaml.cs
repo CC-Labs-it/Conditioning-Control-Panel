@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private readonly Border _drawerGlow;
         private BeatLoop? _drawerPulse;
         private readonly TextBlock _txtScreenOcrOffHint;
+        private readonly TextBlock _txtScreenOcrUnavailable;
         private readonly StackPanel _screenOcrIntervalPanel;
         private readonly TextBlock _txtHighlightOffHint;
         private readonly StackPanel _highlightDurationPanel;
@@ -52,6 +53,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             _expander = this.FindControl<Expander>("KeywordTriggersExpander")!;
             _drawerGlow = this.FindControl<Border>("KeywordDrawerGlow")!;
             _txtScreenOcrOffHint = this.FindControl<TextBlock>("TxtScreenOcrOffHint")!;
+            _txtScreenOcrUnavailable = this.FindControl<TextBlock>("TxtScreenOcrUnavailable")!;
+            // A refusal arrives from a scan; the static event is held only while the panel is shown.
+            AttachedToVisualTree += (_, _) => Platform.ScreenOcrService.UnavailableChanged += OnOcrUnavailable;
+            DetachedFromVisualTree += (_, _) => Platform.ScreenOcrService.UnavailableChanged -= OnOcrUnavailable;
             _screenOcrIntervalPanel = this.FindControl<StackPanel>("ScreenOcrIntervalPanel")!;
             _txtHighlightOffHint = this.FindControl<TextBlock>("TxtHighlightOffHint")!;
             _highlightDurationPanel = this.FindControl<StackPanel>("HighlightDurationPanel")!;
@@ -211,7 +216,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             _screenOcrIntervalPanel.IsVisible = masterOn;
             _txtScreenOcrOffHint.IsVisible = !masterOn;
+            _ocrOn = masterOn;
+            var reason = masterOn ? Platform.ScreenOcrService.UnavailableReasonKey() : null;
+            _txtScreenOcrUnavailable.IsVisible = reason != null;
+            _txtScreenOcrUnavailable.Text = reason == null ? null : ConditioningControlPanel.Localization.Loc.Get(reason);
         }
+        private bool _ocrOn;
+        private void OnOcrUnavailable() => Dispatcher.UIThread.Post(() => SetScreenOcrDetail(_ocrOn));
 
         /// <summary>Follows the highlight master: detail rows when on, the "needs source" hint when off.</summary>
         internal void SetHighlightDetail(bool masterOn)
