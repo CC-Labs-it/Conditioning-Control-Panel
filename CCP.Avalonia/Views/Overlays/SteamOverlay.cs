@@ -141,7 +141,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void ReadLook()
         {
             var (r, g, b) = PinkFilterOverlay.EffectiveColor();
-            Look = (r, g, b, PinkFilterOverlay.PaintedOpacity);
+            // The painted strength: the Accessibility limit already applied (WPF PinkTintLayer.LastLook).
+            Look = (r, g, b, PinkComfortLimit.Apply(PinkFilterOverlay.PaintedOpacity));
         }
 
         private static void ReadPool()
@@ -225,7 +226,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                 // The base filter's own colour and strength: thicker than the flat tint, never opaque.
                 var look = SteamOverlay.Look;
-                double strength = Math.Clamp(0.3 + look.Opacity * 1.6, 0.3, 0.82) * SteamOverlay.ShowAlpha;
+                // The fog is drawn thicker than the tint, so with the Accessibility limit on its peak alpha is
+                // held to the limit as well (WPF SteamLayer; limit off = unchanged). SteamOptions.Strength is the
+                // WPF curve (thins linearly below the 10% default, 7.3.4 tier-2 round); this head had the old 0.3 floor.
+                double strength = PinkComfortLimit.FogStrength(SteamOptions.Strength(look.Opacity)) * SteamOverlay.ShowAlpha;
                 var colour = new SKColor(look.R, look.G, look.B);
                 var bounds = new SKRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
                 double t = SteamOverlay.T;
