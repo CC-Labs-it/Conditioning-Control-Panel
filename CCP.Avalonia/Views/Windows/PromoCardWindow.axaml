@@ -34,6 +34,12 @@
             <Border x:Name="Card" Width="580" CornerRadius="25" BorderThickness="3" BorderBrush="#1B1A17"
                     Background="#F7F5EF" ClipToBounds="True">
                 <Grid x:Name="Sheet">
+                    <!-- The game's two-arm crayon spiral, turning slowly behind everything; the cards' sparkles. -->
+                    <Canvas IsHitTestVisible="False">
+                        <Image x:Name="SpiralImage" Width="1086" Height="1086" Opacity="0.56" Stretch="Fill"
+                               Canvas.Left="-256" Canvas.Top="-375" RenderTransformOrigin="50%,50%"/>
+                    </Canvas>
+                    <Canvas x:Name="SparkleLayer" IsHitTestVisible="False"/>
                     <StackPanel x:Name="Body" Margin="22,18,22,22">
                         <!-- The hook: the big line at the top, its last word under a pink highlighter. -->
                         <TextBlock x:Name="HookText" Margin="34,2,34,0" TextAlignment="Center" TextWrapping="Wrap"

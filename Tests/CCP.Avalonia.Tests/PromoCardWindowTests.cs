@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -57,6 +58,20 @@ public sealed class PromoCardWindowTests
         Assert.False(Named<TextBlock>(bare, "HookText").IsVisible);
         Assert.False(Named<Border>(bare, "TagStamp").IsVisible);
         Assert.False(Named<ScrollViewer>(bare, "MessageScroll").IsVisible);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task StickersInHandAreDiecutAndTheArtLayersAreDrawn() => Run(() =>
+    {
+        IImage pic = new DrawingImage(new GeometryDrawing { Brush = Brushes.HotPink, Geometry = new RectangleGeometry(new Rect(0, 0, 64, 40)) });
+        var card = new PromoCardWindow("a4", "For you", "Message", Promo(false), () => Now, new IImage?[] { pic, null, pic });
+        Assert.Equal(2, Named<Canvas>(card, "HeroBox").Children.Count); // the one that failed does not draw
+        Assert.True(Named<StackPanel>(card, "HeroRow").IsVisible);
+        Assert.NotNull(Named<Image>(card, "SpiralImage").Source);
+        Assert.Equal(3, Named<Canvas>(card, "SparkleLayer").Children.Count);
+        var none = new PromoCardWindow("a4", "For you", "Message", Promo(false), () => Now, new IImage?[] { null });
+        Assert.False(Named<StackPanel>(none, "HeroRow").IsVisible);
         return Task.CompletedTask;
     });
 
