@@ -101,9 +101,49 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </ControlTheme>
+        <!-- WPF DeeperEditorWindow.xaml:155,266: hero effect menu surface and rows. -->
+        <ControlTheme x:Key="HeroEffectMenuPresenter" TargetType="MenuFlyoutPresenter"
+                      BasedOn="{StaticResource {x:Type MenuFlyoutPresenter}}">
+            <Setter Property="Background" Value="{DynamicResource DarkerBgBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentBrush}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="LayoutRoot" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}" Padding="4">
+                        <ScrollViewer Theme="{StaticResource FluentMenuScrollViewer}"
+                                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"
+                                            KeyboardNavigation.TabNavigation="Continue" Grid.IsSharedSizeScope="True"/>
+                        </ScrollViewer>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
     </Window.Resources>
 
     <Window.Styles>
+        <Style Selector="MenuFlyoutPresenter.heroEffect MenuItem">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Arrow"/>
+        </Style>
+        <Style Selector="MenuFlyoutPresenter.heroEffect MenuItem:selected /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource DeeperMenuItemHoverBgBrush}"/>
+        </Style>
+        <Style Selector="MenuFlyoutPresenter.heroEffect MenuItem:disabled">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="MenuFlyoutPresenter.heroEffect MenuItem:disabled /template/ ContentPresenter#PART_HeaderPresenter">
+            <Setter Property="Foreground" Value="#666666"/>
+        </Style>
+
         <!-- Shared WPF rounded themes. Setting Theme preserves each control's local theme/template. -->
         <Style Selector="Button"><Setter Property="Theme" Value="{StaticResource DeeperRoundButton}"/></Style>
         <Style Selector="ToggleButton"><Setter Property="Theme" Value="{StaticResource DeeperRoundIconToggleButton}"/></Style>
@@ -458,7 +498,7 @@
                                     Foreground="{DynamicResource DeeperAccentBrush}"
                                     BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1">
                                 <Button.Flyout>
-                                    <MenuFlyout>
+                                    <MenuFlyout FlyoutPresenterTheme="{StaticResource HeroEffectMenuPresenter}" FlyoutPresenterClasses="heroEffect">
                                         <MenuItem x:Name="HeroEffectHaptic" Header="Haptic"/>
                                         <MenuItem x:Name="HeroEffectFlash" Header="Flash"/>
                                         <MenuItem x:Name="HeroEffectBubble" Header="Bubble"/>
