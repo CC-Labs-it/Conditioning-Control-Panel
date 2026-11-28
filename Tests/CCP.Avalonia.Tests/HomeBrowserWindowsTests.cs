@@ -69,6 +69,11 @@ public sealed class HomeBrowserWindowsTests
             Assert.False(local.Cancel);
             Assert.False(panel.IsVisible); // a page that loads clears the error
             Assert.True(host.NativeView!.IsVisible);
+            var link = new WebViewNavigationStartingEventArgs { Request = Remote };
+            host.OnNavigationStarted(null, link);
+            Assert.True(link.Cancel);
+            Assert.False(panel.IsVisible); // a refused link must not hide the page that is already running
+            Assert.True(host.NativeView!.IsVisible);
         });
         return Task.CompletedTask;
     });

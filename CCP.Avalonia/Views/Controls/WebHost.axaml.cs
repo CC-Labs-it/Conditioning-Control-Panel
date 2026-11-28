@@ -778,7 +778,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 e.Cancel = true;
                 Log.Warning("WebHost: navigation held, no Scrolller gate on this web view ({Host})", target?.Host);
-                if (_scrolllerGate == false) ShowGateError(target);
+                // Only a blank engine needs the panel: a refused link must not hide a page that already runs.
+                if (_scrolllerGate == false && !_loadedOnThisEngine) ShowGateError(target);
                 return;
             }
             if (_gateError) { _gateError = false; _fallback.IsVisible = _web is null; if (_web != null) _web.IsVisible = true; }
