@@ -130,7 +130,10 @@ public static class ChaosBubbleVariants
     public const int    DARTER_QUICK_BONUS    = 90;
     private static readonly uint DarterTint  = 0xFFFF4DC4u; // bright flash-pink
 
-    private static readonly Random _rng = new();
+    /// <summary>The unseeded roll behind every spec built here (sizes, fuses, picks). A test that
+    /// compares two specs pins it, or a rare size draw makes them differ (flake: BubblePayloadHostTests).</summary>
+    internal static Random Rng { get; set; } = new();
+    private static Random _rng => Rng;
 
     /// <summary>
     /// Per-spawn-tick roll for a darter. Density climbs with run intensity (present from
@@ -701,11 +704,12 @@ public static class ChaosBubbleVariants
     public static EffectBubbleSpec Build(ChaosBubbleVariant variant, double intensity, double fuseTimeMult = 1.0,
                                          ChaosMotion? motionOverride = null, double effectIntensity = 1.0,
                                          double sizeScale = 1.0, double sideDriftChance = 0.0,
-                                         bool ambient = false)
+                                         bool ambient = false, Random? random = null)
     {
+        var rng = random ?? _rng;
         // Size: random across the band, nudged upward by run intensity. Strength is keyed to
         // the CLASSIC (unscaled) size so visual sizing never weakens payloads or scoring.
-        double t = Math.Clamp(_rng.NextDouble() * 0.7 + intensity * 0.45, 0, 1);
+        double t = Math.Clamp(rng.NextDouble() * 0.7 + intensity * 0.45, 0, 1);
         double size = variant.MinSize + (variant.MaxSize - variant.MinSize) * t;
         int strength = (int)Math.Round(Math.Clamp((size - SizeMinGlobal) / (SizeMaxGlobal - SizeMinGlobal), 0, 1) * 100);
         double visual = GLOBAL_SIZE_SCALE * Math.Max(0.5, sizeScale);
@@ -725,13 +729,13 @@ public static class ChaosBubbleVariants
         // Entry variety: on Mixed motion, a slice of the vertical travellers swap to drifting
         // in from a side edge instead (SideDrift exits on its own, so freeze stays legal).
         if (motionOverride == null && motion != ChaosMotion.RoamBounce
-            && sideDriftChance > 0 && _rng.NextDouble() < sideDriftChance)
+            && sideDriftChance > 0 && rng.NextDouble() < sideDriftChance)
             motion = ChaosMotion.SideDrift;
 
         int fuse = 0;
         if (variant.IsLive)
         {
-            int baseFuse = variant.FuseMinMs + _rng.Next(Math.Max(1, variant.FuseMaxMs - variant.FuseMinMs));
+            int baseFuse = variant.FuseMinMs + rng.Next(Math.Max(1, variant.FuseMaxMs - variant.FuseMinMs));
             // Harder/later in the run = a bit shorter; boons (fuseTimeMult>1) lengthen.
             fuse = (int)Math.Max(1200, baseFuse * (1.0 - intensity * 0.25) * fuseTimeMult);
         }
