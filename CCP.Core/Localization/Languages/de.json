@@ -6487,6 +6487,7 @@
   "emi_desk_hotkey_err_hook": "Diese Taste ist schon die {0}-Taste ({1}). Nimm eine andere, oder leg die erst neu.",
   "emi_desk_hotkey_err_quickrecal": "Strg+Alt+G öffnet schon die Schnell-Rekalibrierung. Nimm eine andere Kombination.",
   "emi_desk_hotkey_err_taken": "Windows gibt uns {0} nicht. Eine andere App hält die Kombination. Nimm eine andere.",
+  "emi_desk_hotkey_err_portal": "{0} konnte nicht registriert werden. Prüfe die Tastenkürzel deines Desktops.",
   "emi_desk_mute_prompt_title": "EMI ist da",
   "emi_desk_mute_prompt_body": "Den Avatar solange stummschalten? Zwei Stimmen auf einmal wird laut. Panik-Ansagen kommen immer durch.",
   "emi_desk_mute_prompt_mute": "Stummschalten",

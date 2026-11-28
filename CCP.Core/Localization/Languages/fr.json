@@ -6487,6 +6487,7 @@
   "emi_desk_hotkey_err_hook": "Cette touche est déjà la touche {0} ({1}). Prends-en une autre, ou réassigne celle-là d'abord.",
   "emi_desk_hotkey_err_quickrecal": "Ctrl+Alt+G ouvre déjà la Recalibration rapide. Choisis une autre combinaison.",
   "emi_desk_hotkey_err_taken": "Windows refuse de nous donner {0}. Une autre app la retient. Choisis une autre combinaison.",
+  "emi_desk_hotkey_err_portal": "Impossible d’enregistrer {0}. Vérifie les raccourcis du bureau.",
   "emi_desk_mute_prompt_title": "EMI est sortie",
   "emi_desk_mute_prompt_body": "Couper l'avatar pendant ce temps ? Deux voix à la fois, ça devient bruyant. Les annonces panique passent toujours.",
   "emi_desk_mute_prompt_mute": "Couper le son",

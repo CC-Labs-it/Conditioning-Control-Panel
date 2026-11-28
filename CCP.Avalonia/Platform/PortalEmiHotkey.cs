@@ -13,9 +13,12 @@ internal sealed class PortalEmiHotkey : IDisposable
 {
     private const string Iface = "org.freedesktop.portal.GlobalShortcuts";
     private const string Desktop = "/org/freedesktop/portal/desktop";
-    private const string Id = "emi-desk";
+    internal static string IdFor(ChordMods mods, string key) =>
+        "emi-desk-" + (int)mods + "-" + Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(key.ToUpperInvariant())).ToLowerInvariant();
+    private string _id = "";
     private readonly object _gate = new();
     private readonly Action _pressed;
+    private readonly Action<bool> _stateChanged;
     private readonly PanicKeyHold _hold = new();
     private DBusConnection? _bus;
     private IDisposable? _down, _up, _closed;
@@ -24,11 +27,11 @@ internal sealed class PortalEmiHotkey : IDisposable
     internal string Trigger { get; private set; } = "";
     internal bool IsBound { get { lock (_gate) return _bound && !_disposed; } }
 
-    internal PortalEmiHotkey(Action pressed) => _pressed = pressed;
+    internal PortalEmiHotkey(Action pressed, Action<bool> stateChanged) { _pressed = pressed; _stateChanged = stateChanged; }
     internal static Func<DBusConnection> OpenConnection = () => new DBusConnection(DBusAddress.Session!);
-    internal void SetSessionForTests(string session)
+    internal void SetSessionForTests(string session, ChordMods mods, string key)
     {
-        lock (_gate) { _session = session; _bound = true; }
+        lock (_gate) { _session = session; _id = IdFor(mods, key); _bound = true; }
     }
 
     internal static string PreferredTrigger(ChordMods mods, string key)
@@ -44,7 +47,9 @@ internal sealed class PortalEmiHotkey : IDisposable
     internal async Task BindAsync(ChordMods mods, string key, string description)
     {
         // This also initializes SandboxNet from the user-data override before opening a bus.
-        if (!OperatingSystem.IsLinux() || SandboxMarker.Active) return;
+        if (!OperatingSystem.IsLinux() || SandboxMarker.Active) { Dispose(); return; }
+        var id = IdFor(mods, key);
+        lock (_gate) { if (_disposed) return; _id = id; }
         try
         {
             var bus = OpenConnection();
@@ -78,7 +83,7 @@ internal sealed class PortalEmiHotkey : IDisposable
             {
                 w.WriteObjectPath(session);
                 var shortcuts = w.WriteArrayStart(DBusType.Struct);
-                w.WriteStructureStart(); w.WriteString(Id);
+                w.WriteStructureStart(); w.WriteString(id);
                 w.WriteDictionary(new Dictionary<string, VariantValue> { ["description"] = description, ["preferred_trigger"] = PreferredTrigger(mods, key) });
                 w.WriteArrayEnd(shortcuts); w.WriteString("");
                 w.WriteDictionary(new Dictionary<string, VariantValue> { ["handle_token"] = token });
@@ -87,8 +92,9 @@ internal sealed class PortalEmiHotkey : IDisposable
             lock (_gate)
             {
                 if (_disposed) return;
-                Trigger = PortalPanicShortcut.TriggerOf(result, Id);
+                Trigger = PortalPanicShortcut.TriggerOf(result, id);
                 _bound = true;
+                _stateChanged(true);
             }
         }
         catch (Exception ex) { Log.Warning(ex, "EMI Desk shortcut portal unavailable"); Dispose(); }
@@ -98,7 +104,7 @@ internal sealed class PortalEmiHotkey : IDisposable
     {
         lock (_gate)
         {
-            if (_disposed || !_bound || session != _session || id != Id) return;
+            if (_disposed || !_bound || session != _session || id != _id) return;
             if (!down) { _hold.Up(); return; }
             if (!_hold.Down(now ?? DateTime.UtcNow)) _pressed();
         }
@@ -112,6 +118,7 @@ internal sealed class PortalEmiHotkey : IDisposable
         {
             if (_disposed) return;
             _disposed = true; _bound = false; _hold.Up();
+            _stateChanged(false);
             bus = _bus; _bus = null;
             down = _down; up = _up; closed = _closed;
             _down = _up = _closed = null;

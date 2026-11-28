@@ -6991,6 +6991,7 @@
   "emi_desk_hotkey_err_hook": "这个键已经是{0}键（{1}）。换一个，或者先把那个改掉。",
   "emi_desk_hotkey_err_quickrecal": "Ctrl+Alt+G 已经用来打开快速重新校准。换个组合吧。",
   "emi_desk_hotkey_err_taken": "Windows 不肯把 {0} 给我们。别的应用占着它。换个组合吧。",
+  "emi_desk_hotkey_err_portal": "无法注册 {0}。请检查桌面快捷键设置。",
   "emi_desk_mute_prompt_title": "EMI 出来了",
   "emi_desk_mute_prompt_body": "她在的时候要静音头像吗？两个声音一起说话会很吵。紧急提示始终会传出来。",
   "emi_desk_mute_prompt_mute": "静音",

@@ -250,12 +250,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>True while the summon chord is grabbed (WPF HotkeyArmed).</summary>
         public bool HotkeyArmed { get; private set; }
+        internal bool HotkeyPending { get; private set; }
+        internal event Action? HotkeyStateChanged;
+        private int _portalGeneration;
 
         private IDisposable? _winHotkey;
         internal Func<bool> UsesPortal = () => MainShellWindow.Current is { } shell && MainShellWindow.ChatUsesPortal(shell);
-        internal Func<ChordMods, string, Action, IDisposable?> RegisterPortalChord = (mods, key, pressed) =>
+        internal Func<ChordMods, string, Action, Action<bool>, IDisposable?> RegisterPortalChord = (mods, key, pressed, stateChanged) =>
         {
-            var portal = new Platform.PortalEmiHotkey(pressed);
+            var portal = new Platform.PortalEmiHotkey(pressed, stateChanged);
             _ = portal.BindAsync(mods, key, ConditioningControlPanel.Localization.Loc.Get("label_emi_desk_hotkey"));
             return portal;
         };
@@ -322,17 +325,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 }
                 else if (UsesPortal())
                 {
-                    _winHotkey = RegisterPortalChord(parsed.Mods, parsed.Key, QueueHotkey);
-                    HotkeyArmed = _winHotkey != null;
+                    int generation = _portalGeneration;
+                    HotkeyPending = true;
+                    _winHotkey = RegisterPortalChord(parsed.Mods, parsed.Key, QueueHotkey, bound =>
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            if (generation != _portalGeneration) return;
+                            HotkeyPending = false;
+                            HotkeyArmed = bound;
+                            HotkeyStateChanged?.Invoke();
+                        }));
+                    if (_winHotkey == null) HotkeyPending = false;
                 }
                 else
                     HotkeyArmed = RegisterChord(parsed.Mods, parsed.Key, QueueHotkey);
+                HotkeyStateChanged?.Invoke();
+                if (HotkeyPending) return;
                 if (HotkeyArmed) Log.Information("[EmiDesk] summon hotkey armed: {Chord}", chord);
                 else Log.Warning("[EmiDesk] summon hotkey {Chord} could not be grabbed: another client holds it. " +
                                  "The dock chip in the nav rail still summons her.", chord);
             }
             catch (Exception ex)
             {
+                Disarm();
                 Log.Warning(ex, "[EmiDesk] ApplyHotkey failed");
             }
         }
@@ -340,10 +355,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private void Disarm()
         {
             CancelQueuedHotkey();
+            _portalGeneration++;
+            HotkeyPending = false;
             _winHotkey?.Dispose();
             _winHotkey = null;
             UnregisterChord();
             HotkeyArmed = false;
+            HotkeyStateChanged?.Invoke();
         }
 
         /// <summary>

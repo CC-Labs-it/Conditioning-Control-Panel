@@ -52,12 +52,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            EmiDeskService.Instance.HotkeyStateChanged += RefreshHotkeyHint;
             SyncFromSettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            EmiDeskService.Instance.HotkeyStateChanged -= RefreshHotkeyHint;
             CancelCapture();
             base.OnDetachedFromVisualTree(e);
         }
@@ -90,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 CmbSpice.SelectedIndex = Math.Max(0, Math.Min(2, s.EmiDeskSpice));
 
                 RefreshHotkeyButton();
+                RefreshHotkeyHint();
             }
             catch (Exception ex)
             {
@@ -220,15 +223,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 RefreshHotkeyButton();
 
                 EmiDeskService.Instance.ApplyHotkey();
-                // Registration can still fail: another client may already hold the combo.
-                if (!EmiDeskService.Instance.HotkeyArmed)
-                    TxtHotkeyHint.Text = Loc.GetF("emi_desk_hotkey_err_taken", chord);
+                RefreshHotkeyHint();
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "[EmiDesk] hotkey capture failed");
                 CancelCapture();
             }
+        }
+
+        private void RefreshHotkeyHint()
+        {
+            if (_capturing) return;
+            var s = CoreSettings.Current;
+            var desk = EmiDeskService.Instance;
+            var chord = string.IsNullOrWhiteSpace(s.EmiDeskHotkey) ? EmiDeskChord.DefaultHotkey : s.EmiDeskHotkey;
+            TxtHotkeyHint.Text = s.EmiDeskEnabled && !desk.HotkeyPending && !desk.HotkeyArmed
+                ? Loc.GetF(desk.UsesPortal() ? "emi_desk_hotkey_err_portal" : "emi_desk_hotkey_err_taken", chord)
+                : Loc.Get("set2_emi_desk_hotkey_hint");
         }
 
         private void CancelCapture()

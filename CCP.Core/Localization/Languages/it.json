@@ -6740,6 +6740,7 @@
   "emi_desk_hotkey_err_hook": "Quel tasto è già il tasto {0} ({1}). Scegline un altro, o prima riassegna quello.",
   "emi_desk_hotkey_err_quickrecal": "Ctrl+Alt+G apre già Ricalibra al volo. Scegli un'altra combinazione.",
   "emi_desk_hotkey_err_taken": "Windows non ci concede {0}: lo sta usando un'altra app. Scegli un'altra combinazione.",
+  "emi_desk_hotkey_err_portal": "Impossibile registrare {0}. Controlla le scorciatoie del desktop.",
   "emi_desk_mute_prompt_title": "EMI è fuori",
   "emi_desk_mute_prompt_body": "Silenzio l'avatar finché c'è lei? Due voci insieme fanno confusione. Le battute del panico passano sempre.",
   "emi_desk_mute_prompt_mute": "Silenzia",
