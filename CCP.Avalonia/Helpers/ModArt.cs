@@ -1,11 +1,13 @@
 using System;
 using System.IO;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.Platform;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Helpers
@@ -285,10 +287,36 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             void Paint()
             {
                 // Share the 800px decode by default; video keeps WPF's 480px hero cap.
-                var art = TryLoad(resourceName, 800);
+                var art = TryLoad(resourceName, out var modApplied, 800);
                 var heroArt = heroWidth is int width ? TryLoad(resourceName, width) : art;
                 if (hero != null && heroArt != null) hero.Background = new ImageBrush(heroArt) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right, Opacity = 0.9 };
                 if (side != null && art != null) side.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
+
+                // WPF MainWindow.xaml.cs:2921 frames these two distinct header shapes.
+                var surface = resourceName switch
+                {
+                    "features/lab_quiz_hero.png" => ModArtFramingRegistry.SurfaceIntakeStrip,
+                    "features/lab_aimemory_hero.png" => ModArtFramingRegistry.SurfacePageHeader,
+                    _ => null,
+                };
+                var plate = hero ?? side;
+                var bitmap = hero != null ? heroArt : art;
+                if (surface != null && bitmap != null && plate?.Background is ImageBrush brush)
+                {
+                    ModArtFraming? framing = null;
+                    var map = modApplied ? CoreMods.ActiveModPackage?.Manifest.ArtFraming : null;
+                    if (map != null)
+                        foreach (var entry in map)
+                        {
+                            if (entry.Value == null || !string.Equals(entry.Key.Replace('\\', '/'), resourceName, StringComparison.OrdinalIgnoreCase)) continue;
+                            foreach (var item in entry.Value)
+                                if (string.Equals(item.Key, surface, StringComparison.OrdinalIgnoreCase)) { framing = item.Value; break; }
+                            break;
+                        }
+                    var aspect = bitmap.Size.Height > 0 ? bitmap.Size.Width / bitmap.Size.Height : 0;
+                    var crop = ModArtFramingRegistry.ResolveViewbox(resourceName, surface, modApplied, aspect, framing);
+                    brush.SourceRect = new RelativeRect(crop.X, crop.Y, crop.Width, crop.Height, RelativeUnit.Relative);
+                }
             }
             void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(Paint);
 
