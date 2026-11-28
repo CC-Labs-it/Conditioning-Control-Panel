@@ -2,8 +2,7 @@
 // Requests go through the Core PrizeCounterRelay pinned to the opener. Panic closes it (PanicSurfaces "games",
 // WPF GameSurfaces.cs:66), app exit closes it (WPF App.xaml.cs:6433), a first Escape is the page's back
 // (PanicPolicy.KeptEscapePage.Counter, WPF MainWindow.xaml.cs:1531). Openers hear the close once, with its reason.
-// ponytail: part B (row game-prize-counter): wear routing (init.wears stays empty, so no Wear), the doors that
-// call LaunchPrizeCounter, Rain price cache, boot wallet read, SeasonRecap e_shop.
+// Part B: desk, chess, kart and Rain wear routing, remaining doors, Rain price cache, boot wallet read.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +12,7 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Services.PrizeCounter;
 using ConditioningControlPanel.Services.Safety;
@@ -28,6 +28,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>Test seams: the relay's transport (null = shared client) and server (null = sandbox: offline).</summary>
         internal static Func<HttpClient?> CounterHttp { get; set; } = () => null;
         internal static Func<string?> CounterServerBase { get; set; } = () => PbpServerBase();
+        internal static Action<string> CounterNoteEvent { get; set; } = key => App.FeatureDayLog?.Note(key);
+        internal static Func<string, bool> CounterWearProfile { get; set; } = id => Windows.MainShellWindow.Current?.WearProfileItemFromCounter(id) == true;
         /// <summary>WPF RequestSignIn: the panel's account sign-in over the counter.</summary>
         internal static Func<Window, Task> CounterSignIn { get; set; } = owner =>
             Windows.MainShellWindow.Current?.OpenUnifiedLoginDialog(owner) ?? Task.CompletedTask;
@@ -57,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 w = new GameWindow(Games[PrizeCounterId]) { _counterFrom = string.IsNullOrWhiteSpace(from) ? "wallet" : from, _counterTab = tab };
                 if (onClosed != null) w._counterOnClosed.Add(onClosed);
-                w.Load(Server()); w.Show(); return w;
+                w.Load(Server()); w.CenterDefaultFrame(onMain: true); w.Show(); return w;
             }
             catch (Exception ex)
             {
@@ -97,7 +99,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 () => FriendsHead.Identity() is { } id && id.UnifiedId == _counterOpener ? id : null,
                 () => baseUrl == null || CoreSettings.Current.OfflineMode,
                 (account, fromBuy, sp) => Dispatcher.UIThread.Post(() => V2PurchaseHead.AdoptSp(account, fromBuy, sp)),
-                PrizeOwnership.ApplySnapshot, baseUrl);
+                PrizeOwnership.ApplySnapshot, baseUrl)
+            {
+                BuyLanded = () => Dispatcher.UIThread.Post(() => SeasonFeatureTracking.Track(CoreSettings.Current,
+                    ConditioningControlPanel.Models.SeasonFeatureKeys.Shop, CounterNoteEvent, DateTime.UtcNow)),
+            };
         }
 
         /// <summary>WPF Reload (:376): the page again in the same window, with a fresh init.</summary>
@@ -136,6 +142,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         Log.Debug("PrizeCounter: wallet frame {Sp} names no receipt, ignored", sp);
                     break;
                 case "close": CloseFor(PrizeCounterRules.PageCloseReason((string?)o["reason"])); break;
+                case "wear":
+                    var wearId = o["id"]?.Type == JTokenType.String ? (string?)o["id"] : null;
+                    var wearGeneration = _counterGeneration;
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (_closing || wearGeneration != _counterGeneration || wearId == null) return;
+                        if (!wearId.StartsWith("profile.frame.", StringComparison.Ordinal) &&
+                            !wearId.StartsWith("profile.avatar.", StringComparison.Ordinal) &&
+                            !wearId.StartsWith("prime.frame.", StringComparison.Ordinal)) return;
+                        bool ok = false;
+                        try { ok = CounterWearProfile(wearId); }
+                        catch (Exception ex) { Log.Warning(ex, "PrizeCounter: profile wear failed"); }
+                        Post(new { type = "worn", id = wearId, ok });
+                    });
+                    break;
                 case "signin": Dispatcher.UIThread.Post(() => _ = SignInFromCounterPage()); break;   // never inside the page's message callback
                 default:
                     Log.Debug("PrizeCounter: page message '{Type}' {Msg}", (string?)o["type"], (string?)o["msg"]);
@@ -172,7 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 motion = PrizeCounterRules.MotionWire(s.MotionLevel, GentleVisuals.On),
                 gentle = GentleVisuals.On, reducedMotion = !UiMotionPreference.AnimationsEnabled,   // WPF :535 ClientAreaAnimation
                 tab = !RainV2Gate.On && PrizeCounterRules.IsRainId(_counterTab) ? null : _counterTab,
-                from = _counterFrom, wears = Array.Empty<string>(), platform = "desktop",
+                from = _counterFrom, wears = new[] { "profile" }, platform = "desktop",
                 companion = CompanionName.ForActiveMod(), rainV2 = RainV2Gate.On,
             };
         }

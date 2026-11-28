@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///   * MUTE silences this video run only (player volume 0, never the system mixer). Cleared when
     ///     the run ends, kept across an attention-check replay and the output heal.
     /// A Chaos run (<see cref="Chaos.ChaosRunHost.IsActive"/>) hides both, as WPF LockedChaosRun;
-    /// Down the Rabbit Hole is not hosted on this head (n/a).
+    /// a running Down the Rabbit Hole descent does too (<see cref="LockedRun"/>).
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay
     {
@@ -43,8 +43,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal int PlayerVolume { get; private set; }
 
         private static bool LockdownActive => LockdownService.Current?.IsActive == true;
-        private bool CloseAllowed => MandatoryVideoControls.ShowClose(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
-        private bool ControlsAllowed => MandatoryVideoControls.ShowMute(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
+        /// <summary>WPF VideoService.Controls.cs:40-41 LockedChaosRun: a Chaos run or a DtRH descent.</summary>
+        internal static bool LockedRun => Chaos.ChaosRunHost.IsActive || Games.GameWindow.IsDtrhRunning;
+        private bool CloseAllowed => MandatoryVideoControls.ShowClose(_strict, LockdownActive, LockedRun);
+        private bool ControlsAllowed => MandatoryVideoControls.ShowMute(_strict, LockdownActive, LockedRun);
 
         internal int EffectivePlayerVolume => (_userMuted || _externalMuted || _revealAudioHeld) ? 0 :
             MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
@@ -69,6 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 x.Buttons.Close.IsVisible = close;
                 x.Buttons.SetMuted(_userMuted);
                 x.Buttons.Row.IsVisible = true;
+                if (_browser != null) LiftControls(x);
             }
         }
 
@@ -93,12 +96,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             Log.Information("VideoService: close button - dismissing the video (the Esc door)");
-            Scheduler.End();
+            EndPrimary("close button");
         }
 
         private void HideCloseButtons()
         {
-            foreach (var x in _surfaces) x.Buttons.Close.IsVisible = false;
+            foreach (var x in AllSurfaces) x.Buttons.Close.IsVisible = false;   // WPF VideoService.Controls.cs:84-87: every window
         }
 
         /// <summary>WPF WatchForLocks: a Lockdown that starts mid-video takes the X down. Subscribed once

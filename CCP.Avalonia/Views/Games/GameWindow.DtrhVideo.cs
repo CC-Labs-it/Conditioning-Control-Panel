@@ -12,35 +12,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 {
     internal sealed partial class GameWindow
     {
-        private bool _dtrhFrozen;
-        private MandatoryVideoScheduler? _dtrhVideo;
-
-        protected override void OnLoaded(RoutedEventArgs e)
-        {
-            base.OnLoaded(e);
-            if (!IsDtrh) return;
-            _dtrhVideo = CoreEngine.Video;
-            if (_dtrhVideo == null) return;
-            _dtrhVideo.VideoStarted += DtrhVideoStarted;
-            _dtrhVideo.VideoEnded += DtrhVideoEnded;
-        }
-
-        protected override void OnUnloaded(RoutedEventArgs e)
-        {
-            if (_dtrhVideo != null)
-            {
-                _dtrhVideo.VideoStarted -= DtrhVideoStarted;
-                _dtrhVideo.VideoEnded -= DtrhVideoEnded;
-                _dtrhVideo = null;
-            }
-            base.OnUnloaded(e);
-        }
-
-        private void DtrhVideoStarted() => DtrhVideoState(true);
-        private void DtrhVideoEnded() => DtrhVideoState(false);
         private void DtrhVideoState(bool on)
         {
-            DtrhHapticDirector.OnVideoCovering(on);
+            DtrhVideoCovering(on);
             Dispatcher.UIThread.Post(() =>
             {
                 if (_closing) return;
@@ -58,20 +32,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             payload.Fire();
         }
 
-        private void ApplyDtrhFreeze(bool on)
-        {
-            if (_dtrhFrozen == on) return;
-            _dtrhFrozen = on;
-            DtrhHapticDirector.OnWorldFreeze(on);
-            // WPF DtrhHostService.cs:814-837: video and the companion's spoken line pause together.
-            if (on) MandatoryVideoOverlay.Instance.PausePrimary();
-            else MandatoryVideoOverlay.Instance.PlayPrimary();
-            AvatarTubeWindow.Live?.SetSpokenAudioPaused(on);
-        }
-
         private void ReleaseDtrhVideo()
         {
-            ApplyDtrhFreeze(false);
+            ApplyDtrhWorldFreeze(false);
             MandatoryVideoOverlay.Instance.SetExternalMute(false);
         }
     }

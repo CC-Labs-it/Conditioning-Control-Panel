@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -7,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.JustDrop;
 using Newtonsoft.Json;
@@ -30,6 +32,65 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     {
         internal const string JustDropId = "justdrop";
         private WindowState _justDropWindowedState = WindowState.Normal;
+        private PixelPoint _justDropPosition;
+        private double _justDropWidth, _justDropHeight;
+        private double _justDropWindowedWidth, _justDropWindowedHeight;
+        private bool _justDropHasFrame, _justDropChangingFrame;
+
+        private void CaptureJustDropFrame()
+        {
+            if (_justDropChangingFrame || !IsVisible || WindowState != WindowState.Normal || Width <= 0 || Height <= 0) return;
+            _justDropPosition = Position;
+            _justDropWidth = Width;
+            _justDropHeight = Height;
+            _justDropHasFrame = true;
+        }
+
+        private void CenterJustDrop(Visual source)
+        {
+            var screens = ScreenList.Enumerate(source);
+            var window = source as Window ?? this;
+            var position = window.Position;
+            global::Avalonia.Platform.Screen? screen = null;
+            // WPF TargetScreen :447-464 uses the monitor containing most of the HWND.
+            // Use the native window query when available; injected screens use the same overlap rule.
+            if (ScreenList.QueryOverride == null && window.IsVisible)
+            {
+                try { screen = window.Screens.ScreenFromWindow(window); }
+                catch (Exception ex) { Log.Debug(ex, "[Game] justdrop: screen lookup failed"); }
+            }
+            if (screen == null || !screens.Contains(screen))
+            {
+                var size = window.FrameSize ?? window.ClientSize;
+                var scaling = window.RenderScaling > 0 ? window.RenderScaling : 1;
+                double right = position.X + Math.Max(0, size.Width * scaling);
+                double bottom = position.Y + Math.Max(0, size.Height * scaling);
+                screen = screens.Select(s =>
+                {
+                    var b = s.Bounds;
+                    double overlap = Math.Max(0, Math.Min(right, b.Right) - Math.Max(position.X, b.X))
+                        * Math.Max(0, Math.Min(bottom, b.Bottom) - Math.Max(position.Y, b.Y));
+                    double dx = Math.Max(0, Math.Max(b.X - right, position.X - b.Right));
+                    double dy = Math.Max(0, Math.Max(b.Y - bottom, position.Y - b.Bottom));
+                    return (Screen: s, Overlap: overlap, Distance: dx * dx + dy * dy);
+                }).OrderByDescending(x => x.Overlap).ThenBy(x => x.Distance)
+                  .ThenByDescending(x => x.Screen.IsPrimary).Select(x => x.Screen).FirstOrDefault();
+            }
+            if (screen == null) return;
+            var scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            if (_justDropWindowedWidth <= 0 || _justDropWindowedHeight <= 0)
+            {
+                var primary = screens.FirstOrDefault(s => s.IsPrimary) ?? screen;
+                var primaryScale = primary.Scaling > 0 ? primary.Scaling : 1;
+                _justDropWindowedWidth = primary.Bounds.Width * .85 / primaryScale;
+                _justDropWindowedHeight = primary.Bounds.Height * .85 / primaryScale;
+            }
+            Width = Math.Min(_justDropWindowedWidth, screen.Bounds.Width / scale);
+            Height = Math.Min(_justDropWindowedHeight, screen.Bounds.Height / scale);
+            Position = new PixelPoint(screen.Bounds.X + (int)((screen.Bounds.Width - Width * scale) / 2),
+                screen.Bounds.Y + (int)((screen.Bounds.Height - Height * scale) / 2));
+            WindowStartupLocation = WindowStartupLocation.Manual;
+        }
 
         // WPF JustDropHostService.cs:132-135: audio starts and the live clock survives occlusion.
         internal const string JustDropBrowserArguments = "--autoplay-policy=no-user-gesture-required "
@@ -143,44 +204,85 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }, RoutingStrategies.Tunnel);
         }
 
+        internal Action? JustDropActivatePanelForTests;
+        internal static Action<GameWindow>? JustDropFocusPageForTests;
+
+        // WPF ChaosWebViewHost.FocusWeb (:877-883): Activate, then hand the keyboard to the page.
+        private void FocusJustDropPage()
+        {
+            Activate();
+            JustDropFocusPageForTests?.Invoke(this);
+            Web.FocusPage();
+        }
+
         internal static GameWindow? LaunchJustDropReplay(string code, Windows.MainShellWindow shell)
         {
             if (string.IsNullOrWhiteSpace(code)) return null;
             lock (Open)
             {
                 var live = Open.Find(w => w.Spec.Id == JustDropId);
-                if (live is not null) { live.Activate(); return live; }
+                if (live is not null) { live.FocusJustDropPage(); return live; }
             }
             var window = new GameWindow(Games[JustDropId] with { Query = JustDropHandoff.ReplayPath(code) });
             window.LoadJustDrop();
             var state = shell.WindowState;
             bool duck = shell.IsVisible && state != global::Avalonia.Controls.WindowState.Minimized;
+            window.CenterJustDrop(shell);
             window.SetJustDropFullscreen(true);
             window.Closed += (_, _) =>
             {
                 if (duck && shell.IsVisible && shell.WindowState == global::Avalonia.Controls.WindowState.Minimized)
-                    shell.WindowState = state;
+                {
+                    shell.WindowState = state == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+                    if (window.JustDropActivatePanelForTests is { } activate) activate();
+                    else shell.Activate();
+                }
             };
             window.Show();
-            if (duck) { shell.WindowState = global::Avalonia.Controls.WindowState.Minimized; window.Activate(); }
+            if (duck) { shell.WindowState = global::Avalonia.Controls.WindowState.Minimized; window.FocusJustDropPage(); }
             // WPF ChaosWebViewHost.cs:919-972: ownership attaches after the duck, so a minimized panel
             // leaves the replay unowned until it comes back (GameWindow.JustDropOwner.cs).
             window.AttachJustDropOwner(shell);
             return window;
         }
 
-        // WPF ChaosWebViewHost.cs:746-756,768-776: capture on each entry, restore on every exit.
-        // Native bounds restoration remains the window platform's job; replay starts from Normal.
+        // WPF ChaosWebViewHost.cs:713-785: preserve the last normal frame, including maximized state.
         private void SetJustDropFullscreen(bool fullscreen)
         {
             if (fullscreen)
             {
                 if (WindowState == WindowState.FullScreen) return;
-                _justDropWindowedState = WindowState == WindowState.Maximized
-                    ? WindowState.Maximized : WindowState.Normal;
+                _justDropWindowedState = WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+                CaptureJustDropFrame();
+                // WPF SetFullscreen :600-606 saves size only for a visible normal frame.
+                if (IsVisible && WindowState == WindowState.Normal && _justDropHasFrame)
+                {
+                    _justDropWindowedWidth = _justDropWidth;
+                    _justDropWindowedHeight = _justDropHeight;
+                }
                 WindowState = WindowState.FullScreen;
             }
-            else if (WindowState == WindowState.FullScreen) WindowState = _justDropWindowedState;
+            else if (WindowState == WindowState.FullScreen)
+            {
+                var screens = ScreenList.Enumerate(this);
+                bool reachable = _justDropHasFrame && screens.Any(s =>
+                    _justDropPosition.X < s.Bounds.Right && _justDropPosition.Y < s.Bounds.Bottom &&
+                    _justDropPosition.X + _justDropWidth * s.Scaling > s.Bounds.X &&
+                    _justDropPosition.Y + _justDropHeight * s.Scaling > s.Bounds.Y);
+                _justDropChangingFrame = true;
+                try
+                {
+                    WindowState = WindowState.Normal;
+                    if (reachable)
+                    {
+                        Width = _justDropWidth; Height = _justDropHeight; Position = _justDropPosition;
+                        if (_justDropWindowedState == WindowState.Maximized) WindowState = WindowState.Maximized;
+                    }
+                    else CenterJustDrop(this);
+                }
+                finally { _justDropChangingFrame = false; }
+                CaptureJustDropFrame();
+            }
         }
 
         /// <summary>WPF OnPageMessage (:227): the raw envelope to Core, so the source/version checks stay in one place.</summary>

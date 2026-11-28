@@ -25,6 +25,13 @@ public sealed class X11KeywordInputTests
     public void SpecialKeysMapToEngineKeys(uint keysym, KeywordInputKey expected) =>
         Assert.Equal(expected, X11KeywordInput.Special(keysym));
 
+    [Theory]
+    [InlineData(1, 0, 1u)]
+    [InlineData(2, 2, 16386u)]
+    [InlineData(3, 3, 24579u)]
+    public void CoreStateCarriesShiftCapsAndGroup(byte modifiers, byte group, uint expected) =>
+        Assert.Equal(expected, X11KeywordInput.CoreState(modifiers, group));
+
     [Fact]
     public void InvalidAndNonCharacterKeysymsAreIgnored()
     {

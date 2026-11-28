@@ -10,8 +10,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>Stops the clip PlaySpeechAudio last started (WPF StopSpokenAudio's handle). Never null.</summary>
         private Action _stopSpoken = static () => { };
 
-        /// <summary>WPF AvatarTubeWindow.Speech.cs:2023-2036 Pause/ResumeSpokenAudio: a world freeze holds the line in place.</summary>
-        internal void SetSpokenAudioPaused(bool paused) => RunOnAvatar(() => Platform.LibVlcAudio.SetPaused(_stopSpoken, paused));
+        /// <summary>WPF Speech.cs:2023-2036 PauseSpokenAudio / ResumeSpokenAudio (DtRH world freeze): holds the line in place.</summary>
+        internal void SetSpokenPaused(bool paused) => RunOnAvatar(() =>
+        {
+            try { Platform.LibVlcAudio.SetPaused(_stopSpoken, paused); } catch { }
+        });
+
 
         /// <summary>WPF AvatarTube/AvatarTubeWindow.Speech.cs:1911 StopVoiceLineAudio: mute cuts the clip without hiding the text bubble.</summary>
         internal void StopVoiceLineAudio() => RunOnAvatar(() =>
@@ -25,26 +29,33 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// auto-hide and the bubble in one pass. Nothing is drained afterwards, so nothing speaks
         /// after a panic. Idempotent and safe when idle; every step runs even if one throws.
         /// </summary>
-        public void PanicSilence() => RunOnAvatar(() =>
+        public void PanicSilence()
         {
-            // WPF Speech.cs:1881 leaves look-picker fades running; only settle pending roster paint.
-            try { if (_rosterAvatarSwitchPending) CancelAvatarSwitch(finishRoster: true); } catch { }
-            try { _stopSpoken(); } catch { }
-            _stopSpoken = static () => { };
-            // WPF KillAllAudio -> Subliminal.Stop (App.xaml.cs:1293): a trigger whisper plays while the
-            // subliminal scheduler, and so the engine stop, is idle, so it is cut here too.
-            try { Views.Overlays.SubliminalWhisperShow.StopAll(); } catch { }
-            try { StopThinkingAnimation(); } catch { }
-            try { _speechTimer?.Stop(); } catch { }
-            try { ClearSpeechQueue(); } catch { }   // WPF Speech.cs:1850-1851: nothing queued speaks after
-            try { _listeningDotsTimer?.Stop(); _listeningDotsTimer = null; } catch { }
-            _isWaitingForAi = false;
-            _isGiggling = false;
-            _isShowingAiBubble = false;
-            _isListeningBubble = false;
-            try { _speechBubble.IsVisible = false; } catch { }   // WPF CollapseSpeechBubble (Speech.cs:2962)
-            _lastSpeechEndTime = SpeechNow;
-            _isMouseOverSpeechBubble = false;
-        });
+            System.Threading.Interlocked.Increment(ref _levelReactionVersion);
+            RunOnAvatar(() =>
+            {
+                _videoAnnouncementShowing = false;
+                LockReactionGeneration++;
+                try { StopAvatarGlow(); } catch { }
+                // WPF Speech.cs:1881 leaves look-picker fades running; only settle pending roster paint.
+                try { if (_rosterAvatarSwitchPending) CancelAvatarSwitch(finishRoster: true); } catch { }
+                try { _stopSpoken(); } catch { }
+                _stopSpoken = static () => { };
+                // WPF KillAllAudio -> Subliminal.Stop (App.xaml.cs:1293): a trigger whisper plays while the
+                // subliminal scheduler, and so the engine stop, is idle, so it is cut here too.
+                try { Views.Overlays.SubliminalWhisperShow.StopAll(); } catch { }
+                try { StopThinkingAnimation(); } catch { }
+                try { _speechTimer?.Stop(); } catch { }
+                try { ClearSpeechQueue(); } catch { }   // WPF Speech.cs:1850-1851: nothing queued speaks after
+                try { _listeningDotsTimer?.Stop(); _listeningDotsTimer = null; } catch { }
+                _isWaitingForAi = false;
+                _isGiggling = false;
+                _isShowingAiBubble = false;
+                _isListeningBubble = false;
+                try { _speechBubble.IsVisible = false; } catch { }   // WPF CollapseSpeechBubble (Speech.cs:2962)
+                _lastSpeechEndTime = SpeechNow;
+                _isMouseOverSpeechBubble = false;
+            });
+        }
     }
 }

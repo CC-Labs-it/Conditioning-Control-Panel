@@ -1,10 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -49,6 +53,132 @@ public sealed class IntakeLifecycleTests
             CoreSettings.Current.IntakeFullscreen = fullscreen;
         }
     }
+
+    [Fact]
+    public Task IntakeOwnerTracksShellAndUnhooksOnClose() => WithCleanState(() =>
+    {
+        var get = NativeWindowOwner.HandleForTests;
+        var set = NativeWindowOwner.SetForTests;
+        var visible = NativeWindowOwner.NativeVisibleForTests;
+        var show = NativeWindowOwner.ShowForTests;
+        var owners = new List<Window?>();
+        var repaired = new List<Window>();
+        NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "HWND");
+        NativeWindowOwner.SetForTests = (_, owner) => { owners.Add(owner); return true; };
+        NativeWindowOwner.NativeVisibleForTests = _ => false;
+        NativeWindowOwner.ShowForTests = repaired.Add;
+        var main = new Window();
+        main.Show();
+        try
+        {
+            var intake = GradedIntakeTabView.OpenIntake(main, duckMain: false);
+            Assert.Same(main, owners.Last());
+            Assert.True(intake.IntakeOwnerLinked);
+            main.WindowState = WindowState.Minimized;
+            Assert.Null(owners.Last());
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(intake, repaired);
+            main.WindowState = WindowState.Normal;
+            Assert.Same(main, owners.Last());
+            main.Hide();
+            Assert.Null(owners.Last());
+            main.Show();
+            Assert.Same(main, owners.Last());
+            intake.Close();
+            int count = owners.Count;
+            main.Hide();
+            Assert.Equal(count, owners.Count);
+        }
+        finally
+        {
+            main.Close();
+            NativeWindowOwner.HandleForTests = get;
+            NativeWindowOwner.SetForTests = set;
+            NativeWindowOwner.NativeVisibleForTests = visible;
+            NativeWindowOwner.ShowForTests = show;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task HealedWindowsCascadeRestoresWebViewControllerVisibility() => WithCleanState(() =>
+    {
+        var get = NativeWindowOwner.HandleForTests;
+        var set = NativeWindowOwner.SetForTests;
+        var visible = NativeWindowOwner.NativeVisibleForTests;
+        var show = NativeWindowOwner.ShowForTests;
+        var table = Marshal.AllocHGlobal(5 * IntPtr.Size);
+        var controller = Marshal.AllocHGlobal(IntPtr.Size);
+        int calls = 0, value = 0;
+        WebHost.WindowsVisibleSetter setter = (IntPtr ptr, int on) =>
+        {
+            Assert.Equal(controller, ptr);
+            calls++;
+            value = on;
+            return 0;
+        };
+        Marshal.WriteIntPtr(table, 4 * IntPtr.Size, Marshal.GetFunctionPointerForDelegate(setter));
+        Marshal.WriteIntPtr(controller, table);
+        bool nativeVisible = true;
+        NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "HWND");
+        NativeWindowOwner.SetForTests = (_, _) => true;
+        NativeWindowOwner.NativeVisibleForTests = _ => nativeVisible;
+        NativeWindowOwner.ShowForTests = _ => nativeVisible = true;
+        var main = new Window();
+        main.Show();
+        try
+        {
+            var intake = GradedIntakeTabView.OpenIntake(main, duckMain: false);
+            intake.Web.WindowsRenderControllerForTests = () => controller;
+            main.WindowState = WindowState.Minimized;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, calls); // already visible, no cascade was healed
+            main.WindowState = WindowState.Normal;
+            nativeVisible = false;
+            main.WindowState = WindowState.Minimized;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, calls);
+            Assert.Equal(1, value); // WebView2 BOOL true
+
+            // A cascade may land before main is restored, before the queued repair runs.
+            main.WindowState = WindowState.Normal;
+            nativeVisible = false;
+            main.WindowState = WindowState.Minimized;
+            main.WindowState = WindowState.Normal;
+            Assert.True(intake.IntakeOwnerLinked);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(nativeVisible);
+            Assert.Equal(2, calls);
+            Assert.Equal(1, value);
+
+            intake.Close();
+            nativeVisible = false;
+            main.WindowState = WindowState.Normal;
+            main.WindowState = WindowState.Minimized;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, calls);
+        }
+        finally
+        {
+            main.Close();
+            NativeWindowOwner.HandleForTests = get;
+            NativeWindowOwner.SetForTests = set;
+            NativeWindowOwner.NativeVisibleForTests = visible;
+            NativeWindowOwner.ShowForTests = show;
+            Marshal.FreeHGlobal(controller);
+            Marshal.FreeHGlobal(table);
+            GC.KeepAlive(setter);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task IntakeEnablesAutoplay() => WithCleanState(() =>
+    {
+        var intake = GradedIntakeTabView.OpenIntake(null, duckMain: false);
+        Assert.Contains("--autoplay-policy=no-user-gesture-required", intake.Web.WindowsBrowserArguments);
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task OpeningRecordsOnceAndHoldEndsOnCloseAndRecovery() => WithCleanState(() =>

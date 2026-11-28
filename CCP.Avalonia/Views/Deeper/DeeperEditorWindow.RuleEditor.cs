@@ -386,14 +386,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         };
 
         // -- Help popups: list every trigger / action with its description ----
-        // RESTORED. The note here said these "need a message box", which stopped being true when
-        // Views/Dialogs/MessageDialog landed: three panels of user-facing help text were being
-        // assembled in full and then written to the DEBUG LOG, so the three "?" buttons ran a
-        // visible amount of work and showed the user nothing. MessageDialog scrolls and caps at
-        // 640px, which is what these need - the trigger list is long. Argument order is WPF's
-        // (message first, title second) re-stated as ShowAsync(owner, title, message).
-
-        private async void BtnTriggerHelp_Click(object? sender, RoutedEventArgs e)
+        private void BtnTriggerHelp_Click(object? sender, RoutedEventArgs e)
         {
             var isAudio = _enhancement?.MediaType == MediaTypes.Audio;
             var types = isAudio ? TriggerTypesForAudio : TriggerTypesForVideo;
@@ -406,11 +399,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     sb.Append("  ").AppendLine(desc);
                 sb.AppendLine();
             }
-            await MessageDialog.ShowAsync(this, Loc.Get("deeper_editor_help_browse_triggers"),
+            ShowHelpPopup(sender as Control, Loc.Get("deeper_editor_help_browse_triggers"),
                 sb.ToString().TrimEnd());
         }
 
-        private async void BtnActionHelp_Click(object? sender, RoutedEventArgs e)
+        private void BtnActionHelp_Click(object? sender, RoutedEventArgs e)
         {
             var sb = new StringBuilder();
             foreach (var a in AllActionTypes)
@@ -421,13 +414,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     sb.Append("  ").AppendLine(desc);
                 sb.AppendLine();
             }
-            await MessageDialog.ShowAsync(this, Loc.Get("deeper_editor_help_browse_actions"),
+            ShowHelpPopup(sender as Control, Loc.Get("deeper_editor_help_browse_actions"),
                 sb.ToString().TrimEnd());
         }
 
-        private async void BtnRegionHelp_Click(object? sender, RoutedEventArgs e)
-            => await MessageDialog.ShowAsync(this, Loc.Get("deeper_editor_help_region"),
+        private void BtnRegionHelp_Click(object? sender, RoutedEventArgs e)
+            => ShowHelpPopup(sender as Control, Loc.Get("deeper_editor_help_region"),
                 Loc.Get("deeper_editor_help_region_body"));
+
+        // WPF DeeperEditorWindow.xaml.cs:2875. Reanchor the shared popup for each help button.
+        private void ShowHelpPopup(Control? anchor, string title, string body)
+        {
+            EditorHelpPopup.IsOpen = false;
+            TxtEditorHelpTitle.Text = title;
+            TxtEditorHelpBody.Text = body;
+            EditorHelpPopup.PlacementTarget = anchor ?? this;
+            EditorHelpPopup.IsOpen = true;
+        }
 
         private void BtnDeleteRule_Click(object? sender, RoutedEventArgs e)
         {
@@ -718,6 +721,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _selectedRule.RegionConstraint = _enhancement.Regions[idx - 1].Id;
             }
             MarkDirty();
+            RebuildRuleVisuals();
             ScheduleValidation();
         }
 

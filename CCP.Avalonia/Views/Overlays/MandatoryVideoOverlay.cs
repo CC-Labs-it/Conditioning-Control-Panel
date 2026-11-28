@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -36,12 +37,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// on a 1 s UI timer: a dead (8 s) or lost (5 s without frames) output replays the clip once, as
     /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.html). Ambient bubbles
     /// are paused by the Core scheduler.
-    /// Missing against WPF: off-thread player rescue and LibVLC retire/quarantine
-    /// (a Stop that hangs in native code still hangs the UI thread), the gaze
-    /// attention input and no-activate z-order.
+    /// Missing against WPF: off-thread player rescue, the gaze attention input and remaining z-order parity.
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
+        public bool BrowserMediaBlocksScheduledVideo => Views.Windows.LockCardWindow.WebVideoClaimed
+            || (CoreSettings.Current.ProtectBrowserVideoPlayback && Views.Tabs.SettingsTabView.InterruptingBrowserMediaBusy);
+
         public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsForYouOnScreen);
 
         public void Freeze() => SubliminalWhisperShow.FreezeForVideo();
@@ -56,6 +58,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private Action? _refreshFloating;
         internal Action<Window> ApplyFloatingPassive { get; set; } = X11Overlay.SetPassive;
+        internal Action<Window> DenyVideoMouseActivate { get; set; } = w => Win32Window.DenyMouseActivate(w);
+        internal Action<Window> MakeVideoNonActivating { get; set; } = Win32Window.MakeNonActivating;
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
         internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons, Panel Picture, FloatingVideoReveal? Reveal = null)
         {
@@ -63,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             internal Window? GraceHost { get; set; }
             internal global::Avalonia.Platform.Screen? Screen { get; init; }
             internal EventHandler<KeyEventArgs>? PanicTunnel { get; init; }
+            internal Action<KeyEventArgs>? OnKey { get; init; }
         }
 
         private readonly List<Surface> _surfaces = new();
@@ -84,7 +89,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private VideoPlaybackClock? _cutClock;
         internal VideoWedgeWatchdog? _wedge;
         internal bool VetoStrictClose(bool playing) => MandatoryVideoScheduler.StrictVetoesClose(playing, _closing, _wedge?.StallSeen == true);
+        // Quarantined graphs must survive even if the blocked native call eventually returns.
+        private static readonly List<object> _quarantinedPlayback = new();
+        internal int StopGraceMs { get; set; } = 5000; // WPF: 1 s plus 4 s straggler grace
         private IMandatoryPlayback? _playback;
+        private Task? _pendingStop;
+        private LibVLC? _pendingStopOwner, _playingEngine, _videoEngine;
+        private bool _engineUnusable;
+        private static readonly List<LibVLC> _retiredVideoEngines = new();
+        internal int PendingStopWaitMs { get; set; } = 2000;
+        internal Func<bool>? ReplaceEngineForTests { get; set; }
+        internal Func<LibVLC?>? PlaybackEngineForTests { get; set; }
         private readonly Func<IMandatoryPlayback>? _playbackFactory;
         internal Random CutRandom { get; set; } = Random.Shared;
         private bool _cutStartChosen;
@@ -96,8 +111,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!_cutStartChosen && _playback.IsPlaying && _playback.IsSeekable && _playback.Length > 0)
             {
                 _cutStartChosen = true;
-                var start = CoreSettings.Current.VideoCutRandomStart
-                    ? VideoLengthCapRules.StartOffsetMs(CoreSettings.Current.VideoMaxDurationSeconds, _playback.Length, CutRandom) : 0;
+                var segment = Scheduler.RandomSegmentSeconds;
+                var start = segment > 0 ? VideoLengthCapRules.StartOffsetMs(segment, _playback.Length, CutRandom)
+                    : CoreSettings.Current.VideoCutRandomStart
+                        ? VideoLengthCapRules.StartOffsetMs(CoreSettings.Current.VideoMaxDurationSeconds, _playback.Length, CutRandom) : 0;
                 if (start > 0)
                 {
                     _playback.Time = start;
@@ -154,9 +171,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF VideoService.MetadataCache: created on first use on the shared LibVLC; a miss starts
         /// a background parse and the clip is kept this refill.</summary>
         private static VideoMetadataCache? _lengths;
+        private static LibVLC? _lengthsOwner;
         internal static double? LengthOf(string path)
         {
-            if (_lengths == null && LibVlcAudio.Shared is { } vlc) _lengths = new VideoMetadataCache(vlc);
+            var vlc = LibVlcAudio.Shared;
+            if (!ReferenceEquals(_lengthsOwner, vlc)) { _lengthsOwner = vlc; _lengths = vlc == null ? null : new VideoMetadataCache(vlc); }
             var d = _lengths?.TryGetDuration(path);
             if (d == null && _lengths != null) _ = _lengths.GetOrComputeDurationAsync(path);
             return d;
@@ -183,10 +202,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return () => Instance.PlaybackTimeMsChanged -= handler;
         }
 
-        internal IReadOnlyList<Window> Windows => _surfaces.Select(s => s.Window).ToList();
+        internal IReadOnlyList<Window> Windows => AllSurfaces.Select(s => s.Window).ToList();
         internal IReadOnlyList<Surface> Surfaces => _surfaces;
         internal IReadOnlyList<Window> Messages => _messages;
         internal VlcFrameSink? Sink => _sink;
+        internal bool PlaybackActive => _playback != null;
+        internal Func<IMandatoryPlayback>? RoutedPlaybackForTests { get; set; }
         internal int LiveTargets => _targets.Count;
         internal IEnumerable<Target> GazeTargets => _gracePaused ? Enumerable.Empty<Target>() : _targets.AsEnumerable().Reverse();
         /// <summary>This clip arms the attention checks (never on a floating window).</summary>
@@ -197,21 +218,112 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal double FillMs { get; private set; }
         internal int FillCount { get; private set; }
 
-        public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
+        internal Func<double?> VideoMinutes = () => App.Achievements?.Progress?.TotalVideoMinutes;
+        internal Action FirstVideoMoment = () => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("firstVideoEver", null);
+
+        public void Show(string path, bool strict) => Show(path, strict, null);
+        public void Show(string path, bool strict, Action? started) => Dispatcher.UIThread.Invoke(() =>
         {
+            // WPF VideoService.cs:3174-3185: offer the moment before either playback route.
+            try { if (VideoMinutes() <= 0) FirstVideoMoment(); }
+            catch (Exception ex) { Log.Debug(ex, "First video moment failed"); }
             _healUsed = false;   // WPF PlayVideo: one output heal per clip; the heal's replay keeps it spent
+            _forceLibVlc = false;   // each clip gets one browser attempt
             _capSpent = 0;
             // WPF VideoService.cs:3082-3085: a cached remote clip keeps its URL identity (credit, remote guards).
             _source = Scheduler.ShowingPath ?? path;
-            Play(path, strict);
+            Play(path, strict, () => { if (Floating) SpawnTogetherExtras(); started?.Invoke(); });
         });
 
-        private void Play(string path, bool strict)
+        private void Play(string path, bool strict, Action? started = null)
         {
             _videoReveal?.Dispose();
             _videoReveal = null;
             var muted = _userMuted;
             if (_playback != null || _surfaces.Count > 0) CloseAll();
+            var generation = Interlocked.Increment(ref _escapeGeneration);
+            var pending = _pendingStop;
+            if (pending != null && !pending.IsCompletedSuccessfully)
+            {
+                _ = AwaitStopAsync(pending, _pendingStopOwner, generation, path, strict, muted, started);
+                return;
+            }
+            if ((_engineUnusable || LibVlcAudio.IsRetired(_videoEngine)) && !ReplaceVideoEngine(_videoEngine ?? _pendingStopOwner))
+            {
+                Dispatcher.UIThread.Post(() => { if (generation == EscapeGeneration) Scheduler.End(); });
+                return;
+            }
+            _pendingStop = null;
+            if (PlayReady(path, strict, muted)) started?.Invoke();
+        }
+
+        // WPF VideoService.cs:7848-7882: do not build a player over the preceding Stop.
+        // Await without blocking the dispatcher, and invalidate the continuation on any later close/play.
+        private async Task AwaitStopAsync(Task pending, LibVLC? owner, int generation, string path, bool strict, bool muted, Action? started)
+        {
+            await Task.WhenAny(pending, Task.Delay(PendingStopWaitMs)).ConfigureAwait(false);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (generation != EscapeGeneration) return;
+                if ((!pending.IsCompletedSuccessfully || _engineUnusable || LibVlcAudio.IsRetired(owner)) && !ReplaceVideoEngine(owner))
+                {
+                    Dispatcher.UIThread.Post(() => { if (generation == EscapeGeneration) Scheduler.End(); });
+                    return;
+                }
+                if (ReferenceEquals(_pendingStop, pending)) _pendingStop = null;
+                try { if (PlayReady(path, strict, muted)) started?.Invoke(); }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "VideoService: deferred show failed");
+                    if (generation == EscapeGeneration)
+                    {
+                        if (Scheduler.IsPlaying) Scheduler.End(); else CloseAll();
+                    }
+                }
+            });
+        }
+
+        private bool ReplaceVideoEngine(LibVLC? owner)
+        {
+            _engineUnusable = true;
+            LibVlcAudio.Retire(owner);
+            if (ReplaceEngineForTests is { } replace)
+            {
+                if (!replace()) return false;
+                _engineUnusable = false;
+                return true;
+            }
+            if (_playbackFactory != null) { _engineUnusable = false; return true; }
+            if (owner != null)
+            {
+                lock (_retiredVideoEngines)
+                    if (!_retiredVideoEngines.Contains(owner)) _retiredVideoEngines.Add(owner);
+            }
+            try
+            {
+                var replacement = LibVlcAudio.CreateIsolatedVideo();
+                if (ReferenceEquals(replacement, owner) || ReferenceEquals(replacement, LibVlcAudio.Shared))
+                    throw new InvalidOperationException("A fresh video engine is required");
+                _videoEngine = replacement;
+                _engineUnusable = false;
+                return true;
+            }
+            catch (Exception ex) { Log.Warning(ex, "VideoService: replacement video engine failed"); return false; }
+        }
+
+        internal Action GuardPresentation(Action callback)
+        {
+            var generation = EscapeGeneration;
+            return () => { if (generation == EscapeGeneration) callback(); };
+        }
+        internal Action<T> GuardPresentation<T>(Action<T> callback)
+        {
+            var generation = EscapeGeneration;
+            return value => { if (generation == EscapeGeneration) callback(value); };
+        }
+
+        private bool PlayReady(string path, bool strict, bool muted)
+        {
             _wedge?.Dispose();   // a Show that failed before any surface skipped CloseAll: never leak its 1 s timers
             _wedge = new VideoWedgeWatchdog();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
@@ -224,52 +336,64 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             FirstFrameMs = -1;
             _floatingOnScreen = false;
             _watchedMs = 0;
-            _cutClock = CoreSettings.Current.VideoMaxDurationSeconds > 0 ? new VideoPlaybackClock() : null;
+            _cutClock = CoreSettings.Current.VideoMaxDurationSeconds > 0 || Scheduler.RandomSegmentSeconds > 0 ? new VideoPlaybackClock() : null;
             _cutStartChosen = false;
             FillMs = FillCount = 0;
             _graceConsumed = false;   // WPF PlayVideo: one grace pause per clip, replays included
             SafetyDeadline.Reset();
             SafetyDeadline.Arm(Now, 0);   // WPF StartFallbackSafetyTimer: armed before the length is known
             _safetyLengthArmed = false;
-
-            // The injected decoder omits native allocation and windows; lifecycle methods stay shared.
-            if (_playbackFactory != null)
-            {
-                _playback = _playbackFactory();
-                FirstFrameMs = 0;
-                FrameTs = Stopwatch.GetTimestamp();
-                BeginEnhancement(path);
-                return;
-            }
-            var s = CoreSettings.Current;
-            var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
             Floating = Floats(strict);
             _videoFadeSeconds = Floating ? Services.Safety.GentleVisuals.FadeSeconds : 0;
             _revealAudioHeld = false;
+
+            // The injected decoder omits native allocation (and windows, except a floating one); lifecycle methods stay shared.
+            if (_playbackFactory != null)
+            {
+                _playingEngine = PlaybackEngineForTests?.Invoke();
+                _playback = _playbackFactory();
+                FirstFrameMs = 0;
+                FrameTs = Stopwatch.GetTimestamp();
+                if (Floating) { _surfaces.Add(Build(null, strict)); RevealVideoSurfaces(); }
+                BeginEnhancement(path);
+                return true;
+            }
+            var s = CoreSettings.Current;
+            var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
+            _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
+            // WPF VideoService.cs:3207: the browser engine first, before the duck so its own audio is never swept.
+            var browser = TryStartBrowser(path);
 
-            var vlc = LibVlcAudio.Shared;
-            if (vlc == null)
+            var vlc = RoutedPlaybackForTests == null ? _videoEngine ?? LibVlcAudio.Shared : null;
+            if (vlc == null && !browser && RoutedPlaybackForTests == null)
             {
                 Log.Warning("VideoService: LibVLC is not available - cannot play {Path}", path);
                 Dispatcher.UIThread.Post(Scheduler.End);
-                return;
+                return false;
             }
             // WPF StartVideoPlayback prologue: duck other apps (one ref, released in CloseAll), sleep the
             // bouncing text, and arm the attention checks.
-            if (s.AudioDuckingEnabled) { CoreAudio.Duck(s.DuckingLevel); _didDuck = true; }
+            if (s.AudioDuckingEnabled && !_didDuck) { CoreAudio.Duck(s.DuckingLevel); _didDuck = true; }
             BouncingTextOverlay.PauseForVideo(true);
-            _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
+            if (browser) { StartBrowserClocks(path); return true; }
+            if (RoutedPlaybackForTests is { } routedPlayback)
+            {
+                _playback = routedPlayback();
+                return true;
+            }
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
-            _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
+            _playingEngine = vlc;
+            _player = new MediaPlayer(vlc!) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
             _playback = new NativeMandatoryPlayback(_player);
             ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
-            _sink = new VlcFrameSink(_player, () => _media, bmp =>
+            Media? sinkMedia = null;
+            _sink = new VlcFrameSink(_player, () => sinkMedia, GuardPresentation<WriteableBitmap>(bmp =>
             {
                 foreach (var x in _surfaces) x.Video.Source = bmp;
                 if (!blur) return;
@@ -286,7 +410,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     x.Fill.Source = on ? _fill : null;
                     x.Fill.IsVisible = x.Scrim.IsVisible = on;
                 }
-            }, () =>
+            }), GuardPresentation(() =>
             {
                 FrameTs = Stopwatch.GetTimestamp();
                 if (FirstFrameMs < 0)
@@ -311,13 +435,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     x.Video.InvalidateVisual();
                     if (fill) x.Fill.InvalidateVisual();
                 }
-            });
+            }));
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (OnPlayerPlaying(_player == live))
             {
                 LibVlcAudio.ApplyPreferredDevice(live);
-                ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("video", path, CoreEngine.IsRunning, false, DateTime.Now);   // WPF VideoService.cs:1697
+                ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("video", path, CoreEngine.IsRunning || ConditioningControlPanel.CoreSession.IsSessionRunning, false, DateTime.Now);   // WPF VideoService.cs:1697
                 live.SetRate(ConditioningControlPanel.Services.Video.MandatoryVideoPlaybackRules.PlaybackRate(
                     s.GentleVisuals, s.GentleSpeed));
                 _refreshFloating?.Invoke();
@@ -343,8 +467,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     OnNaturalVideoEnd();
                 });
             };
-            _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
+            _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) EndPrimary("player error"); });
             _media = new Media(vlc, path, VideoSelectionRules.IsRemoteMediaPath(path) ? FromType.FromLocation : FromType.FromPath);
+            sinkMedia = _media;
             foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(path)) _media.AddOption(option);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
@@ -357,6 +482,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _guard.Tick += (_, _) => GuardTick();
             _guard.Start();
             if (_attention) DispatcherTimer.RunOnce(SetupAttention, TimeSpan.FromSeconds(2));   // WPF: Task.Delay(2000)
+            return true;
         }
 
         internal static Border DecorateFloating(Window w)
@@ -383,26 +509,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private volatile bool _floatingOnScreen;   // read by the global keyboard hook
 
         /// <summary>WPF DecidePresentation: floating is for an ordinary video only - never a strict one,
-        /// a Lockdown or a Chaos run (DtRH is n/a on this head).</summary>
+        /// a Lockdown, a Chaos run or a DtRH descent.</summary>
         public bool IsFloating(bool strict) => Floats(strict);
-
-        // The current host supports one floating window, so a Test replaces it.
-        public bool TryFloatingTrigger(bool userInitiated)
-        {
-            if (!userInitiated || !Floating) return false;
-            Scheduler.ForceCleanup();
-            return Scheduler.Trigger(userInitiated: true);
-        }
 
         internal static bool Floats(bool strict) => ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ShouldFloat(
             CoreSettings.Current.MandatoryVideoFloating, strict,
-            ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true, global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+            ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true, LockedRun);   // WPF VideoService.Floating.cs:50-54
 
         /// <summary>WPF VideoService.UpdateMasterVolume / UpdateVideoVolume: a playing clip follows
         /// Settings · Audio live. UI thread (teardown runs there too).</summary>
         internal void UpdateVolume()
         {
             if (_player is { } p) ApplyVolume(p);
+            foreach (var f in _floaters) ApplyInstanceVolume(f);
+            _browser?.SetVolume(PlayerVolume = EffectivePlayerVolume);
             _refreshFloating?.Invoke();
         }
 
@@ -452,7 +572,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
-        internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
+        /// <param name="inst">A joining floating window (MandatoryVideoOverlay.FloatingInstances.cs): its own buttons,
+        /// player and close; null for the run's own clip.</param>
+        internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict, FloatingInstance? inst = null)
         {
             var fill = new Image { Stretch = Stretch.UniformToFill, IsVisible = false };
             RenderOptions.SetBitmapInterpolationMode(fill, BitmapInterpolationMode.HighQuality);
@@ -462,7 +584,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Opacity = Services.Video.MandatoryVideoPresentation.PictureOpacity(false, 0, _videoFadeSeconds) };
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
-            var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
+            var buttons = inst == null ? new VideoButtons(ToggleUserMute, CloseFromButton)
+                : new VideoButtons(() => ToggleInstanceMute(inst),   // WPF VideoService.Controls.cs:157-159: a lock refuses and hides the X
+                    () => { if (!CloseAllowed) HideCloseButtons(); else CloseInstance(inst, "close button"); });
             var w = new Window
             {
                 Title = "CCP Video",
@@ -472,28 +596,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 CanResize = false,
                 Background = Brushes.Black,
                 // The WPF browser player credits Scrolller during playback (VideoService.Browser.cs:158).
-                Content = new Panel { ClipToBounds = true, Children = { picture, layer, buttons.Row, CreditButton(_source) } },
+                Content = new Panel { ClipToBounds = true, Children = { picture, layer, buttons.Row, CreditButton(inst?.Clip ?? _source, inst) } },
             };
-            var floating = Floating;
+            var floating = Floating || inst != null;
             // A floating window can be smaller than the 360x200 card: its card opens in its own window (WPF VideoService.cs:6440).
             if (!floating) ((Panel)w.Content).Children.Insert(2, grace);
-            CoverGentleEntrance((Panel)w.Content!);
+            if (inst == null) CoverGentleEntrance((Panel)w.Content!);
             if (floating)
             {
                 // WPF: a floating window never takes focus from what is under it (panic and Esc reach
                 // it through the global hooks), and it moves with the mouse.
                 w.ShowActivated = false;
-                PlaceFloating(w, screen, _random);
+                PlaceFloating(w, screen, _random, AllSurfaces.Select(x => x.Window).ToList());
                 var frame = DecorateFloating(w);
+                // WPF FloatingInstances.cs:258: a press on a window takes the sound.
+                w.AddHandler(InputElement.PointerPressedEvent, (_, _) => TouchFloating(w),
+                    global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+                Func<bool> audible = inst == null
+                    ? () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0 && HasFloatingSound(w)
+                    : () => inst.Playback?.IsPlaying == true && !inst.UserMuted && !inst.Held && HasFloatingSound(w);
                 w.Opened += (_, _) =>
                 {
                     ApplyFloatingPassive(w);
-                    var floatingFrame = new FloatingVideoFrame(w, frame: frame, audible: () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0);
+                    var floatingFrame = new FloatingVideoFrame(w, frame: frame, audible: audible);
                     _refreshFloating += floatingFrame.Refresh;
                     w.Closed += (_, _) => _refreshFloating -= floatingFrame.Refresh;
                 };
             }
-            else Place(w, screen);
+            else
+            {
+                Place(w, screen);
+                w.Opened += (_, _) =>
+                {
+                    DenyVideoMouseActivate(w);
+                    if (Chaos.ChaosRunHost.IsActive) MakeVideoNonActivating(w);
+                };
+            }
             void OnKey(KeyEventArgs e)
             {
                 // WPF main 642a040e9e (#1594 #1595): a floating video leaves Escape alone unless it is the panic key.
@@ -528,7 +666,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.AddHandler(InputElement.KeyDownEvent, PanicTunnel, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
             w.Closing += (_, e) => { if (strict && VetoStrictClose(Scheduler.IsPlaying)) e.Cancel = true; };
-            var watchdog = _wedge;
+            var watchdog = inst == null ? _wedge : null;
             IntPtr wedgeHandle = IntPtr.Zero;
             w.Opened += (_, _) =>
             {
@@ -537,16 +675,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 watchdog?.Add(wedgeHandle, X11Overlay.BackendOf(handle));
             };
             w.Closed += (_, _) => watchdog?.Remove(wedgeHandle);
-            w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
+            w.Closed += (_, _) =>
+            {
+                if (inst != null) CloseInstance(inst, "window closed");
+                else if (!_closing) EndPrimary("window closed");
+            };
             WireChaosTimerStacking(w);
-            var reveal = floating ? new FloatingVideoReveal(w, HoldRevealAudio) : null;
+            var reveal = floating ? new FloatingVideoReveal(w, inst == null ? HoldRevealAudio : held => { inst.Held = held; ApplyInstanceVolume(inst); }) : null;
             if (!floating)
             {
                 w.Show();
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
-            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture, reveal) { Screen = screen, PanicTunnel = PanicTunnel };
+            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture, reveal) { Screen = screen, PanicTunnel = PanicTunnel, OnKey = OnKey };
         }
 
         /// <summary>WPF ChaosModeService.cs:816-828 and VideoService.cs:5810-5822:
@@ -644,8 +786,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF VideoService.WantsGlobalEscape (:6361): a NON-strict clip is on screen, so a plain Esc
         /// from the global hook may reach it when its window lost focus (Platform/Win32Input.EscapeDoor).</summary>
-        internal bool OnScreen => !Floating || _floatingOnScreen;
-        internal bool WantsGlobalEscape => Scheduler.IsPlaying && _surfaces.Count > 0 && OnScreen && !_closing && !_strict
+        internal bool OnScreen => !Floating || _floatingOnScreen || _floaters.Any(f => f.Revealed);
+        internal bool WantsGlobalEscape => Scheduler.IsPlaying && (_surfaces.Count > 0 || _floaters.Count > 0) && OnScreen && !_closing && !_strict
             && VideoTakesEscape();   // #1594 #1595: a floating video never hears another app's Escape
 
         /// <summary>WPF VideoService.VideoTakesEscape: always on a full-screen clip, on a floating one only when
@@ -687,7 +829,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     ConditioningControlPanel.Services.Safety.PanicPolicy.OverrideEnabled(CoreSettings.Current))) return false;
             var now = Now;
             var since = _lastGraceUtc == default ? double.MaxValue : (now - _lastGraceUtc).TotalMilliseconds;
-            var d = EvaluateGraceRequest(_playback != null, since);
+            var d = EvaluateGraceRequest(_playback != null || _floaters.Count > 0, since);
             if (d == GraceDecision.ConsumedDedup) return true;
             if (d != GraceDecision.Pause) return false;
             SampleCutPlayback();
@@ -695,9 +837,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             SafetyDeadline.PauseForGrace(now);
             _lastGraceUtc = _gracePausedAt = now;
             _playback?.SetPause(true);
+            _browser?.ShowViews(false);   // the grace card sits under the native web view otherwise
             PausePlaybackClocks();   // freezes the ready budget as well as the show and frame clocks
+            SetFloatingPaused(true);   // WPF FloatingInstances.cs:368: the grace pause holds every window
 
-            foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; if (Floating) ShowGraceHost(x); }
+            if (Floating) ShowGraceCards();
+            else foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
             SetCountdown(MandatoryVideoScheduler.GraceWindowSeconds);
             _graceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _graceTimer.Tick += (_, _) => GraceTick();
@@ -756,7 +901,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void SetCountdown(int left)
         {
-            foreach (var x in _surfaces) x.Countdown.Text = Loc.GetF("video_grace_auto_resume_in", left);
+            foreach (var x in AllSurfaces) x.Countdown.Text = Loc.GetF("video_grace_auto_resume_in", left);
         }
 
         internal void PausePlaybackClocks()
@@ -782,11 +927,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _graceConsumed = true;   // spent whether it ended by hand or by timeout
             _graceTimer?.Stop();
             _graceTimer = null;
-            foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; CloseGraceHost(x); }
+            foreach (var x in AllSurfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; CloseGraceHost(x); }
+            SetFloatingPaused(false);
             PrimaryPaused = false; // WPF ResumeFromGrace -> PlayPrimary releases the paused player
             ResumePlaybackClocks();
             FrameTs = Stopwatch.GetTimestamp();
             _cutClock?.ResetPosition();
+            _browser?.ShowViews(true);
             _playback?.SetPause(false);
             Log.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, (Now - _gracePausedAt).TotalSeconds);
         }
@@ -811,18 +958,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (!enhanced)
                 {
                     Log.Warning("VideoService: safety timeout after {Sec:F1}s - ending the clip", Elapsed);
-                    Scheduler.End();
+                    EndPrimary("safety timeout");
                     return;
                 }
                 if (EnhancementStalled(Now))
                 {
                     Log.Warning("VideoService: enhancement-driven video stalled {Grace}s with no playback progress - ending the clip",
                         EnhancementStallGraceSeconds);
-                    Scheduler.End();
+                    EndPrimary("stalled");
                     return;
                 }
             }
             if (PrimaryPaused) return;
+            if (_browser != null) FrameTs = Stopwatch.GetTimestamp();   // the page's own stall check (code 100) owns a lost picture
             SampleCutPlayback();
             var framed = FirstFrameMs >= 0;
             // A playing clip with no frame is revealed at the budget, as WPF FloatingFirstFrame.
@@ -844,7 +992,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var spent = _capSpent + (_cutClock == null ? played : _cutClock.PlayedMs / 1000.0 + PlayedSkew);
                 // WPF DispatchVoutHeal -> CloseAll -> FinalizeWatchCredit credits each attempt.
                 var muted = _userMuted;
-                var watched = CloseAll();
+                var watched = ClosePrimary(retire: true);
                 if (watched >= 1) CoreProgression.TrackVideoWatched(watched);
                 _userMuted = muted;
                 Play(_path, _strict);
@@ -855,7 +1003,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - ending the clip", why, Elapsed);
             // WPF VideoService.cs:6759-6762: the duration cap also releases a queued credit link.
             if (why == "max length") OpenQueuedCreditLink();
-            Scheduler.End();
+            EndPrimary("guard");
         }
 
         /// <summary>WPF FloatingFirstFrame then player.js:915: present the floating windows (a copied frame or the
@@ -864,6 +1012,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             foreach (var surface in _surfaces) surface.Reveal?.Present();
             _floatingOnScreen = _surfaces.Count > 0;
+            // WPF FloatingInstances.cs:633: shown, it joins the sound rotation (behind the holder with Keep sound).
+            if (Floating && _surfaces.Count > 0 && !_audioFocus.Items.Contains(_surfaces[0].Window))
+            {
+                _audioFocus.Join(_surfaces[0].Window, CoreSettings.Current.MandatoryVideoFloatingKeepSound);
+                ApplyAudioFocus();
+            }
             if (_videoReveal != null || _surfaces.Count == 0) return;
             var window = _surfaces[0].Window;
             _videoReveal = new Services.Video.VideoReveal(_videoFadeSeconds,
@@ -883,7 +1037,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             else if (verdict == ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Skip)
             {
                 Log.Warning("VideoService: floating clip skipped: playback never started after 4 s");
-                Scheduler.End();
+                EndPrimary("no first frame");
             }
             return verdict;
         }
@@ -900,14 +1054,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF FloatRectOn: MandatoryVideoFloatingSizePercent of the work area's width, 16:9, at a
         /// random spot wholly on it (Core FloatingRect, in the area's DIPs). No screen known (headless):
         /// the window's primary screen.</summary>
-        internal static void PlaceFloating(Window w, global::Avalonia.Platform.Screen? screen, Random random)
+        internal static void PlaceFloating(Window w, global::Avalonia.Platform.Screen? screen, Random random, IReadOnlyList<Window>? others = null)
         {
             screen ??= w.Screens.Primary ?? w.Screens.All.FirstOrDefault();
             if (screen == null) return;
             var area = screen.WorkingArea;
             var scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            // WPF FloatingInstances.cs:519: never exactly on a window already up (its current spot, in this area's DIPs).
+            var taken = others?.Select(o => ((int)((o.Position.X - area.X) / scale), (int)((o.Position.Y - area.Y) / scale), (int)o.Width, (int)o.Height)).ToList();
             var (x, y, width, height) = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FloatingRect(
-                (int)(area.Width / scale), (int)(area.Height / scale), random, CoreSettings.Current.MandatoryVideoFloatingSizePercent);
+                (int)(area.Width / scale), (int)(area.Height / scale), random, CoreSettings.Current.MandatoryVideoFloatingSizePercent, taken);
             w.WindowStartupLocation = WindowStartupLocation.Manual;
             w.Position = new PixelPoint(area.X + (int)Math.Round(x * scale), area.Y + (int)Math.Round(y * scale));
             w.Width = width;
@@ -1303,11 +1459,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
         }
 
+        /// <summary>Every window of the run, joined floating windows first (WPF CloseFloatingInstances), then the run's clip.</summary>
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            CloseFloatingInstances("close all");
+            return ClosePrimary(retire: false);
+        });
+
+        /// <param name="retire">The run goes on (other floating windows, or the heal's replay): keep the duck and the paused text.</param>
+        private double ClosePrimary(bool retire)
+        {
+            foreach (var x in _surfaces) _audioFocus.Remove(x.Window);
             EndEnhancement();
             System.Threading.Interlocked.Increment(ref _escapeGeneration);
             _floatingOnScreen = false;
+            FirstFrameMs = -1; // a pending replay has not presented a frame
             SampleCutPlayback();
             var watched = _cutClock?.PlayedMs;
             _closing = true;
@@ -1333,16 +1499,77 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _spawnTimes.Clear();
                 _targets.Clear();
                 ReleaseToyBatches();
-                // Stop joins the decoder thread, so after it no callback touches the frame buffer.
-                if (_playback != null)
-                {
-                    try { _playback.Stop(); } catch { }
-                    try { _playback.Dispose(); } catch { }
-                }
+                // WPF VideoService.cs:7536-7580, 7731-7787: vmem has no native
+                // child window to detach. Never join Stop on the dispatcher.
+                var playback = _playback;
+                var player = _player;
+                var owner = _playingEngine;
+                var media = _media;
+                var sink = _sink;
                 _playback = null;
+                _browser = null;
+                CloseControlHosts();
                 _player = null;
-                try { _media?.Dispose(); } catch { }
+                _playingEngine = null;
                 _media = null;
+                _sink = null;
+                if (playback is BrowserPlayback page)
+                {
+                    // No native decoder to wedge: its views are UI controls, and the one browser session
+                    // must be free before a LibVLC replay (WPF FallbackToLibVlc, VideoService.Browser.cs:361).
+                    try { page.Stop(); } catch { }
+                    try { page.Dispose(); } catch { }
+                    playback = null;
+                }
+                if (playback != null)
+                {
+                    var graph = (playback, player, owner, media, sink);
+                    var stopClock = Stopwatch.StartNew();
+                    var graceMs = StopGraceMs;
+                    long stopElapsed = -1;
+                    var stop = Task.Run(() =>
+                    {
+                        try { playback.Stop(); }
+                        finally
+                        {
+                            Interlocked.Exchange(ref stopElapsed, stopClock.ElapsedMilliseconds);
+                            if (stopElapsed >= graceMs) LibVlcAudio.Retire(owner);
+                        }
+                    });
+                    _pendingStop = stop;
+                    _pendingStopOwner = owner;
+                    _ = FinishStopAsync();
+                    async Task FinishStopAsync()
+                    {
+                        var finished = await Task.WhenAny(stop, Task.Delay(graceMs)).ConfigureAwait(false);
+                        if (finished != stop || Interlocked.Read(ref stopElapsed) >= graceMs || stop.IsFaulted || stop.IsCanceled)
+                        {
+                            lock (_quarantinedPlayback) _quarantinedPlayback.Add(graph);
+                            LibVlcAudio.Retire(owner);
+                            Views.Windows.BubbleCountWindow.RecordMandatoryNativePoisoning();
+                            return;
+                        }
+                        try
+                        {
+                            await stop.ConfigureAwait(false);
+                            playback.Dispose();
+                            media?.Dispose();
+                            Dispatcher.UIThread.Post(() => sink?.Free());
+                        }
+                        catch (Exception ex)
+                        {
+                            lock (_quarantinedPlayback) _quarantinedPlayback.Add(graph);
+                            LibVlcAudio.Retire(owner);
+                            Views.Windows.BubbleCountWindow.RecordMandatoryNativePoisoning();
+                            Log.Warning(ex, "Mandatory video native cleanup failed; player quarantined");
+                        }
+                    }
+                }
+                else
+                {
+                    media?.Dispose();
+                    sink?.Free();
+                }
                 foreach (var x in _surfaces)
                 {
                     CloseGraceHost(x);
@@ -1351,18 +1578,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     CloseGentleSurface(x.Window, Scheduler.SoftExit);
                 }
                 _surfaces.Clear();
-                _sink?.Free();
-                _sink = null;
                 _fill?.Dispose();
                 _fill = null;
-                if (_didDuck) { _didDuck = false; CoreAudio.Unduck(); }
-                BouncingTextOverlay.PauseForVideo(false);
+                if (_didDuck && !retire) { _didDuck = false; CoreAudio.Unduck(); }
+                if (!retire) BouncingTextOverlay.PauseForVideo(false);
                 if (FillCount > 0) Log.Information("VideoService: blur fill {Avg:F3} ms/frame over {N} frames", FillMs / FillCount, FillCount);
             }
             finally { _wedge?.Dispose(); _wedge = null; _closing = false; }
             var position = Interlocked.Exchange(ref _watchedMs, 0);
             _cutClock = null;
             return (watched ?? position) / 1000.0;
-        });
+        }
     }
 }

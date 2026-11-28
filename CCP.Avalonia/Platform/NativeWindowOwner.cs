@@ -84,17 +84,36 @@ internal static class NativeWindowOwner
     [ComImport, Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
     private class TaskbarListCoClass { }
 
-    internal static void RepairVisibility(Window window)
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate int SetControllerVisible(IntPtr controller, int visible);
+
+    // WPF KickRenderVisibility: restore the WebView2 controller after a vetoed hide.
+    internal static void ResyncRenderVisibility(Window window, IPlatformHandle? webHandle)
+    {
+        if (!OperatingSystem.IsWindows() || !window.IsVisible || window.WindowState == WindowState.Minimized ||
+            window.TryGetPlatformHandle() is not { } hwnd || !IsWindowVisible(hwnd.Handle) ||
+            webHandle is not IWindowsWebView2PlatformHandle web || web.CoreWebView2Controller == IntPtr.Zero) return;
+        try
+        {
+            var controller = web.CoreWebView2Controller;
+            var slot = Marshal.ReadIntPtr(Marshal.ReadIntPtr(controller), 4 * IntPtr.Size);
+            Marshal.ThrowExceptionForHR(Marshal.GetDelegateForFunctionPointer<SetControllerVisible>(slot)(controller, 1));
+        }
+        catch (Exception ex) { Log.Debug("WebView visibility resync unavailable: {Kind}", ex.GetType().Name); }
+    }
+
+    internal static bool RepairVisibility(Window window)
     {
         // WPF ChaosWebViewHost.cs:1106-1110: deliberate hide/minimize is not a cascade to heal.
-        if (!window.IsVisible || window.WindowState == WindowState.Minimized) return;
+        if (!window.IsVisible || window.WindowState == WindowState.Minimized) return false;
         var handle = window.TryGetPlatformHandle();
         bool win32 = X11Overlay.BackendOf(handle) == OverlayBackend.Win32;
         bool nativeVisible = NativeVisibleForTests?.Invoke(window)
             ?? (win32 && IsWindowVisible(handle!.Handle));
-        if (nativeVisible) return;
-        if (ShowForTests is { } show) { show(window); return; }
-        if (SetForTests is not null) return;
-        if (win32) ShowWindow(handle!.Handle, 8); // SW_SHOWNA
+        if (nativeVisible) return false;
+        if (ShowForTests is { } show) { show(window); return true; }
+        if (SetForTests is not null || !win32) return false;
+        ShowWindow(handle!.Handle, 8); // SW_SHOWNA
+        return IsWindowVisible(handle.Handle);
     }
 }
