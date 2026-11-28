@@ -41,6 +41,7 @@ Views/Windows/QuizWindow.axaml.cs :: (Companion → AI) :: arrow inside an error
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Up => "\u2191" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Down => "\u2193" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Flat => "\u2192" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
+Possession/GlyphRotHeadEffect.cs :: { '▯', '▮', '□', '▪', '◻', '▉', '▒' } :: the glyph rot effect rots label letters into these box characters, text content not an icon (content (c).4)
 
 # --- content (c).3: emoji inside head-authored sentences ---
 Views/Chaos/ChaosHudWindow.axaml.cs :: banks into emotes ✦. :: emoji at the end of a body sentence (content (c).3)

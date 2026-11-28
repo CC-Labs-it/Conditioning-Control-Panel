@@ -1799,6 +1799,7 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.SpiralOverlay.Stop();
             if (final) Views.Overlays.SpiralOverlay.CloseAll();
             Views.Overlays.PinkFilterOverlay.Stop();   // WPF MainWindow.StartStop.cs:527 Overlay.Stop
+            Views.Overlays.BrainDrainOverlay.CloseAll(); // WPF OverlayService.StopBrainDrainBlur :2571
         }
 
         /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
