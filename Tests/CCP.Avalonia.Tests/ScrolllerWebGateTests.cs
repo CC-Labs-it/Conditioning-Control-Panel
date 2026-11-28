@@ -41,7 +41,7 @@ public sealed class ScrolllerWebGateTests
         // A request the reported gate refuses is dropped before Source keeps it for a later gate report.
         // The Home browser (GateScrolller=False) is never refused by it, as WPF never gates Home.
         Assert.Matches(@"if \(GateScrolller && _scrolllerGate is not null && !ScrolllerGateAllows\(_scrolllerGate, url\)\) return false;\s*var previous = Source;", host);
-        Assert.Contains("if (GateScrolller && !ScrolllerGateAllows(_scrolllerGate, target))", host);
+        Assert.Contains("if ((GateScrolller || _scrolllerGate is null) && !ScrolllerGateAllows(_scrolllerGate, target))", host);
         // A rebuilt engine already names its Source: its held page is loaded with Navigate.
         Assert.Contains("try { _web!.Navigate(src!); }", host);
         var gate = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "ScrolllerWebHostGate.cs"));
@@ -138,14 +138,6 @@ public sealed class ScrolllerWebGateTests
         ScrolllerWebHostGate.OnAdapter(null, () => null, reports.Add);
         ScrolllerWebHostGate.OnAdapter(new global::Avalonia.Platform.PlatformHandle(IntPtr.Zero, "test"), () => null, reports.Add);
         Assert.Equal(new[] { false, false }, reports);
-    }
-
-    [Fact]
-    public void Home_waits_for_its_core_past_the_startup_watch_so_it_never_loads_without_the_ad_filter()
-    {
-        Assert.Equal(ScrolllerWebHostGate.CoreRetries, ScrolllerWebHostGate.CoreTries(blockAds: false));
-        // WebHost.WatchStartup gives a dead engine 15 s; an ad-blocking host must not report "no gate" before that.
-        Assert.True(ScrolllerWebHostGate.CoreRetry * ScrolllerWebHostGate.CoreTries(blockAds: true) > TimeSpan.FromSeconds(15));
     }
 
     [Fact]

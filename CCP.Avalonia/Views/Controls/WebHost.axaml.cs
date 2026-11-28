@@ -773,8 +773,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
             // No Scrolller gate on this engine (yet, or at all): nothing but this head's own pages loads.
-            // WPF never gates the Home browser (BrowserService.cs:126-187 has no ScrolllerWebGate), so a failed gate cannot blank it.
-            if (GateScrolller && !ScrolllerGateAllows(_scrolllerGate, target))
+            // WPF never gates the Home browser (BrowserService.cs:126-187 has no ScrolllerWebGate), so a failed gate cannot blank it;
+            // until the report its ad filter may not be on yet (WPF adds it at core init, BrowserService.cs:523-539).
+            if ((GateScrolller || _scrolllerGate is null) && !ScrolllerGateAllows(_scrolllerGate, target))
             {
                 e.Cancel = true;
                 Log.Warning("WebHost: navigation held, no Scrolller gate on this web view ({Host})", target?.Host);
@@ -1077,6 +1078,8 @@ document.addEventListener('DOMContentLoaded',scan);})();";
                 return;
             }
             _scrolllerGate = gated;
+            // A failed ad filter is logged and the page loads, as WPF SetupAdBlocking (BrowserService.cs:613-616).
+            if (!gated && BlockAds) Log.Warning("WebHost: the ad filter could not be installed; this browser loads without it");
             _pendingNavigation?.TrySetResult(gated);
             var src = Source;
             if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))

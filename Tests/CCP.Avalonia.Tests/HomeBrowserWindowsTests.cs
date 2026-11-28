@@ -121,6 +121,96 @@ public sealed class HomeBrowserWindowsTests
         return Task.CompletedTask;
     });
 
+    private sealed class LateCore : IWindowsWebView2PlatformHandle
+    {
+        public IntPtr CoreWebView2 { get; set; }
+        public IntPtr CoreWebView2Controller => IntPtr.Zero;
+        public IntPtr Handle => IntPtr.Zero;
+        public string HandleDescriptor => "WebView2";
+    }
+
+    private static WebHost HeldHome(List<Uri> loaded) =>
+        new() { GateScrolller = false, BlockAds = true, NavigationInvoker = u => { loaded.Add(u); return true; } };
+
+    // Home's page and every navigation its engine starts wait until the ad filter is on: not loaded, refused at start.
+    private static void AssertHeld(WebHost home, List<Uri> loaded)
+    {
+        Assert.Null(home.ScrolllerGate);
+        Assert.True(home.Navigate(Remote)); // accepted, held for the report
+        Assert.Empty(loaded);
+        var start = new WebViewNavigationStartingEventArgs { Request = Remote };
+        home.OnNavigationStarted(null, start);
+        Assert.True(start.Cancel);
+    }
+
+    private static void AssertReleased(WebHost home, List<Uri> loaded)
+    {
+        Assert.True(home.Navigate(Remote));
+        Assert.Equal(new[] { Remote }, loaded);
+        var start = new WebViewNavigationStartingEventArgs { Request = Remote };
+        home.OnNavigationStarted(null, start);
+        Assert.False(start.Cancel);
+    }
+
+    [Fact]
+    public Task R1_HomeStaysHeldThroughALateCoreUntilItsAdFilterAttaches() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Unsandboxed(() =>
+        {
+            var loaded = new List<Uri>();
+            var home = HeldHome(loaded);
+            var ready = home.NewScrolllerEngine();
+            var core = new LateCore();
+            var retries = new Queue<Action>();
+            var attached = new List<IntPtr>();
+            ScrolllerWebHostGate.AttachWindows(core, () => core, ready, ScrolllerWebHostGate.CoreTries(blockAds: true), blockAds: true,
+                c => { attached.Add(c); return true; }, retries.Enqueue);
+            // Past the point where a non-ad host gives up (CoreRetries): still polling, nothing reported.
+            for (var i = 0; i <= ScrolllerWebHostGate.CoreRetries + 1; i++) retries.Dequeue()();
+            Assert.Single(retries);
+            Assert.Empty(attached);
+            AssertHeld(home, loaded);
+            core.CoreWebView2 = new IntPtr(42);
+            retries.Dequeue()();
+            Assert.Equal(new[] { new IntPtr(42) }, attached);
+            Assert.Empty(retries);
+            Assert.True(home.ScrolllerGate);
+            AssertReleased(home, loaded);
+
+            // No core ever: the ad host stops polling but never reports, so it never loads unfiltered.
+            var dead = HeldHome(loaded = new List<Uri>());
+            var none = new LateCore();
+            ScrolllerWebHostGate.AttachWindows(none, () => none, dead.NewScrolllerEngine(), ScrolllerWebHostGate.CoreTries(blockAds: true), blockAds: true,
+                _ => throw new InvalidOperationException("no core to attach"), retries.Enqueue);
+            while (retries.TryDequeue(out var next)) next();
+            AssertHeld(dead, loaded);
+        });
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task R1_HomeOnLinuxWaitsForItsFilterPastTheDeadline() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Unsandboxed(() =>
+        {
+            var loaded = new List<Uri>();
+            var home = HeldHome(loaded);
+            var expiries = new List<Action>();
+            var deadline = ScrolllerWebHostGate.LinuxDeadline(home.NewScrolllerEngine(), blockAds: true, expiries.Add);
+            Assert.Empty(expiries); // no 5 s release for the ad host
+            AssertHeld(home, loaded);
+            deadline.Report(false); // the filter's own failure: logged, the page loads (WPF BrowserService.cs:613-616)
+            Assert.False(home.ScrolllerGate);
+            AssertReleased(home, loaded);
+
+            var gated = new WebHost();
+            _ = ScrolllerWebHostGate.LinuxDeadline(gated.NewScrolllerEngine(), blockAds: false, expiries.Add);
+            Assert.Single(expiries)();
+            Assert.False(gated.ScrolllerGate); // other hosts keep the 5 s "no gate"
+        });
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task R3_HomeProfileGetsWpfArgumentsInItsOwnFolder() => AvaloniaTestDispatcher.RunAsync(() =>
     {
