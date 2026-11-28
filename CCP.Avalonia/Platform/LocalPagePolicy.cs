@@ -10,6 +10,9 @@ internal static class LocalPagePolicy
         && string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
         && uri.Port == server.Port;
 
+    internal static bool AllowsMicrophone(string? uri, WebAssetServer server) =>
+        Uri.TryCreate(uri, UriKind.Absolute, out var u) && IsLocalPage(u, server);
+
     internal static bool SuppressContextMenu(Uri? uri, WebAssetServer server, bool homeBrowser) =>
         !homeBrowser && IsLocalPage(uri, server);
 }

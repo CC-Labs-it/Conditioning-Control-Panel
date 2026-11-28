@@ -488,6 +488,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (e.InitialPressMouseButton is not (MouseButton.Left or MouseButton.Right)) return;
             bool right = e.InitialPressMouseButton == MouseButton.Right;
             bool toggle = Services.UI.DashboardClickRules.IsToggle(right, DashboardDepth, DimWhenInactive, CoreSettings.Current.DashboardInvertClicks);
+            if (PressedSuperCorner(e, toggle)) return;   // the V2 corner (FeatureCard.Super.cs)
             if (!toggle)
             {
                 if (right) e.Handled = true;

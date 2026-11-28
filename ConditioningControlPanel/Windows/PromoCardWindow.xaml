@@ -1,0 +1,152 @@
+<Window x:Class="ConditioningControlPanel.PromoCardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CC Labs"
+        SizeToContent="WidthAndHeight"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Ideal"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <!--
+        The paper promo card (7.4): the Terms & Conditioning title screen as a window. Paper #f7f5ef,
+        ink #1b1a17, pink #ff4fa8, violet #7b5cff, gold #ffd23f, stamp #a3232b (ui/main-menu.js).
+        Design: cclabs-ops/marketing/bf50-2026 section three. Contract: handoff-1123/BF-PROMO-BRIEF.md.
+        Every pill, sticker and countdown cell is built in code (PromoCardWindow.Parts.cs) from the
+        promo; this file is the sheet they sit on.
+    -->
+    <Window.Resources>
+        <FontFamily x:Key="PromoRound">/Fonts/Promo/#Fredoka, Segoe UI</FontFamily>
+        <FontFamily x:Key="PromoMono">/Fonts/Promo/#Courier Prime, Consolas, Courier New</FontFamily>
+        <SolidColorBrush x:Key="PromoPaper" Color="#F7F5EF"/>
+        <SolidColorBrush x:Key="PromoInk" Color="#1B1A17"/>
+
+        <!-- A button that is only its content: the pill it holds draws everything. -->
+        <Style x:Key="PromoBareButton" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Room around the card for its hard shadow and the IN settle. -->
+    <Grid x:Name="Root" Margin="14,10,24,26" RenderTransformOrigin="0.5,0.4">
+        <Grid.RenderTransform>
+            <TransformGroup>
+                <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1"/>
+                <TranslateTransform x:Name="RootShift"/>
+            </TransformGroup>
+        </Grid.RenderTransform>
+
+        <!-- The hard offset shadow (no blur): 8, 11 like the concept's box-shadow. -->
+        <Border CornerRadius="25" Background="#66000000" Margin="-3,-3,-3,-3">
+            <Border.RenderTransform>
+                <TranslateTransform X="8" Y="11"/>
+            </Border.RenderTransform>
+        </Border>
+
+        <Border x:Name="Card" Width="580" CornerRadius="25" BorderThickness="3"
+                BorderBrush="{StaticResource PromoInk}" Background="{StaticResource PromoPaper}">
+            <Grid x:Name="Sheet" ClipToBounds="True">
+
+                <!-- The game's two-arm crayon spiral, turning slowly behind everything. -->
+                <Canvas x:Name="SpiralLayer" IsHitTestVisible="False">
+                    <Image x:Name="SpiralImage" Width="1086" Height="1086" Opacity="0.56"
+                           RenderTransformOrigin="0.5,0.5" Stretch="Fill">
+                        <Image.RenderTransform>
+                            <RotateTransform x:Name="SpiralTurn"/>
+                        </Image.RenderTransform>
+                    </Image>
+                </Canvas>
+
+                <!-- Sparkles, the cards' four-point stars. -->
+                <Canvas x:Name="SparkleLayer" IsHitTestVisible="False"/>
+
+                <StackPanel x:Name="Body" Margin="22,18,22,22">
+
+                    <!-- The hook: the big line at the top, its last word under a pink highlighter. -->
+                    <TextBlock x:Name="HookText" Margin="34,2,34,0" TextAlignment="Center" TextWrapping="Wrap"
+                               FontFamily="{StaticResource PromoRound}" FontWeight="SemiBold" FontSize="35"
+                               LineHeight="39" LineStackingStrategy="BlockLineHeight"
+                               Foreground="{StaticResource PromoInk}"/>
+
+                    <!-- Stickers on the left, the countdown on the right. -->
+                    <Grid x:Name="HeroRow" Margin="0,10,0,0" HorizontalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Canvas x:Name="HeroBox" Width="300" Height="200" RenderTransformOrigin="0.5,0.5">
+                            <Canvas.RenderTransform>
+                                <TransformGroup>
+                                    <RotateTransform x:Name="HeroDriftTurn"/>
+                                    <TranslateTransform x:Name="HeroDriftShift"/>
+                                </TransformGroup>
+                            </Canvas.RenderTransform>
+                        </Canvas>
+                        <StackPanel x:Name="CountdownPanel" Grid.Column="1" Margin="22,0,0,0"
+                                    VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- The personal line and the message, on a paper plate over the spiral. -->
+                    <Border x:Name="Plate" Margin="0,14,0,0" CornerRadius="14" Padding="16,11,16,12" Background="#E6F7F5EF">
+                        <StackPanel>
+                            <TextBlock x:Name="TitleText" TextAlignment="Center" TextWrapping="Wrap"
+                                       FontFamily="{StaticResource PromoRound}" FontWeight="SemiBold" FontSize="18"
+                                       LineHeight="23" LineStackingStrategy="BlockLineHeight" Foreground="#B4226F"/>
+                            <ScrollViewer x:Name="MessageScroll" MaxHeight="132" Margin="0,5,0,0"
+                                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                          Focusable="False">
+                                <TextBlock x:Name="MessageText" TextAlignment="Center" TextWrapping="Wrap"
+                                           FontFamily="{StaticResource PromoRound}" FontWeight="Medium" FontSize="15"
+                                           LineHeight="22" LineStackingStrategy="BlockLineHeight"
+                                           Foreground="{StaticResource PromoInk}"/>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- The menu: the code row, the offer rows, the button, Not now. -->
+                    <StackPanel x:Name="MenuStack" Margin="0,18,0,0" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- The end tag, bottom left, stamped on like the cards'. -->
+                <Border x:Name="TagStamp" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                        Margin="18,0,0,20" Padding="8,3,8,2" CornerRadius="4" Background="{StaticResource PromoInk}"
+                        RenderTransformOrigin="0,1" Visibility="Collapsed" IsHitTestVisible="False">
+                    <Border.RenderTransform>
+                        <RotateTransform Angle="-4"/>
+                    </Border.RenderTransform>
+                    <TextBlock x:Name="TagText" FontFamily="{StaticResource PromoMono}" FontWeight="Bold" FontSize="12"
+                               Foreground="#FFD23F"/>
+                </Border>
+
+                <!-- Close: a paper coin with an ink ring, top right. -->
+                <Button x:Name="BtnClose" Style="{StaticResource PromoBareButton}" Click="BtnClose_Click"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,14,0">
+                    <Grid Width="32" Height="32">
+                        <Ellipse Fill="#33000000" Margin="2,3,-2,-3"/>
+                        <Ellipse Fill="#FFFDF7" Stroke="{StaticResource PromoInk}" StrokeThickness="2"/>
+                        <Path Data="M 11,11 L 21,21 M 21,11 L 11,21" Stroke="{StaticResource PromoInk}"
+                              StrokeThickness="2.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                    </Grid>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

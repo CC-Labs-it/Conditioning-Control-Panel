@@ -181,8 +181,12 @@ public class StudioModArtRenderTests
             var broken = new List<string>();
             foreach (var p in panels)
             {
+                // Live Preview pilot (owner 2026-11-24): a side card that holds the live preview shows no
+                // art, so its SideArtBrush (kept, named and unfrozen for ApplyFeatureArt) needs no default.
+                bool preview = HoldsPreview(p);
                 foreach (var brushName in new[] { "HeroArtBrush", "SideArtBrush" })
                 {
+                    bool needsArt = !(preview && brushName == "SideArtBrush");
                     if (p.FindName(brushName) is not ImageBrush b)
                     {
                         broken.Add($"{p.GetType().Name}.{brushName} is missing or not an ImageBrush");
@@ -191,7 +195,7 @@ public class StudioModArtRenderTests
                     if (b.IsFrozen) broken.Add($"{p.GetType().Name}.{brushName} is frozen — it can never repaint");
                     // The XAML default has to survive construction: ApplyFeatureArt only ever
                     // OVERRIDES a non-null resolve, so an unpainted plate here would stay unpainted.
-                    if (b.ImageSource == null) broken.Add($"{p.GetType().Name}.{brushName} has no XAML default art");
+                    if (needsArt && b.ImageSource == null) broken.Add($"{p.GetType().Name}.{brushName} has no XAML default art");
                 }
 
                 // And the resolver pass itself runs clean. Called directly rather than through
@@ -200,13 +204,20 @@ public class StudioModArtRenderTests
                 if (m == null) { broken.Add($"{p.GetType().Name} has no ApplyFeatureArt"); continue; }
                 m.Invoke(p, null);
 
-                foreach (var brushName in new[] { "HeroArtBrush", "SideArtBrush" })
+                foreach (var brushName in new[] { "HeroArtBrush", preview ? "HeroArtBrush" : "SideArtBrush" })
                     if (p.FindName(brushName) is ImageBrush b2 && b2.ImageSource == null)
                         broken.Add($"{p.GetType().Name}.{brushName} was BLANKED by ApplyFeatureArt");
             }
 
             Assert.True(broken.Count == 0, string.Join(Environment.NewLine, broken));
         });
+    }
+
+    private static bool HoldsPreview(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+            if (child is ConditioningControlPanel.Controls.Preview.EffectPreview || HoldsPreview(child)) return true;
+        return false;
     }
 
     [Fact]

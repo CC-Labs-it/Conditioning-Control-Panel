@@ -482,8 +482,11 @@ public sealed class FlashLayer : BaseLayer
             }
 
             // Flashes v2: step the motion here (the one place with delta time). Step answers
-            // false for a Still item and for a zero delta, so a held flash stays clean.
-            if (item.Motion != null && FlashMotion.Step(item.Motion, delta.TotalSeconds))
+            // false for a Still item and for a zero delta, so a held flash stays clean. A picture
+            // still flying out of its bubble waits: the entrance owns the rect until it lands on
+            // the motion's start rect, then the motion takes over from there (ccp-bugs #1716).
+            if (item.Motion != null && item.BubbleOriginPx == null
+                && FlashMotion.Step(item.Motion, delta.TotalSeconds))
             {
                 SyncRect(item, item.Motion);
                 _dirty = true;
@@ -546,7 +549,8 @@ public sealed class FlashLayer : BaseLayer
             // Pendulum: rotate the canvas about the pivot and draw the media hanging straight
             // down the rope in that frame. item.X..H stays the axis-aligned bounds of the rotated
             // picture (for gaze/click); the draw rect is the unrotated media in pivot space.
-            if (item.Motion is { Style: FlashMotionStyle.Pendulum } pend)
+            // A picture still flying out of its bubble draws the entrance rect, not the rope.
+            if (item.Motion is { Style: FlashMotionStyle.Pendulum } pend && item.BubbleOriginPx == null)
             {
                 canvas.RotateDegrees((float)(pend.AngleRad * 180.0 / Math.PI), (float)pend.PivotX, (float)pend.PivotY);
                 var cx = (float)pend.PivotX;

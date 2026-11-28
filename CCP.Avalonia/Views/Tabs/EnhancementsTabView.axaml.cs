@@ -385,18 +385,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Bitmap? baked = null;
             try
             {
-                using var ms = new System.IO.MemoryStream();
-                src.Save(ms);
-                ms.Position = 0;
-                using var sk = SkiaSharp.SKBitmap.Decode(ms);
-                float sigma = (float)((0.57735 * 8 + 0.5) * sk.Width / NodeWidth);
-                using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(sk.Width, sk.Height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul));
-                using var paint = new SkiaSharp.SKPaint { ImageFilter = SkiaSharp.SKImageFilter.CreateBlur(sigma, sigma) };
-                surface.Canvas.Clear(SkiaSharp.SKColors.Transparent);
-                surface.Canvas.DrawBitmap(sk, 0, 0, paint);
-                using var image = surface.Snapshot();
-                using var png = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                baked = new Bitmap(png.AsStream());
+                // Pixels in and out directly (as CardArtDesaturate), into an immutable bitmap as before: the PNG
+                // encode/decode round trip each way was most of the startup cost of this hidden tab.
+                var size = src.PixelSize;
+                var fmt = global::Avalonia.Platform.PixelFormat.Bgra8888;
+                var alpha = global::Avalonia.Platform.AlphaFormat.Premul;
+                using var staging = new WriteableBitmap(size, new Vector(96, 96), fmt, alpha);
+                using var from = staging.Lock();
+                src.CopyPixels(from);   // transcodes any source format to Bgra8888 Premul
+                var info = new SkiaSharp.SKImageInfo(size.Width, size.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
+                using var sk = new SkiaSharp.SKBitmap();
+                sk.InstallPixels(info, from.Address, from.RowBytes);
+                using var blurred = new SkiaSharp.SKBitmap(info);
+                using (var canvas = new SkiaSharp.SKCanvas(blurred))
+                using (var paint = new SkiaSharp.SKPaint())
+                {
+                    float sigma = (float)((0.57735 * 8 + 0.5) * size.Width / NodeWidth);
+                    paint.ImageFilter = SkiaSharp.SKImageFilter.CreateBlur(sigma, sigma);
+                    canvas.Clear(SkiaSharp.SKColors.Transparent);
+                    canvas.DrawBitmap(sk, 0, 0, paint);
+                }
+                baked = new Bitmap(fmt, alpha, blurred.GetPixels(), size, new Vector(96, 96), blurred.RowBytes);
             }
             catch (Exception ex) { Serilog.Log.Debug("Enhancements blurred art {Id}: {E}", id, ex.Message); }
             return _blurredArt[id] = baked;

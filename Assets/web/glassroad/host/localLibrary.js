@@ -45,15 +45,36 @@ export function pickFiles(list, { max = MAX_LIBRARY_FILES, rng = Math.random } =
   return ok.slice(0, Math.max(0, max));
 }
 
+/** DESKTOP LIBRARY (`caps.ownMedia.library`): the host's `own-media { v:1, rows:[{ url, kind }] }` answer to
+ *  `own-media-list`, the app's own ticked pictures and clips served from its media origin. Only rows on exactly that
+ *  one https origin pass (no credentials, no svg), deduped on the whole url, at most `max`, sampled at random like a
+ *  big pick. Nothing is fetched or sent here; a host without the cap never answers, so the web and phone are unchanged. */
+export function libraryRows(msg, origin, { max = MAX_LIBRARY_FILES, rng = Math.random } = {}) {
+  if (!msg || msg.v !== 1 || !Array.isArray(msg.rows) || !/^https:\/\/[a-z0-9.-]+$/.test(origin || '')) return [];
+  const seen = new Set(), ok = [];
+  for (const r of msg.rows) {
+    if (ok.length >= 1000) break;
+    const kind = r?.kind === 'image' || r?.kind === 'video' ? r.kind : '';
+    let url = '';
+    try { const u = new URL(r?.url); url = u.origin === origin && !u.username && !u.password ? u.href : ''; } catch { url = ''; }
+    if (!kind || !url || seen.has(url) || /\.svg($|[?#])/i.test(url)) continue;
+    seen.add(url); ok.push({ url, kind });
+  }
+  for (let i = ok.length - 1; i > 0 && ok.length > max; i--) {
+    const j = Math.floor(rng() * (i + 1)); [ok[i], ok[j]] = [ok[j], ok[i]];
+  }
+  return ok.slice(0, Math.max(0, max));
+}
+
 const loaded = (el) => isVideo(el) ? !el.error && el.readyState >= 1 : el.complete && el.naturalWidth > 0;
 
 export function createLocalLibrary({ makeImage = () => new Image(), makeVideo = () => displayVideo(),
   createURL = (f) => URL.createObjectURL(f), revokeURL = (u) => URL.revokeObjectURL(u) } = {}) {
-  let items = [];   // [{ el, url }]
+  let items = [];   // [{ el, url, own }] (own: a host library url, nothing to revoke)
   function clear() {
-    for (const { el, url } of items) {
+    for (const { el, url, own } of items) {
       try { el.removeAttribute('src'); if (isVideo(el)) el.load?.(); } catch { /* gone */ }
-      try { revokeURL(url); } catch { /* already revoked */ }
+      if (!own) try { revokeURL(url); } catch { /* already revoked */ }
     }
     items = [];
   }
@@ -69,6 +90,18 @@ export function createLocalLibrary({ makeImage = () => new Image(), makeVideo = 
         const url = createURL(f);
         if (isVideo(el)) el.preload = 'metadata'; else el.decoding = 'async';
         el.src = url; items.push({ el, url });
+      }
+      return items.length;
+    },
+    /** Replace the pick with host library rows (libraryRows): same elements, the urls are the host's own. */
+    setRows(rows) {
+      clear();
+      for (const r of Array.from(rows || []).slice(0, MAX_LIBRARY_FILES)) {
+        if (typeof r?.url !== 'string' || (r.kind !== 'image' && r.kind !== 'video')) continue;
+        const el = r.kind === 'video' ? makeVideo() : makeImage();
+        if (!el) continue;
+        if (isVideo(el)) el.preload = 'metadata'; else el.decoding = 'async';
+        el.src = r.url; items.push({ el, url: r.url, own: true });
       }
       return items.length;
     },

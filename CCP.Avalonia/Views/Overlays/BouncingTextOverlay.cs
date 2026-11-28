@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// here: the primary screen's scaling), each window draws the part on its screen.</para>
     ///
     /// </summary>
-    internal static class BouncingTextOverlay
+    internal static partial class BouncingTextOverlay
     {
         internal static readonly BouncingTextEngine Engine = new();
         private static double _zAccum;
@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var right = (int)Math.Ceiling((l.PosX + l.TextWidth + pad) * _screenScale);
                 var bottom = (int)Math.Ceiling((l.PosY + l.TextHeight + pad) * _screenScale);
                 return new System.Drawing.Rectangle(left, top, right - left, bottom - top);
-            }).ToArray();
+            }).Concat(ScrawlRects()).ToArray();
         }
 
         /// <summary>Is a logo (engine DIPs) close enough to this screen to draw on it? Padded the way
@@ -132,6 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _host = host;
             _running = true;
             _last = null;
+            StartScrawl();
             for (var i = 0; i < Engine.Logos.Count; i++)
             {
                 UpdateText(i);
@@ -150,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _running = false;
             _paused = false;
             _zAccum = 0;
+            StopScrawl();
             foreach (var w in Windows) w.Close();
             Windows.Clear();
             Engine.Stop();
@@ -176,15 +178,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Engine.RefreshSpeed(s);
             Engine.RefreshFontSize(s);   // both re-measure the logos when their setting moved
             Engine.RefreshFont(s);
+            ResetScrawlForFont();
             foreach (var w in Windows) w.Restyle(Engine.FontSize, Family(), s.BouncingTextOpacity);
             if (s.BouncingTextColorMode == 1) Engine.ApplyFixedColor(s);
             for (var i = 0; i < Engine.Logos.Count; i++) UpdateText(i);
         }
 
+        /// <summary>The word and Scrawl stamp face: the picked font, then Segoe UI (Windows), then the bundled
+        /// CCP Sans (Selawik with Segoe UI's line height), so Linux never falls to whatever fontconfig picks.</summary>
         internal static FontFamily Family()
         {
             var f = CoreSettings.Current.BouncingTextFont;
-            return new FontFamily(string.IsNullOrWhiteSpace(f) ? "Segoe UI" : f + ", Segoe UI");
+            return new FontFamily(string.IsNullOrWhiteSpace(f) ? $"Segoe UI, {AppFonts.UiSans}" : $"{f}, Segoe UI, {AppFonts.UiSans}");
         }
 
         private static (double, double) Measure(string text, int size)
@@ -249,11 +254,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var s = CoreSettings.Current;
             Engine.Tick(dt);
+            if (_running) SyncScrawl(); // tier events may not be available in this head
             var logos = Engine.Logos;
             for (var i = 0; i < logos.Count; i++)
             {
                 var l = logos[i];
+                if (StepScrawlSlam(l, dt)) continue;
+                RelaxScrawl(l, dt);
+                if (StepScrawlStage(l, dt)) continue;   // caught by the pool: it moves the word this frame
                 var step = Engine.Step(l, dt, s);
+                ScrawlBounce(l, step);
                 if (step.CornerHit) { CornerHit(); Platform.BarkHead.Engine?.Raise("BouncingTextCorner"); }   // WPF BarkService.cs:731
                 if (step.CornerHit && s.BouncingTextFxCornerBurst)
                 {
@@ -276,9 +286,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var l = logos[i];
                 var (sx, sy, angle) = Engine.ComputeEffectTransform(l, s);
+                var slamScale = ScrawlScale(l); sx *= slamScale; sy *= slamScale;
                 foreach (var w in Windows) w.Move(i, l.PosX, l.PosY, sx, sy, angle, l.TextWidth, l.TextHeight);
             }
             foreach (var w in Windows) w.AgeBursts(dt);
+            TickScrawl(dt);   // WPF ticks the stamps after the words moved
         }
 
         private static void Sample(double dt)
@@ -301,7 +313,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// shadow (blur 10, depth 3) or - BouncingTextOutline - WPF OutlinedText's black stroke of
     /// max(2, size/22). Scale then rotate about the centre, as WPF's TransformGroup.
     /// </summary>
-    internal sealed class BouncingTextOverlayWindow : Window
+    internal sealed partial class BouncingTextOverlayWindow : Window
     {
         private sealed record Logo(Control Element, TextBlock? Tb, OutlinedTextBlock? Ot, ScaleTransform Scale, RotateTransform Rotate);
 

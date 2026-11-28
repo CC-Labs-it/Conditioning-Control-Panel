@@ -31,7 +31,7 @@ public class QuestHoverShotTests
 
     private static BitmapSource Art()
     {
-        var file = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "quests", "blink_drill_d.png");
+        var file = Path.Combine(RepoRoot(), "Assets", "quests", "blink_drill_d.png");
         var img = new BitmapImage();
         img.BeginInit();
         img.CacheOption = BitmapCacheOption.OnLoad;

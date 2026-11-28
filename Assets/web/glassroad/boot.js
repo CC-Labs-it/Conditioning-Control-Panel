@@ -26,7 +26,7 @@ import { createScrolllerFeed } from './host/scrolllerFeed.js';
 import { createDevicePictures, decodeClip, decodeInto } from './host/devicePictures.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
-import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker } from './host/localLibrary.js';
+import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker, libraryRows } from './host/localLibrary.js';
 import { createSubliminalBurst } from './fx/subliminalBurst.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -208,6 +208,8 @@ shared.bridge.on('sparkles-receipt', receiptSlip);
 // The web host's Scrolller pictures (host/scrolllerFeed.js): display only. Built once so a feed
 // that lands before the first course is kept; the desktop host never sends one.
 shared.scrolllerFeed = createScrolllerFeed({ bridge: shared.bridge });
+// The desktop's own library (host/localLibrary.js libraryRows): kept for every course; only a host with caps.ownMedia answers.
+shared.bridge.on('own-media', m => { shared.ownMedia = m; try { shared.onOwnMedia?.(); } catch (e) { console.warn('[own-media]', e); } });
 const controller = createCourseController({
   cover() { loading.start(); shared.renderer?.setHold(true); shared.garage?.setVisible(false); },
   open(id, options, lifetime, isCurrent) { return boot(COURSES.find(c => c.id === id), options, lifetime, isCurrent); },
@@ -471,11 +473,23 @@ async function boot(course, options, lifetime, isCurrent) {
   // "My files" (host/localLibrary.js): the player's own pictures as blob urls, never uploaded; while it is on the
   // Scrolller switch is off, so the host fetches nothing. Kept across courses; only the choice survives a reload.
   const library = shared.library ||= createLocalLibrary();
-  library.setFiles(shared.courseFiles[TRACK_ID] || []);
+  // DESKTOP LIBRARY (caps.ownMedia.library): My files shows the app's own ticked pictures, asked once per page
+  // (`own-media-list`, answered `own-media` on the host's media origin); a hand pick for a course still wins. A host
+  // without the cap (web, phone) never gets the ask, so nothing changes there.
+  const ownOrigin = init.caps.ownMedia?.library === true && /^https:\/\/[a-z0-9.-]+$/.test(init.caps.ownMedia.mediaOrigin || '') ? init.caps.ownMedia.mediaOrigin : '';
+  const ownRows = () => (ownOrigin ? libraryRows(shared.ownMedia, ownOrigin) : []);
+  if (ownOrigin && !shared.ownAsked) { shared.ownAsked = true; shared.bridge.send({ type: 'own-media-list' }); }
   const consentOn = () => scrolller?.consent ?? init.caps.scrolller?.consent === true;
   const coursePick = shared.coursePicks[TRACK_ID] ||= {};
-  if (!coursePick.source) coursePick.source = TRACK_ID === shared.initialCourse && shared.legacyFilesOn ? 'files' : consentOn() ? 'scrolller' : 'off';
+  if (!coursePick.source) coursePick.source = TRACK_ID === shared.initialCourse && shared.legacyFilesOn ? 'files' : consentOn() ? 'scrolller' : ownOrigin ? 'files' : 'off';
   shared.filesOn = coursePick.source === 'files';
+  function fillLibrary() {
+    const picked = shared.courseFiles[TRACK_ID];
+    if (picked?.length || !shared.filesOn) return library.setFiles(picked || []);
+    const rows = ownRows();
+    return rows.length ? library.setRows(rows) : library.setFiles([]);
+  }
+  fillLibrary();
   const pictures = feedSwitch(() => shared.filesOn ? library : coursePick.source === 'off' ? null : scrolller);
   const view = () => ({ on: consentOn(), track: trackName, niches: nichesFor(track.id), custom: !isDefault(track.id),
     catalog: scrolller?.catalog, source: shared.filesOn ? 'files' : consentOn() ? 'scrolller' : 'off', files: library.count });
@@ -485,6 +499,7 @@ async function boot(course, options, lifetime, isCurrent) {
     coursePick.source = to; shared.filesOn = to === 'files'; saveCustomization(shared.coursePicks);
     saveFilesChoice(shared.filesOn);
     if (!shared.filesOn) { library.clear(); delete shared.courseFiles[TRACK_ID]; }
+    if (shared.filesOn && !library.count) fillLibrary();
     if (shared.filesOn && !library.count && choose) pick();
     if (scrolller) {
       scrolller.setConsent(to === 'scrolller', deviceOrigin);   // every setSource is the player's own press
@@ -493,6 +508,12 @@ async function boot(course, options, lifetime, isCurrent) {
     refreshMedia();
   }
   const pick = () => openFilePicker(files => { shared.courseFiles[TRACK_ID] = pickFiles(files); library.setFiles(shared.courseFiles[TRACK_ID]); if (lifetime.alive) refreshMedia(); });
+  // The library answer can land after the course opened: fill an empty My files then, never over a hand pick.
+  const onOwnMedia = () => {
+    if (!lifetime.alive || !shared.filesOn || library.count || shared.courseFiles[TRACK_ID]?.length) return;
+    fillLibrary(); refreshMedia();
+  };
+  if (ownOrigin) { shared.onOwnMedia = onOwnMedia; lifetime.defer(() => { if (shared.onOwnMedia === onOwnMedia) shared.onOwnMedia = null; }); }
   hud.setScrolller(view());
   if (scrolller) {
     if (coursePick.source === 'scrolller') {
@@ -706,8 +727,8 @@ async function boot(course, options, lifetime, isCurrent) {
       sound: (name, opts) => { audio.start(); audio.cue(name, opts); } });
     const mediaFor = id => {
       const saved = shared.coursePicks[id] || {}, local = shared.courseSongs[id];
-      return { source: id === TRACK_ID ? view().source : saved.source || (consentOn() ? 'scrolller' : 'off'),
-        files: id === TRACK_ID ? library.count : Math.min(24, shared.courseFiles[id]?.length || 0), catalog: scrolller?.catalog || [], scrolllerAvailable: !!scrolller,
+      return { source: id === TRACK_ID ? view().source : saved.source || (consentOn() ? 'scrolller' : ownOrigin ? 'files' : 'off'),
+        files: id === TRACK_ID ? library.count : Math.min(24, shared.courseFiles[id]?.length || 0) || ownRows().length, catalog: scrolller?.catalog || [], scrolllerAvailable: !!scrolller,
         niches: nichesFor(id), custom: !isDefault(id), songs: shared.songRows.map(({id,label}) => ({id,label})),
         songId: local ? 'file' : saved.songId || 'default',
         songName: local?.name || shared.songRows.find(row => row.id === ((saved.songId && saved.songId !== 'default' ? saved.songId : null) || ({threshold:'pink-road',mainframe:'mainframe',keep:'keep',boudoir:'boudoir',goonworks:'goonworks'})[id]))?.label || 'Track default' };
