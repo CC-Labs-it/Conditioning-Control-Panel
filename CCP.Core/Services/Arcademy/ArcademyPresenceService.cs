@@ -561,16 +561,27 @@ internal static class ArcademyPresenceService
     /// none of them may pay for the network or die of it (CLAUDE.md async rules 6-8).</summary>
     private static void Run(Func<Task> work, string what)
     {
+        Interlocked.Increment(ref _pending);
         try
         {
             _ = Task.Run(async () =>
             {
                 try { await work().ConfigureAwait(false); }
                 catch (Exception ex) { Log.Information("[ArcademyPresence] {What} failed: {E}", what, ex.Message); }
+                finally { Interlocked.Decrement(ref _pending); }
             });
         }
-        catch (Exception ex) { Log.Debug("ArcademyPresence.Run({What}): {E}", what, ex.Message); }
+        catch (Exception ex)
+        {
+            Interlocked.Decrement(ref _pending);
+            Log.Debug("ArcademyPresence.Run({What}): {E}", what, ex.Message);
+        }
     }
+
+    private static int _pending;
+
+    /// <summary>Requests started by <see cref="Run"/> and not yet finished (tests wait for zero before restoring <see cref="Http"/>).</summary>
+    internal static int Pending => Volatile.Read(ref _pending);
 
     private static JObject? Parse(string body)
     {

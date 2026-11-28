@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Reflection;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Arcademy;
 using Newtonsoft.Json.Linq;
@@ -23,13 +26,15 @@ public sealed class ArcademyPresenceServiceTests
     {
         public readonly ConcurrentQueue<(HttpMethod Method, string? Token, JObject? Body)> Seen = new();
         public string Snapshot = "{\"v\":1,\"now\":1,\"students\":[]}";
+        public HttpStatusCode PostStatus = HttpStatusCode.OK;
+        public string PostReply = "{\"self\":\"me\"}";
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var body = r.Content == null ? null : JObject.Parse(await r.Content.ReadAsStringAsync(ct));
             Seen.Enqueue((r.Method, r.Headers.TryGetValues("X-Auth-Token", out var v) ? v.First() : null, body));
-            var text = r.Method == HttpMethod.Get ? Snapshot : "{\"self\":\"me\"}";
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(text) };
+            var get = r.Method == HttpMethod.Get;
+            return new HttpResponseMessage(get ? HttpStatusCode.OK : PostStatus) { Content = new StringContent(get ? Snapshot : PostReply) };
         }
 
         public List<JObject> Posts() => Seen.Where(x => x.Method == HttpMethod.Post).Select(x => x.Body!).ToList();
@@ -52,6 +57,7 @@ public sealed class ArcademyPresenceServiceTests
         var (oldGet, oldSet, oldHttp) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, ArcademyPresenceService.Http);
         var (oldId, oldShare, oldOffline) = (s.UnifiedId, s.ArcademyPresenceShare, s.OfflineMode);
         var fake = new Fake();
+        var saved = SavedStatics();
         CoreSecrets.RetrieveProvider = n => secrets.GetValueOrDefault(n);
         CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
         ArcademyPresenceService.Http = new HttpClient(fake);
@@ -69,8 +75,73 @@ public sealed class ArcademyPresenceServiceTests
             s.UnifiedId = null; s.AuthToken = null;
             s.ArcademyPresenceShare = oldShare;
             (s.UnifiedId, s.OfflineMode) = (oldId, oldOffline);
+            // A leave still on the wire must reach the fake, not the restored client.
+            var end = DateTime.UtcNow.AddSeconds(5);
+            while (ArcademyPresenceService.Pending > 0 && DateTime.UtcNow < end) Thread.Sleep(10);
+            Assert.Equal(0, ArcademyPresenceService.Pending);
+            RestoreStatics(saved);
             (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, ArcademyPresenceService.Http) = (oldGet, oldSet, oldHttp);
         }
+    }
+
+    private static readonly string[] StaticNames = { "_self", "_lastShare", "_hookedSettings" };
+    private static FieldInfo Field(string name) =>
+        typeof(ArcademyPresenceService).GetField(name, BindingFlags.Static | BindingFlags.NonPublic)!;
+    private static object?[] SavedStatics() => StaticNames.Select(n => Field(n).GetValue(null)).ToArray();
+
+    /// <summary>Puts back the fake self id, the rung and the settings subscription the service keeps forever.</summary>
+    private static void RestoreStatics(object?[] saved)
+    {
+        var handler = (PropertyChangedEventHandler)Delegate.CreateDelegate(typeof(PropertyChangedEventHandler),
+            typeof(ArcademyPresenceService).GetMethod("OnSettingChanged", BindingFlags.Static | BindingFlags.NonPublic)!);
+        var (now, was) = (Field("_hookedSettings").GetValue(null) as AppSettings, saved[2] as AppSettings);
+        if (!ReferenceEquals(now, was))
+        {
+            if (now != null) now.PropertyChanged -= handler;
+            if (was != null) was.PropertyChanged += handler;
+        }
+        for (var i = 0; i < StaticNames.Length; i++) Field(StaticNames[i]).SetValue(null, saved[i]);
+    }
+
+    /// <summary>The cleanup leaves no fake self id and no settings subscription behind.</summary>
+    [Fact]
+    public void CleanupRestoresTheServiceStatics()
+    {
+        var real = SavedStatics();
+        var known = new object?[] { "before", "off", null };   // not what any test leaves behind
+        RestoreStatics(known);
+        try
+        {
+            With("anon", signedIn: true, offline: false, fake =>
+            {
+                ArcademyPresenceService.Attach((_, _) => { });
+                Until(() => fake.Posts().Count >= 1);
+                Assert.Equal("me", Field("_self").GetValue(null));
+            });
+            Assert.Equal(known, SavedStatics());
+        }
+        finally { RestoreStatics(real); }
+    }
+
+    /// <summary>WPF PostEventAsync: every presence reply goes to contract D.</summary>
+    [Fact]
+    public void PresenceReplyGoesToMergedRecovery()
+    {
+        var old = ArcademySyncService.MergedRecovery;
+        const string merged = "{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}";
+        var seen = new ConcurrentQueue<(int, string?)>();
+        ArcademySyncService.MergedRecovery = (status, body) => { seen.Enqueue((status, body)); return true; };
+        try
+        {
+            With("anon", signedIn: true, offline: false, fake =>
+            {
+                (fake.PostStatus, fake.PostReply) = (HttpStatusCode.Conflict, merged);
+                ArcademyPresenceService.Attach((_, _) => { });
+                Until(() => !seen.IsEmpty);
+                Assert.Equal(new[] { (409, (string?)merged) }, seen);
+            });
+        }
+        finally { ArcademySyncService.MergedRecovery = old; }
     }
 
     [Fact]
