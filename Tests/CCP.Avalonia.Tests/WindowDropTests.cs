@@ -499,6 +499,38 @@ public sealed class WindowDropTests
     });
 
     [Fact]
+    public Task ImportProgressKeepsOverlayUpAndRefusesAnotherDrop() => Run(async (shell, root, _) =>
+    {
+        var file = Path.Combine(root, "pack.zip");
+        File.WriteAllBytes(file, Array.Empty<byte>());
+        var run = shell._dropImport.Begin();
+        try
+        {
+            shell.ShowDropImportProgress(null);
+            Assert.True(shell.Named<Border>("GlobalDropOverlay")!.IsVisible);
+            Assert.True(shell.Named<ProgressBar>("DropImportBar")!.IsIndeterminate);
+            shell.ShowDropImportProgress(new ImportProgress(3, 4, "clip.mp4"));
+            Assert.False(shell.Named<ProgressBar>("DropImportBar")!.IsIndeterminate);
+            Assert.Equal(75, shell.Named<ProgressBar>("DropImportBar")!.Value);
+            Assert.Equal("3 / 4 - clip.mp4", shell.Named<TextBlock>("DropImportCount")!.Text);
+            Drop(shell, file, RawDragEventType.DragEnter); // a leave only reaches an entered target
+            Assert.False(shell.Named<StackPanel>("DropOverlayPrompt")!.IsVisible);
+            Drop(shell, file, RawDragEventType.DragLeave);
+            Assert.True(shell.Named<Border>("GlobalDropOverlay")!.IsVisible);
+            await shell.ImportDroppedFilesAsync(new[] { file });
+            Assert.True(shell._dropImport.Busy);
+        }
+        finally
+        {
+            shell._dropImport.End(run);
+            shell.HideDropImportProgress();
+        }
+        Assert.False(shell.Named<Border>("GlobalDropOverlay")!.IsVisible);
+        Assert.True(shell.Named<StackPanel>("DropOverlayPrompt")!.IsVisible);
+        Assert.False(shell.Named<StackPanel>("DropImportProgress")!.IsVisible);
+    });
+
+    [Fact]
     public Task SessionDroppedOnTheWindowImportsIntoTheLibrary() => Run((shell, root, _) =>
     {
         var custom = Directory.CreateDirectory(Path.Combine(root, "custom")).FullName;
@@ -622,6 +654,9 @@ public sealed class WindowDropTests
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var notifications = global::ConditioningControlPanel.Avalonia.App.Notifications;
+        global::ConditioningControlPanel.Avalonia.App.Notifications = new();
         LocalizationManager.Instance.SetLanguage("en");
         var root = Directory.CreateTempSubdirectory("ccp-window-drop-").FullName;
         var assets = Path.Combine(root, "assets");
@@ -640,6 +675,8 @@ public sealed class WindowDropTests
             foreach (var w in shell.OwnedWindows.ToArray()) w.Close();
             shell.Close();
             ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = provider;
+            global::ConditioningControlPanel.Avalonia.App.Notifications = notifications;
+            LocalizationManager.Instance.SetLanguage(language);
             try { Directory.Delete(root, true); } catch { }
         }
     });

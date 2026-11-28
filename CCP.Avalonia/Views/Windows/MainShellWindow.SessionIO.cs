@@ -78,6 +78,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
              Loc.GetF(play ? "media_drop_player_error_fmt" : "media_drop_editor_error_fmt", ex.GetType().Name, ex.Message));
 
         private AssetImportService? _assetImportService;
+        internal readonly DropImportGate _dropImport = new();
+
+        private void SayDropImportBusy()
+        {
+            if (_dropImport.ShouldSayBusy(DateTime.UtcNow))
+                App.Notifications.Show(Loc.Get("drop_import_refused"), Helpers.NotificationType.Info);
+        }
+
+        internal void ShowDropImportProgress(ImportProgress? progress)
+        {
+            if (Named<StackPanel>("DropOverlayPrompt") is { } prompt) prompt.IsVisible = false;
+            if (Named<StackPanel>("DropImportProgress") is { } card) card.IsVisible = true;
+            if (Named<ProgressBar>("DropImportBar") is { } bar)
+            {
+                bar.IsIndeterminate = ImportProgressText.IsIndeterminate(progress);
+                if (!bar.IsIndeterminate) bar.Value = ImportProgressText.Percent(progress);
+            }
+            if (Named<TextBlock>("DropImportCount") is { } count)
+                count.Text = ImportProgressText.CountLine(progress, (c, t, f) => $"{c} / {t} - {f}");
+            SetDropOverlay(true);
+        }
+
+        internal void HideDropImportProgress()
+        {
+            if (Named<StackPanel>("DropOverlayPrompt") is { } prompt) prompt.IsVisible = true;
+            if (Named<StackPanel>("DropImportProgress") is { } card) card.IsVisible = false;
+            if (Named<ProgressBar>("DropImportBar") is { } bar) bar.IsIndeterminate = true;
+            if (Named<TextBlock>("DropImportCount") is { } count) count.Text = "";
+            SetDropOverlay(false);
+        }
 
         internal static string[] DroppedPaths(DragEventArgs e) =>
             e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).OfType<string>().ToArray()
@@ -97,6 +127,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// with no overlay (the drop explains itself in a toast).</summary>
         private void Window_DragEnter(object? sender, DragEventArgs e)
         {
+            if (_dropImport.Busy)
+            {
+                e.DragEffects = DragDropEffects.None;
+                SayDropImportBusy();
+                e.Handled = true;
+                return;
+            }
             var files = DroppedPaths(e);
             var dropType = DropRules.Detect(files);
             e.DragEffects = dropType == DropType.None ? DragDropEffects.None : DragDropEffects.Copy;
@@ -110,14 +147,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void Window_DragOver(object? sender, DragEventArgs e)
         {
-            e.DragEffects = DropRules.Detect(DroppedPaths(e)) == DropType.None ? DragDropEffects.None : DragDropEffects.Copy;
+            e.DragEffects = _dropImport.Busy || DropRules.Detect(DroppedPaths(e)) == DropType.None ? DragDropEffects.None : DragDropEffects.Copy;
             e.Handled = true;
         }
 
-        private void Window_DragLeave(object? sender, RoutedEventArgs e) => SetDropOverlay(false);
+        private void Window_DragLeave(object? sender, RoutedEventArgs e) { if (!_dropImport.Busy) SetDropOverlay(false); }
 
         private async void Window_Drop(object? sender, DragEventArgs e)
         {
+            if (_dropImport.Busy) { e.Handled = true; SayDropImportBusy(); return; }
             SetDropOverlay(false);
             if (e.Handled) return;   // the Sessions tab already imported it
             e.Handled = true;
@@ -128,6 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal async Task ImportDroppedFilesAsync(string[]? files)
         {
             if (files == null || files.Length == 0) return;
+            if (_dropImport.Busy) { SayDropImportBusy(); return; }
 
             // WPF MainWindow.SessionIO.cs:1474-1484, Presets.cs:822-925.
             if (files.Length == 1 && File.Exists(files[0]) && DropRules.IsDeeperPlayableMedia(files[0]))
@@ -221,7 +260,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 _assetImportService ??= new AssetImportService();
-                var result = await Task.Run(() => _assetImportService.ImportAsync(paths));
+                var run = _dropImport.Begin();
+                ShowDropImportProgress(null);
+                var progress = new Progress<ImportProgress>(p => { if (_dropImport.Accepts(run)) ShowDropImportProgress(p); });
+                ImportResult result;
+                try
+                {
+                    result = await Task.Run(() => _assetImportService.ImportAsync(paths, progress));
+                }
+                finally
+                {
+                    _dropImport.End(run);
+                    HideDropImportProgress();
+                }
                 // WPF MainWindow.SessionIO.cs:1814-1818 (RefreshVideosPath): the dealt video queue
                 // must see the new files. Pack decrypts stay: a clip may be playing (WPF does not sweep here).
                 if (result.VideosImported > 0) Overlays.MandatoryVideoOverlay.Instance.Scheduler.RefreshVideosPath();
