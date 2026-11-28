@@ -107,8 +107,9 @@ public sealed class CompanionVideoAutoPlayTests
             // The sandbox refuses real sites; the playlist rule matches the path text, so a loopback URL carries it.
             Assert.True(shell.NavigateToUrlInBrowser("https://127.0.0.1/bambicloud.com/playlist/1", true));
             host.OnNavigationCompleted(new Uri("https://127.0.0.1/bambicloud.com/playlist/1"));
-            Assert.Equal(1, waits);
+            Assert.Equal(2, waits);
             Assert.DoesNotContain(WebHostTakeover.VideoAutoPlayScript, scripts);
+            Assert.Single(scripts, s => s == WebHostTakeover.PlaylistAutoPlayScript);
             return Task.CompletedTask;
         }
         finally
@@ -171,6 +172,45 @@ public sealed class CompanionVideoAutoPlayTests
         {
             CoreSettings.ServiceProvider = previousSettings;
             PanicSurfaces.All = surfaces;
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    [Fact]
+    public Task PlaylistPanicCancelsDelayedStart() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var previousSettings = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.OfflineMode = false;
+        (settings.Current.Welcomed, settings.Current.HasAcceptedAgeVerification,
+            settings.Current.WhatMovedCardShown, settings.Current.AvatarEnabled) = (true, true, 1, false);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var host = shell.Named<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            var scripts = new List<string>();
+            host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+            host.NavigationInvoker = _ => true;
+            var delay = new TaskCompletionSource();
+            shell.BrowserAutoPlayDelay = () => delay.Task;
+            var url = new Uri("https://127.0.0.1/bambicloud.com/playlist/1");
+            Assert.True(shell.NavigateToUrlInBrowser(url.ToString(), true));
+            host.OnNavigationCompleted(url);
+            shell.PanicPauseBrowserMedia();
+            delay.SetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(WebHostMedia.PanicPauseScript, scripts);
+            Assert.DoesNotContain(WebHostTakeover.PlaylistAutoPlayScript, scripts);
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            CoreSettings.ServiceProvider = previousSettings;
             shell.Close();
             Dispatcher.UIThread.RunJobs();
         }

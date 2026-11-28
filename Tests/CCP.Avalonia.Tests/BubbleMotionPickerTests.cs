@@ -36,10 +36,10 @@ public sealed class BubbleMotionPickerTests
         Window? host = null;
         try
         {
-            // Exercise the future offer configuration while it is gated on this head.
+            // WPF keeps the box up for the Get it offer (BubblePopFeatureControl.xaml.cs:327).
             PrizeOwnership.IsGranted = _ => false;
             var bare = new BubblePopFeatureControl();
-            Assert.False(bare.FindControl<Border>("V2Box")!.IsVisible);
+            Assert.True(bare.FindControl<Border>("V2Box")!.IsVisible);
             bare.FindControl<V2GetItRow>("RowGetBubblesV2")!.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
             Assert.True(bare.FindControl<Border>("V2Box")!.IsVisible);
             Assert.False(bare.FindControl<Control>("MotionRow")!.IsVisible);
@@ -125,7 +125,7 @@ public sealed class BubbleMotionPickerTests
             Task.Run(() => PrizeOwnership.ApplySnapshot("bubble-owner", 1, new[] { PrizeOwnership.BubbleRain })).GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
             Assert.True(box.IsVisible);
-            Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
+            Assert.True(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
             Assert.Equal(new[] { BubbleMotionStyle.FloatUp, BubbleMotionStyle.Rain, BubbleMotionStyle.Mix },
                 picker.Items.OfType<ComboBoxItem>().Select(i => (BubbleMotionStyle)i.Tag!).ToArray());
             Assert.Equal(BubbleMotionStyle.SpiralIn, settings.BubbleMotionStyle); // repaint must not save fallback
@@ -136,7 +136,7 @@ public sealed class BubbleMotionPickerTests
             settings.UnifiedId = "other-owner";
             CoreAccount.UnifiedUserId = "other-owner";
             Dispatcher.UIThread.RunJobs();
-            Assert.False(box.IsVisible);
+            Assert.True(box.IsVisible);   // the Get it offer keeps the box (WPF :327)
             Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
             settings.UnifiedId = "bubble-owner";
             CoreAccount.UnifiedUserId = "bubble-owner";
@@ -151,7 +151,7 @@ public sealed class BubbleMotionPickerTests
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
             Assert.DoesNotContain(changed?.GetInvocationList() ?? System.Array.Empty<System.Delegate>(), d => ReferenceEquals(d.Target, panel));
             host.Content = panel;
-            Assert.False(box.IsVisible); // reload catches the snapshot missed while detached
+            Assert.True(box.IsVisible); // the offer row keeps the box; the reload still drops the owned styles below
             Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
             Assert.Single(picker.Items);
         }

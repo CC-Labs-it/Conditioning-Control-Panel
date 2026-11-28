@@ -18,8 +18,10 @@ namespace CCP.Avalonia.Tests;
 
 public class TakeoverModLabelsTests
 {
-    [Fact]
-    public Task LabelsFollowModAndLanguageAndUnsubscribeOnDetach() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task LabelsFollowModAndLanguageAndUnsubscribeOnDetach(bool tooltip) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
@@ -30,6 +32,19 @@ public class TakeoverModLabelsTests
         var loc = LocalizationManager.Instance;
         var language = loc.CurrentLanguage;
         var view = new BambiTakeoverTabView();
+        void AssertTakeoverLabel()
+        {
+            var label = mods.GetTakeoverLabel();
+            if (tooltip)
+                Assert.Equal(Loc.GetF("tooltip_start_stop_takeover", label), ToolTip.GetTip(view.FindControl<Button>("BtnAutonomyStartStop")!));
+            else
+            {
+                var locked = view.FindControl<ConditioningControlPanel.Avalonia.Controls.IconLabel>("TxtTakeoverLocked")!;
+                Assert.Equal(label, locked.Label.Text);
+                var icon = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>(locked.Children[0]);
+                Assert.Equal(FluentIcons.Common.Symbol.Bot, icon.Kind);
+            }
+        }
         var count = Count();
         var languageCount = LanguageCount(loc);
         var window = new Window { Content = view };
@@ -47,6 +62,7 @@ public class TakeoverModLabelsTests
             CoreMods.RaiseModChanged(null, mods.ActiveMod);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(mods.GetTakeoverLabel(), view.FindControl<TextBlock>("TxtBambiTakeoverHeader")!.Text);
+            AssertTakeoverLabel();
             Assert.Equal("First effect", view.FindControl<TextBlock>("TxtAutoFlash")!.Text);
             foreach (var (name, english) in effects)
                 Assert.Equal("First " + english, view.FindControl<TextBlock>(name)!.Text);
@@ -56,9 +72,11 @@ public class TakeoverModLabelsTests
             CoreMods.RaiseModChanged(null, mods.ActiveMod);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(mods.GetTakeoverLabel(), view.FindControl<TextBlock>("TxtBambiTakeoverHeader")!.Text);
+            AssertTakeoverLabel();
             Assert.NotEqual(firstHeading, view.FindControl<TextBlock>("TxtBambiTakeoverHeader")!.Text);
             Assert.Equal("Second effect", view.FindControl<TextBlock>("TxtAutoFlash")!.Text);
             loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
+            AssertTakeoverLabel();
             Assert.Equal("Second effect", view.FindControl<TextBlock>("TxtAutoFlash")!.Text);
             Assert.Equal(loc.Get("tab_videos"), view.FindControl<TextBlock>("TxtAutoVideo")!.Text);
             Assert.Equal(loc.Get("label_pink_filter"), view.FindControl<TextBlock>("TxtAutoPinkFilter")!.Text);

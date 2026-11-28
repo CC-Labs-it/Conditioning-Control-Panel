@@ -466,7 +466,7 @@ namespace ConditioningControlPanel.Services.Bark
                 try
                 {
                     if (WindowAwarenessService.V2OwnsReactionsProvider?.Invoke() == true)
-                        AwarenessArbiter?.RecordExternalLine(ReactionSource.Bark);
+                        (AwarenessArbiter ?? AwarenessV2Routing.Arbiter)?.RecordExternalLine(ReactionSource.Bark);
                 }
                 catch (Exception ex) { Log.Debug(ex, "BarkEngine: arbiter report failed"); }
             }

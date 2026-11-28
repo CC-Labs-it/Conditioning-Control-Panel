@@ -90,11 +90,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (!st.Show) return;
             var tone = new SolidColorBrush(ToneColor(st.Tone));
             TxtOnlineMeterPct.Text = string.Format(Loc.Get("online_meter_pct"), st.Percent);
-            TxtOnlineMeterPct.Foreground = st.Spent ? new SolidColorBrush(Color.FromRgb(0xA7, 0xA7, 0xC1)) : tone;
+            TxtOnlineMeterPct.Foreground = st.Spent ? new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xE0)) : tone;
             OnlineMeterBar.ColumnDefinitions[0].Width = new GridLength(st.Percent, GridUnitType.Star);
             OnlineMeterBar.ColumnDefinitions[1].Width = new GridLength(100 - st.Percent, GridUnitType.Star);
             OnlineMeterBarFill.Background = tone;
-            TxtOnlineMeterSummary.Text = OnlineMeterHead.CardLine(st, now, reset);
+            TxtOnlineMeterSummary.Text = OnlineMeterHead.CardLine(st with { UpsellKey = null }, now, reset);
+            TxtOnlineMeterSummary.Foreground = new SolidColorBrush(st.Spent ? Color.FromRgb(0xF0, 0xF0, 0xF5) : Color.FromRgb(0xA7, 0xA7, 0xC1));
+            TxtOnlineMeterSummary.FontSize = st.Spent ? 12.5 : 11.5;
+            TxtOnlineMeterUpsell.Text = st.UpsellKey == null ? "" : "   " + Loc.Get(st.UpsellKey);
         }
 
         /// <summary>WPF OnlineMeterRing.ColorFor: pink, amber from 80%, grey once used up.</summary>
