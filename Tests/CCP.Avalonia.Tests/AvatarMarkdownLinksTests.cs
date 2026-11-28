@@ -40,6 +40,7 @@ public sealed class AvatarMarkdownLinksTests
         {
             parent.Show(); tube.Show();
             tube.GigglePriority(Message, playSound: false);
+            while (tube.TypewriterFrame is { } frame) frame();
             Dispatcher.UIThread.RunJobs();
             var live = tube.FindControl<TextBlock>("TxtSpeech")!;
             var liveLink = Link(live);
@@ -89,6 +90,7 @@ public sealed class AvatarMarkdownLinksTests
         {
             parent.Show(); tube.Show();
             tube.GigglePriority(message, playSound: false);
+            while (tube.TypewriterFrame is { } frame) frame();
             Dispatcher.UIThread.RunJobs();
             var live = tube.FindControl<TextBlock>("TxtSpeech")!;
             var liveLink = Assert.IsAssignableFrom<Button>(Assert.Single(live.Inlines!.OfType<InlineUIContainer>()).Child);
@@ -131,6 +133,7 @@ public sealed class AvatarMarkdownLinksTests
         {
             parent.Show(); tube.Show();
             tube.GigglePriority("Before [" + label + "](https://example.com/long) after", playSound: false);
+            while (tube.TypewriterFrame is { } frame) frame();
             Dispatcher.UIThread.RunJobs(); tube.UpdateLayout();
             TextBlock owner;
             Button link;

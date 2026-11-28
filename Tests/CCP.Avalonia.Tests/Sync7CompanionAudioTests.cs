@@ -91,6 +91,7 @@ public sealed class Sync7CompanionAudioTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(3, gains.Count);
             Assert.True(finished);
+            while (tube.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             Assert.Equal("silent line", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
             Assert.True(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
         }

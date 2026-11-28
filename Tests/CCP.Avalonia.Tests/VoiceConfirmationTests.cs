@@ -112,6 +112,7 @@ public sealed class VoiceConfirmationTests
             Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi bubbles on", new[] { "hey bambi" }));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, starts);
+            while (shell.Tube!.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             Assert.Equal("Bubbles manifest confirmation", shell.Tube!.FindControl<TextBlock>("TxtSpeech")!.Text);
             Assert.Equal(clip, played);
             finish!();

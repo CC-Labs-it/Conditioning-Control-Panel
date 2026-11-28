@@ -79,6 +79,7 @@ public sealed class TubeChatAiTests
             input.Text = "hello there";
             await tube.SendChatAsync();
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             Assert.Equal("hi sweetie", speech.Text);
             Assert.True(aiBadge.IsVisible);
             Assert.Contains(tube.ChatHistory, m => m.IsUser && m.Text == "hello there");

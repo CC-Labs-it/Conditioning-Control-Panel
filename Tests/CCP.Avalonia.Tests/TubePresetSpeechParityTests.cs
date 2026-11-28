@@ -50,7 +50,9 @@ public sealed class TubePresetSpeechParityTests
             Assert.Equal("1", text.Text);
             tube.GigglePriority("replacement", playSound: false, aiGenerated: false);
             stale();
-            Assert.Equal("replacement", text.Text); // an interrupted tick cannot overwrite a newer line
+            Assert.Equal("", text.Text); // an interrupted tick cannot overwrite a newer line
+            while (tube.TypewriterFrame is { } replacementFrame) replacementFrame();
+            Assert.Equal("replacement", text.Text);
 
             tube.EndSpeechBubble();
             tube.SpeechDelayScheduler = (_, fire) => { fire(); return () => { }; };
@@ -225,6 +227,7 @@ public sealed class TubePresetSpeechParityTests
                 global::Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(link)).Invoke();
             Assert.Equal("https://example.com/", opened); // the shared renderer hands over Uri.AbsoluteUri
             tube.GigglePriority("next", playSound: false, aiGenerated: false);
+            while (tube.TypewriterFrame is { } nextFrame) nextFrame();
             Assert.Equal("next", text.Text);
             Assert.Empty(text.Inlines!.OfType<InlineUIContainer>());
         }

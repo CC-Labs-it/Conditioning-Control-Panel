@@ -63,6 +63,7 @@ public sealed class AwarenessMouthSeedTests
             var speaker = new AvatarAwarenessSpeaker(() => null);
             Assert.True(speaker.TrySpeakLine("you again", RarityTier.Rare));
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             Assert.Equal("you again", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
             Assert.Equal(1, echoes);
             // Her AI bubble is up, so the tube now reads busy and the next quip defers (WPF IsCompanionBusy).

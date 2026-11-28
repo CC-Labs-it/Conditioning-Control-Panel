@@ -55,6 +55,7 @@ public sealed class TubeCompanionLevelTests
             Assert.False(tube.HasBubbleUp);
             CompanionCore.AddCompanionXP(CompanionProgress.GetXPForLevel(9), "test");
             Assert.Contains("10", caption.Text);
+            while (tube.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             Assert.Contains("level 10", text.Text);
             Assert.True(tube.HasBubbleUp);
             Assert.Equal(new[] { true }, sounds);   // WPF Speech.cs:332,543-546: the milestone giggles
@@ -62,6 +63,7 @@ public sealed class TubeCompanionLevelTests
             Assert.False(tube.HasBubbleUp);
             progress.Level = 99; progress.CurrentXP = 0;
             CompanionCore.AddCompanionXP(CompanionProgress.GetXPForLevel(99), "test");
+            while (tube.TypewriterFrame is { } typed2) typed2();
             Assert.Contains("MAX LEVEL", text.Text);
             Assert.True(tube.HasBubbleUp);
             shell.OnEngineStopped();   // WPF Reactions.cs:631-635: a stop only giggles, the line stays

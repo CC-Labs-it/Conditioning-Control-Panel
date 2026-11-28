@@ -419,6 +419,7 @@ public sealed class TakeoverTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, plays);
             Assert.Equal(CompanionEventAudio.Resolve(said), played);
+            while (shell.Tube!.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             Assert.Equal(said, shell.Tube!.FindControl<TextBlock>("TxtSpeech")!.Text);
             PanicSurfaces.StopAll("test", shell);
             Assert.Equal(1, stops);
@@ -427,6 +428,7 @@ public sealed class TakeoverTests
             shell.Autonomy.TestTrigger();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, plays);   // missing event clip stays text-only, without a fallback giggle
+            while (shell.Tube!.TypewriterFrame is { } typed2) typed2();
             Assert.Equal(said, shell.Tube!.FindControl<TextBlock>("TxtSpeech")!.Text);
         }
         finally
@@ -748,6 +750,7 @@ public sealed class TakeoverTests
             Dispatcher.UIThread.RunJobs();
             tube.Giggle("preset two");   // an AI bubble is up
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             Assert.Equal("ai reply", text.Text);
 
             var sounds = Enumerable.Range(0, 10).Select(_ => tube.NextPresetGiggleSound()).ToArray();

@@ -1205,9 +1205,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///
         /// <para><b>What it drops, and why each is safe to drop rather than fake.</b></para>
         /// <list type="bullet">
-        ///   <item>The typewriter. Cosmetic, and WPF adds its runtime to the display duration - so
-        ///         dropping it shortens the window rather than truncating the line. The reading
-        ///         floor below is kept, which is the half that protects a long reply.</item>
         ///   <item>The voice lead-in timer, except a preset portrait line, whose expression leads by 0.6 s.</item>
         ///   <item>Her <c>AvatarMuted</c> IS honoured below, as WPF
         ///         ShowGiggle (Speech.cs:461): the line still reaches the chat log, no bubble, no voice.</item>
@@ -1434,9 +1431,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     }
 
                     SyncAskButtonsFor(text);
-                    // WPF Speech.cs:513,559: non-AI bubbles type slowly; triggers type after their lead-in.
-                    if (preset && !trigger) TypeBubble(text, static () => true);
-                    else RenderSpeechLinks(_txtSpeech, text);   // WPF Speech.cs:1351 PopulateSpeechBubble
+                    // WPF Speech.cs:515,559: only non-AI sources type slowly; priority lines are SpeechSource.AI
+                    // (Speech.cs:373) even when canned. Triggers type after their lead-in.
+                    if (!trigger) TypeBubble(text, static () => true, slow: preset);
+                    else RenderSpeechLinks(_txtSpeech, text);
                     // WPF AdjustBubbleSize (Speech.cs:857-881): real DIPs now, 14 only for long replies.
                     _txtSpeech.FontSize = text.Length > 250 ? 14 : 15;
                     if (!_isShowingChatHistory) _speechBubble.MaxWidth = SpeechBubbleMaxWidth;
@@ -1447,7 +1445,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _currentSpeechSource = source;
                     _currentSpeechLength = text.Length;
 
-                    StartBubbleHideTimer(text, trigger ? TriggerDisplaySeconds(text) : preset ? PresetDisplaySeconds(text) : null);
+                    StartBubbleHideTimer(text, trigger ? TriggerDisplaySeconds(text) : preset ? PresetDisplaySeconds(text) : PriorityDisplaySeconds(text));
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                     return handled;
                 }

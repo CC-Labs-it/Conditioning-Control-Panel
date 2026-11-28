@@ -65,6 +65,7 @@ public sealed class StartupServiceWiringTests
             Dispatcher.UIThread.RunJobs();
             live = tube;
             Assert.True(countdown.Speaker("startup scripted line"));
+            while (tube.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             Assert.Contains("startup scripted line", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
             Assert.False(tube.FindControl<Border>("AiBadge")!.IsVisible);
             tube.Close();

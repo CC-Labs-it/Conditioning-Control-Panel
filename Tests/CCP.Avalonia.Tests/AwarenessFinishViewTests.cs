@@ -64,7 +64,8 @@ public sealed class AwarenessFinishViewTests
                 KeywordAvatarComment.DispatchAsync(new AvatarCommentAction { FallbackPhraseCategory = "retry-test" }, new()).GetAwaiter().GetResult();
                 Dispatcher.UIThread.RunJobs(); Assert.Single(pending);
                 finished!(); Dispatcher.UIThread.RunJobs(); Assert.True(tube.SpokenAudioDone.IsCompleted);
-                pending.Dequeue()(); Assert.Equal("comment", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
+                pending.Dequeue()(); while (tube.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
+                Assert.Equal("comment", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
                 KeywordAvatarComment.DispatchAsync(new AvatarCommentAction { FallbackPhraseCategory = "retry-test" }, new()).GetAwaiter().GetResult();
                 Dispatcher.UIThread.RunJobs();
                 for (var i = 0; i < 16; i++) pending.Dequeue()();

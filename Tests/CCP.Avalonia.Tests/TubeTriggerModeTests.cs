@@ -239,6 +239,7 @@ public sealed class TubeTriggerModeTests
             tube.GigglePriority("replacement", playSound: false);
             replacedTyping.Tick();
             Assert.True(replacedTyping.Stopped());
+            while (tube.TypewriterFrame is { } replacementFrame) replacementFrame();
             Assert.Equal("replacement", text.Text);
             tube.EndSpeechBubble();
             // Linked-trigger regression: type the label, then render a real link, preserving surrounding text.
