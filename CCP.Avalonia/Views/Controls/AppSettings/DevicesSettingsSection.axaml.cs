@@ -104,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             SyncFromSettings();
             PopulateMicDevices();
-            PopulateWebcamDevices();
+            _ = PopulateWebcamDevices();
             PopulateWebcamMonitors();
             RefreshQuickRecalHint();
         }
@@ -138,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         }
 
         // A cloud restore or a factory reset swaps the instance; repaint from it, on the UI thread.
-        private void OnCurrentReplaced() => Dispatcher.UIThread.Post(() => { SyncFromSettings(); PopulateWebcamDevices(); PopulateWebcamMonitors(); });
+        private void OnCurrentReplaced() => Dispatcher.UIThread.Post(() => { SyncFromSettings(); _ = PopulateWebcamDevices(); PopulateWebcamMonitors(); });
 
         // =====================================================================================
         //  seed
@@ -429,11 +429,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         private bool _webcamDevicePopulating;   // Items.Clear()/SelectedItem raise SelectionChanged
 
-        /// <summary>WPF PopulateWebcamCombo (MainWindow.LabTab.cs:1372), over sysfs instead of DirectShow.
-        /// Selection matches the saved /dev/videoN number, since V4L2 numbers are not contiguous.</summary>
-        private int PopulateWebcamDevices()
+        private readonly WebcamScanCoordinator<(int Index, string Name)> _webcamScan = new();
+        internal Func<System.Collections.Generic.IReadOnlyList<(int Index, string Name)>> EnumerateWebcamDevices = Platform.V4l2Cameras.Enumerate;
+
+        // WPF MainWindow.LabTab.cs:1375: join a scan already running and fill once on the UI thread.
+        private Task<System.Collections.Generic.IReadOnlyList<(int Index, string Name)>> PopulateWebcamDevices()
         {
-            var devices = Platform.V4l2Cameras.Enumerate();
+            var scan = _webcamScan.Run(EnumerateWebcamDevices, out bool started);
+            if (started) _ = FillWebcamDevices(scan);
+            return scan;
+        }
+
+        private async Task FillWebcamDevices(Task<System.Collections.Generic.IReadOnlyList<(int Index, string Name)>> scan)
+        {
+            var devices = await scan;
             _webcamDevicePopulating = true;
             try
             {
@@ -442,7 +451,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 {
                     CmbWebcamDevice.Items.Add(new ComboBoxItem { Content = "(no cameras detected)", Tag = -1, IsEnabled = false });
                     CmbWebcamDevice.SelectedIndex = 0;
-                    return 0;
+                    return;
                 }
                 int saved = CoreSettings.Current.WebcamDeviceIndex, target = 0;
                 for (int i = 0; i < devices.Count; i++)
@@ -451,8 +460,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                     if (devices[i].Index == saved) target = i;
                 }
                 CmbWebcamDevice.SelectedIndex = target;
-                return devices.Count;
             }
+            catch (Exception ex) { Log.Warning(ex, "Devices: filling the camera picker failed"); }
             finally { _webcamDevicePopulating = false; }
         }
 
@@ -470,9 +479,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         }
 
         /// <summary>WPF BtnWebcamDeviceRefresh_Click (MainWindow.LabTab.cs:1427): counts real devices, not items (#291).</summary>
-        private void BtnWebcamDeviceRefresh_Click(object? sender, RoutedEventArgs e)
+        private async void BtnWebcamDeviceRefresh_Click(object? sender, RoutedEventArgs e)
         {
-            int found = PopulateWebcamDevices();
+            int found = (await PopulateWebcamDevices()).Count;
             AppendWebcamDebugLog(found == 0 ? "Re-scanned cameras: none detected." : $"Re-scanned cameras: {found} found.");
         }
 

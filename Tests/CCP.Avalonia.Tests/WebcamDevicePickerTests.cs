@@ -1,5 +1,8 @@
+using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -17,6 +20,48 @@ namespace CCP.Avalonia.Tests;
 /// lists capture nodes only, restores the saved one, saves a pick, and Refresh reports the real count.</summary>
 public sealed class WebcamDevicePickerTests
 {
+    private static async Task WaitFor(Func<bool> condition)
+    {
+        for (int i = 0; i < 200 && !condition(); i++) await Task.Delay(10);
+        Assert.True(condition());
+    }
+
+    [Fact]
+    public async Task SlowScanDoesNotBlockPickerAndRefreshJoinsIt()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        int calls = 0;
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var section = new DevicesSettingsSection();
+                section.EnumerateWebcamDevices = () =>
+                {
+                    Interlocked.Increment(ref calls);
+                    entered.Set();
+                    release.Wait(TimeSpan.FromSeconds(5));
+                    return new List<(int Index, string Name)> { (7, "Camera") };
+                };
+                section.OnSectionShown();
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
+                section.FindControl<Button>("BtnWebcamDeviceRefresh")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(1, calls);
+                release.Set();
+                var combo = section.FindControl<ComboBox>("CmbWebcamDevice")!;
+                var log = section.FindControl<TextBlock>("TxtWebcamDebugLog")!;
+                await WaitFor(() => combo.Items.Count == 1 && log.Text?.Contains("Re-scanned cameras: 1 found.") == true);
+                Assert.Equal("[7] Camera", ((ComboBoxItem)combo.Items[0]!).Content);
+            });
+        }
+        finally { release.Set(); }
+    }
+
     [Fact]
     public async Task PickerListsCaptureNodesAndSavesThePick()
     {
@@ -40,7 +85,7 @@ public sealed class WebcamDevicePickerTests
             V4l2Cameras.Root = root;
             CoreWebcam.IsAvailableProvider = () => true;
             s.WebcamDeviceIndex = 2;
-            await AvaloniaTestDispatcher.RunAsync(() =>
+            await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (Application.Current is null)
                     AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -50,6 +95,7 @@ public sealed class WebcamDevicePickerTests
                 var window = new Window { Content = section };
                 window.Show();
                 var cmb = section.FindControl<ComboBox>("CmbWebcamDevice")!;
+                await WaitFor(() => cmb.Items.Count == 2);
                 Assert.True(cmb.IsEnabled);
                 Assert.Equal(new[] { "[0] Cam A", "[2] Cam B" },
                     cmb.Items.Cast<ComboBoxItem>().Select(i => i.Content!.ToString()).ToArray());
@@ -70,14 +116,16 @@ public sealed class WebcamDevicePickerTests
 
                 Directory.Delete(Path.Combine(root, "video2"), true);
                 section.FindControl<Button>("BtnWebcamDeviceRefresh")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await WaitFor(() => log.Text?.Contains("Re-scanned cameras: 1 found.") == true);
                 Assert.Contains("Re-scanned cameras: 1 found.", log.Text);
 
                 Directory.Delete(root, true);
                 section.FindControl<Button>("BtnWebcamDeviceRefresh")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await WaitFor(() => log.Text?.Contains("Re-scanned cameras: none detected.") == true);
+                await WaitFor(() => cmb.Items.Count == 1 && Equals(((ComboBoxItem)cmb.Items[0]!).Content, "(no cameras detected)"));
                 Assert.Contains("Re-scanned cameras: none detected.", log.Text);
                 Assert.Equal("(no cameras detected)", ((ComboBoxItem)cmb.SelectedItem!).Content);
                 window.Close();
-                return Task.CompletedTask;
             });
         }
         finally
