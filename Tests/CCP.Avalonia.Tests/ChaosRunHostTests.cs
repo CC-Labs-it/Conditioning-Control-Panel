@@ -1538,14 +1538,16 @@ public sealed class ChaosRunHostTests
                 var state = ChaosRunHost.State!;
                 for (int i = 0; i < 3; i++) ChaosRunHost.SpawnTick();
                 Assert.True(BubbleOverlay.ChaosCount >= 3);
-                var b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Popping);
+                // A darter or golden from the unseeded bonus rolls neither pops by click nor floats up.
+                static bool Treat(AmbientBubble x) => x.Spec?.VariantId is "flash" or "subliminal" && !x.Popping;
+                var b = BubbleOverlay.Field.Bubbles.First(Treat);
                 Assert.False(b.Spec!.IsLive);   // this click-to-pop test explicitly enables only treats
                 BubbleOverlay.Pop(b);
                 Assert.True(state.Score > 0);
                 Assert.Equal(1, state.Combo);
 
                 // WPF ToggleManualPause :265-268: a held field neither moves nor takes clicks.
-                var held = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Popping);
+                var held = BubbleOverlay.Field.Bubbles.First(Treat);
                 double score = state.Score, y = held.Y;
                 ChaosRunHost.ToggleManualPause();
                 BubbleOverlay.Field.Step();
