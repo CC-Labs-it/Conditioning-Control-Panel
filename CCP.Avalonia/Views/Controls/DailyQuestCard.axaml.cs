@@ -94,6 +94,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             AvaloniaXamlLoader.Load(this);
 
             _root = this.FindControl<Border>("Root")!;
+            _goHint = this.FindControl<Border>("GoHint")!;
+            _goHint.RenderTransform = _hintSlide;
             _track = this.FindControl<Border>("Track")!;
             _fill = this.FindControl<Border>("Fill")!;
             _completedOverlay = this.FindControl<Border>("CompletedOverlay")!;
@@ -293,10 +295,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!value)
             {
                 _lift.Active = _glow.Active = false;
+                SetHint(false, snap: true);
                 SetLift(1.0);
                 SetGlow(0);
             }
         }
+
+        private readonly Border _goHint;
+        private readonly TranslateTransform _hintSlide = new();
+        private readonly Tween _hint = new();
+        private bool _hintOn;
 
         private bool _canNavigate = true; // The constructor paints a navigable design sample.
 
@@ -312,6 +320,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!_canNavigate) return;
             try
             {
+                SetHint(true);
                 if (!AllowTransitions()) { _lift.Active = false; SetLift(HoverLiftScale); return; }
                 Start(_lift, _liftScale.ScaleX, HoverLiftScale, HoverMs, quadOut: true);
                 Start(_glow, _glowLevel, 1, GlowInMs, quadOut: false);
@@ -323,6 +332,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             try
             {
+                SetHint(false);
                 if (!AllowTransitions())
                 {
                     _lift.Active = _glow.Active = false;
@@ -334,6 +344,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 Start(_glow, _glowLevel, 0, GlowOutMs, quadOut: false);
             }
             catch (Exception ex) { Log.Debug("DailyQuestCard hover out: {E}", ex.Message); }
+        }
+
+        // WPF QuestGoHint: fade and travel right, with motion-off snapping.
+        private void SetHint(bool on, bool snap = false)
+        {
+            if (on == _hintOn && !snap) return;
+            _hintOn = on;
+            if (snap || !AllowTransitions())
+            {
+                _hint.Active = false;
+                _goHint.Opacity = on ? 1 : 0;
+                _goHint.IsVisible = on;
+                _hintSlide.X = 0;
+                return;
+            }
+            _goHint.IsVisible = true;
+            _hintSlide.X = on ? -4 : 0;
+            Start(_hint, _goHint.Opacity, on ? 1 : 0,
+                ConditioningControlPanel.Services.Safety.GentleVisuals.RiseMs(on ? 140 : 120), quadOut: on);
         }
 
         // ---- MOTION CLOCK --------------------------------------------------------
@@ -395,9 +424,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 if (_lift.Active) SetLift(_lift.Sample());
                 if (_glow.Active) SetGlow(_glow.Sample());
                 if (_bar.Active) _fill.Width = Math.Max(0, _bar.Sample());
+                if (_hint.Active)
+                {
+                    _goHint.Opacity = _hint.Sample();
+                    _hintSlide.X = _hintOn ? -4 * (1 - _goHint.Opacity) : 4 * (1 - _goHint.Opacity);
+                    if (!_hint.Active && !_hintOn) _goHint.IsVisible = false;
+                }
             }
-            catch (Exception ex) { _lift.Active = _glow.Active = _bar.Active = false; Log.Debug("DailyQuestCard motion: {E}", ex.Message); }
-            if (!_lift.Active && !_glow.Active && !_bar.Active) _clock?.Stop();
+            catch (Exception ex) { _lift.Active = _glow.Active = _bar.Active = _hint.Active = false; Log.Debug("DailyQuestCard motion: {E}", ex.Message); }
+            if (!_lift.Active && !_glow.Active && !_bar.Active && !_hint.Active) _clock?.Stop();
         }
 
         private void SetLift(double scale) => _liftScale.ScaleX = _liftScale.ScaleY = scale;

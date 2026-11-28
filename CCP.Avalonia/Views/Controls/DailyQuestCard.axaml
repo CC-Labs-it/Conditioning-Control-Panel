@@ -73,6 +73,15 @@
                         </fx:IconGlyph>
                     </Border>
 
+                    <!-- WPF DailyQuestCard.xaml: the non-interactive navigation cue. -->
+                    <Border x:Name="GoHint" Width="40" Height="40" CornerRadius="20"
+                            Background="#D91A1A2E" BorderBrush="#FFD700" BorderThickness="1.5"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,38"
+                            Opacity="0" IsVisible="False" IsHitTestVisible="False">
+                        <fx:IconGlyph Kind="ArrowRight" Size="22" Foreground="#FFD700"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+
                     <!-- Seat number: with three cards up, "which one is this" has to be answerable
                          without reading the quest name. -->
                     <Border x:Name="SlotChip" Background="#B01A1A2E" CornerRadius="9"
