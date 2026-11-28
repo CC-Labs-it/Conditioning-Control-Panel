@@ -67,6 +67,35 @@ public class LaunchMigrationsTests
         finally { root.Delete(true); }
     }
 
+    [Fact]
+    public void PersonalityLegacyMigrationRunsOnEveryLaunch()
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-personality-mig");
+        var oldProvider = CoreSettings.ServiceProvider;
+        try
+        {
+            var settings = new SettingsService(Path.Combine(root.FullName, "settings.json"));
+            // Core's migration saves through CoreSettings.Service, so point it at this test's settings.
+            CoreSettings.ServiceProvider = () => settings;
+            var s = settings.Current;
+            var assets = Path.Combine(root.FullName, "assets");
+            AvApp.RunLaunchMigrations(settings, assets, root.FullName); // one-shot migrations out of the way
+            settings.TrySaveImmediate();
+            s.ActivePersonalityPresetId = PersonalityPresets.NeutralDefaultId;
+            s.SlutModeEnabled = false;
+            AvApp.RunLaunchMigrations(settings, assets, root.FullName);
+            Assert.Equal(PersonalityPresets.NeutralDefaultId, s.ActivePersonalityPresetId);
+            Assert.False(settings.HasPendingSave); // unchanged profile: startup leaves settings.json alone
+
+            s.SlutModeEnabled = true;
+            AvApp.RunLaunchMigrations(settings, assets, root.FullName);
+            Assert.Equal(PersonalityPresets.SlutModeId, s.ActivePersonalityPresetId);
+            Assert.True(settings.HasPendingSave);
+            Assert.True(settings.TrySaveImmediate());
+        }
+        finally { CoreSettings.ServiceProvider = oldProvider; root.Delete(true); }
+    }
+
     // WPF App.xaml.cs:2612-2633: the migration reads the saved FlashClickable before the crash heal puts the
     // journal's value back. A session left clicking on (journal: off) must keep gaze pop and linger on.
     [Fact]
