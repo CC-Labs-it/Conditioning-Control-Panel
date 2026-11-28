@@ -16,6 +16,9 @@ namespace ConditioningControlPanel.Services
         // WPF BubbleCountWindow.xaml.cs:308-319: a poisoned native start is a skip, not a loss.
         void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped) =>
             Show(path, difficulty, strict, onComplete);
+        /// <summary>Report duration corrections for this game only.</summary>
+        void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped, Action<double> onDuration) =>
+            Show(path, difficulty, strict, onComplete, onSkipped);
         /// <summary>Full-screen retry/mercy message for <paramref name="ms"/>, then <paramref name="then"/>
         /// (WPF ShowFullscreenMessage).</summary>
         void ShowMessage(string text, int ms, Action then);
@@ -66,7 +69,7 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _leadIn, _queued, _feedDefer;
+        private ITimer? _scheduler, _leadIn, _queued, _feedDefer, _stuck;
         private readonly HashSet<ITimer> _feedPolls = new();
         private DateTimeOffset? _feedDeadline;
         private bool _toldNoVideos, _heldFlashes;
@@ -79,6 +82,9 @@ namespace ConditioningControlPanel.Services
             _time = time ?? TimeProvider.System;
             _library = library ?? MandatoryVideoScheduler.LocalLibrary;
         }
+
+        // WPF BubbleCountService.cs:64-65: only terminal game outcomes are announced.
+        public event Action? GameCompleted, GameFailed;
 
         public bool IsRunning { get; private set; }
         /// <summary>A game (lead-in, clip, answer or retry message) is in progress.</summary>
@@ -206,6 +212,7 @@ namespace ConditioningControlPanel.Services
                 return;
             }
             IsBusy = true;
+            ArmStuck(TimeSpan.FromMinutes(5));
             HoldsEffects = CoreSettings.Current.BubbleCountPauseEffects;
             if (HoldsEffects)
             {
@@ -277,41 +284,55 @@ namespace ConditioningControlPanel.Services
             else Trigger(forceTest);
         });
 
-        private bool Play(bool strict)
+        private bool Play(bool strict, bool retry = false)
         {
-            var path = PickNext();
-            if (path == null) return false;
-            if (!_host.CanPlayPath(path))
-            {
-                // WPF's skip: not a loss - a failed count would start the strict WRONG! WATCH AGAIN loop.
-                Log.Warning("BubbleCountService: skipping game - video playback is not available");
-                _retryCount = 0;
-                Idle();
-                return true;
-            }
-            CoreProgression.TrackBubbleCountGameStarted();
-            var generation = ++_generation;
+            var generation = _generation;
             try
             {
+                var path = PickNext();
+                if (!IsBusy || generation != _generation) return true;
+                if (path == null) return false;
+                var canPlay = _host.CanPlayPath(path);
+                if (!IsBusy || generation != _generation) return true;
+                if (!canPlay)
+                {
+                    Log.Warning("BubbleCountService: skipping game - video playback is not available");
+                    OnSkipped(retry);
+                    return true;
+                }
+                CoreProgression.TrackBubbleCountGameStarted();
+                if (!IsBusy || generation != _generation) return true;
+                generation = ++_generation;
+                var current = generation;
                 _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict,
-                    success => { if (generation == _generation) OnComplete(success); },
-                    () => { if (generation == _generation) OnSkipped(); });
+                    success => { if (current == _generation) OnComplete(success); },
+                    () => { if (current == _generation) OnSkipped(retry); },
+                    duration => { if (IsBusy && current == _generation) ExtendStuck(duration); });
+                if (IsBusy && current == _generation)
+                    ExtendStuck(_host.LastVideoDurationSeconds);
             }
-            catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to start bubble count game");
+                if (generation == _generation) OnSkipped(retry);
+            }
             return true;
         }
 
-        private void OnSkipped()
+        // WPF BubbleCountService.cs:644-703: an initial skip is silent; a failed retry ends the round.
+        private void OnSkipped(bool retry)
         {
             if (!IsBusy) return;
             _retryCount = 0;
             Idle();
+            if (retry) GameFailed?.Invoke();
         }
 
         /// <summary>WPF OnGameComplete.</summary>
         internal void OnComplete(bool success)
         {
             if (!IsBusy) return;   // panic got there first
+            Remote.RemoteScreenFeed.CountEnded(success);   // WPF GameCompleted/GameFailed -> the remote preview
             var generation = ++_generation; // retire the clip callback before showing a message
             if (success)
             {
@@ -326,6 +347,7 @@ namespace ConditioningControlPanel.Services
                     Log.Information("Bubble count game completed! +{Xp} XP", xp);
                 }
                 CoreProgression.TrackBubbleCountCompleted();
+                GameCompleted?.Invoke();
                 return;
             }
             var s = CoreSettings.Current;
@@ -333,6 +355,7 @@ namespace ConditioningControlPanel.Services
             {
                 _retryCount = 0;
                 Idle();
+                GameFailed?.Invoke();
                 Log.Information("Bubble count game failed");
                 return;
             }
@@ -340,14 +363,31 @@ namespace ConditioningControlPanel.Services
             if (_retryCount >= s.MercyAfterFails && s.MercySystemEnabled)   // #1145: 2..10, default 3
             {
                 Log.Information("Bubble count mercy after {Retries} retries", _retryCount);
-                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { if (generation != _generation) return; _retryCount = 0; Idle(); });
+                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { if (generation != _generation || !IsBusy) return; _retryCount = 0; Idle(); GameFailed?.Invoke(); });
                 return;
             }
             Log.Information("Bubble count retry {Count} (mercy at {Mercy})", _retryCount, s.MercyAfterFails);
             _host.ShowMessage(CoreMods.BubbleCountRetryMessage ?? "WRONG!\nWATCH AGAIN", 2000, () =>
             {
                 if (!IsBusy || generation != _generation) return;   // panic or replacement during the message
-                if (!Play(true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); }
+                ArmStuck(TimeSpan.FromMinutes(5));
+                if (!Play(true, retry: true) && IsBusy && generation == _generation) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); GameFailed?.Invoke(); }
+            });
+        }
+
+        private void ExtendStuck(double duration)
+        {
+            if (!double.IsFinite(duration) || duration < 0) return;
+            ArmStuck(TimeSpan.FromSeconds(Math.Max(300, Math.Min(duration + 150, 4294967))));
+        }
+
+        private void ArmStuck(TimeSpan timeout)
+        {
+            Dispose(ref _stuck);
+            _stuck = After(timeout, mine =>
+            {
+                if (!ReferenceEquals(mine, _stuck) || !IsBusy) return;
+                ForceCleanup();
             });
         }
 
@@ -359,6 +399,7 @@ namespace ConditioningControlPanel.Services
 
         private void Idle(bool resumeFlashes = true, bool cleanupTemps = true)
         {
+            Dispose(ref _stuck);
             _generation++; // invalidate callbacks from a closed round
             IsBusy = false;
             if (HoldsEffects)

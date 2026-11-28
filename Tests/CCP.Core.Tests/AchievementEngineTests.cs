@@ -50,6 +50,21 @@ public sealed class AchievementEngineTests : IDisposable
         Assert.False(engine.IsDirty);
     }
 
+    [Theory]
+    [InlineData(6, false, false)]
+    [InlineData(7, true, false)]
+    [InlineData(30, true, true)]
+    public void DailyMaintenanceUsesLaunchStreakThresholds(int days, bool daily, bool thirty)
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.Progress.ConsecutiveDays = days;
+        engine.CheckDailyMaintenance();
+        Assert.Equal(daily, engine.Progress.IsUnlocked("daily_maintenance"));
+        Assert.Equal(thirty, engine.Progress.IsUnlocked("thirty_day_doll"));
+        Assert.Equal(daily, OnDisk(MainPath, "daily_maintenance"));
+        Assert.Equal(thirty, OnDisk(MainPath, "thirty_day_doll"));
+    }
+
     [Fact]
     public void CompanionMessagesUnlockAtWpfThresholdAndKeepCounting()
     {

@@ -38,18 +38,6 @@
         Background="Transparent"
         ShowInTaskbar="False">
 
-    <Window.Styles>
-        <!-- Fluent's TextBox paints PART_BorderElement opaque on hover and focus, and that setter
-             sits on the template child, so it outranks the TextBox's own Background="Transparent".
-             The WPF original stayed transparent over its host Border in every state.
-             ponytail: local copy, hoist to Theme/Styles.xaml when a second view needs it. -->
-        <Style Selector="TextBox.transparent /template/ Border#PART_BorderElement">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-    </Window.Styles>
-
     <Window.Resources>
         <!-- Small secondary/icon button (Open-in-folder, filters, close).
              ponytail: local copy of ConditioningControlPanel/Windows/MediaHistoryWindow.xaml:MlChip,

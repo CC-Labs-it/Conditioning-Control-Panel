@@ -31,17 +31,17 @@ namespace CCP.Avalonia.Tests;
 /// MainWindow/MainWindow.Possession.cs (host + walk), MainWindow.Lab.cs:871-986 (readout) and 1100
 /// (first-run rules), Services/Possession/PossessionWpfHead.cs, EmberAttribution.cs, PossessionEffectBase.cs.
 /// The director is built BEFORE the shell, as App does (its lockdown handlers run first).</summary>
-public sealed class PossessionShellTests
+public sealed partial class PossessionShellTests
 {
     private sealed record Rig(MainShellWindow Shell, LockdownService Lockdown, PossessionDirector Director, FakeFrames Frames)
     {
         public DateTime Clock = DateTime.UtcNow;
     }
 
-    private static void Run(Action<Rig> body, Action<AppSettings>? seed = null) =>
-        RunAsync(rig => { body(rig); return Task.CompletedTask; }, seed).GetAwaiter().GetResult();
+    private static void Run(Action<Rig> body, Action<AppSettings>? seed = null, Func<TimeSpan, CancellationToken, Task>? holdDelay = null) =>
+        RunAsync(rig => { body(rig); return Task.CompletedTask; }, seed, holdDelay: holdDelay).GetAwaiter().GetResult();
 
-    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null)
+    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null, IPossessionEffect[]? effects = null, PossessionDirectorHead? head = null, Func<TimeSpan, CancellationToken, Task>? holdDelay = null)
     {
         return AvaloniaTestDispatcher.RunAsync(async () =>
         {
@@ -69,7 +69,7 @@ public sealed class PossessionShellTests
             var priorPost = CoreDispatch.PostProvider;
             CoreDispatch.PostProvider = a => Dispatcher.UIThread.Post(a);
             var ld = LockdownService.Current = new LockdownService();
-            var director = new PossessionDirector(ld, PossessionAvaloniaHead.CreateEffects(), PossessionAvaloniaHead.CreateDirectorHead());
+            var director = new PossessionDirector(ld, effects != null ? effects : PossessionAvaloniaHead.CreateEffects(), head ?? PossessionAvaloniaHead.CreateDirectorHead(), holdDelay);
             var frames = new FakeFrames();
             var shell = new MainShellWindow { PossessionFramesOverride = frames, PossessionDirectorOverride = director };
             var rig = new Rig(shell, ld, director, frames);
@@ -434,7 +434,10 @@ public sealed class PossessionShellTests
     });
 
     [Fact]
-    public void TheDirectorHauntsTheShell_AndPanicGivesEverythingBack() => Run(rig =>
+    public void TheDirectorHauntsTheShell_AndPanicGivesEverythingBack()
+    {
+        var holds = new List<(TimeSpan Duration, CancellationToken Token)>();
+        Run(rig =>
     {
         AvApp.Possession = rig.Director;
         rig.Shell.ShowTab("settings");
@@ -465,6 +468,7 @@ public sealed class PossessionShellTests
         Assert.Contains(layer.Children, c => c is Border);   // the ember charge, before anything moves
 
         for (int ms = 0; ms <= 600; ms += 50) { rig.Frames.Frame(TimeSpan.FromMilliseconds(5000 + ms)); Dispatcher.UIThread.RunJobs(); }
+        Assert.True(Assert.Single(holds).Duration > TimeSpan.Zero);
         var leased = ((IPossessionHost)rig.Shell).Targets.Where(t => PossessionLease.IsLeased(t.Visual as Control)).ToList();
         var victimTexts = ((IPossessionHost)rig.Shell).Targets
             .Where(t => t.Key == key && t.Visual is Control)
@@ -488,7 +492,13 @@ public sealed class PossessionShellTests
         Assert.DoesNotContain(((IPossessionHost)rig.Shell).Targets, t => PossessionLease.IsLeased(t.Visual as Control));
         Assert.All(victimTexts, tb => Assert.Equal(textBefore[tb], tb.Text));   // every letter given back
         Assert.DoesNotContain(layer.Children, c => c is Border);   // outline and charge stripped
+        Assert.True(Assert.Single(holds).Token.IsCancellationRequested);
+    }, holdDelay: (duration, token) =>
+    {
+        holds.Add((duration, token));
+        return Task.Delay(Timeout.InfiniteTimeSpan, token);
     });
+    }
 
     [Fact]
     public void RulesCard_FirstLockdownOnly_FlagSpentWhenTheCardOpens() => Run(rig =>
@@ -579,6 +589,137 @@ public sealed class PossessionShellTests
         effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
         Assert.False(dialog.IsVisible);
         Assert.Null(effect.Dialog);
+    });
+
+    private sealed class FirstDokiTitle : Random
+    {
+        public override int Next(int maxValue) => 0;
+    }
+
+    [Fact]
+    public void DokiDialog_UsesBambiTitleOnlyForBambiAndNamesTheWindow() => Run(rig =>
+    {
+        var oldProvider = CoreMods.ActiveModIdProvider;
+        try
+        {
+            foreach (var mod in new[] { BuiltInMods.BambiSleepId.ToUpperInvariant(), BuiltInMods.CCPDefaultId })
+            {
+                CoreMods.ActiveModIdProvider = () => mod;
+                string? named = null;
+                var ctx = new PossessionContext
+                {
+                    Host = rig.Shell, Attribution = new ImmediateAttribution(), Rung = PossessionRung.ItKnows,
+                    Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new FirstDokiTitle(),
+                    ElapsedFraction = .9, Remaining = TimeSpan.FromMinutes(1), Name = (_, name) => named = name
+                };
+                var effect = new DokiDialogEffect();
+                effect.ApplyAsync(ctx, null, CancellationToken.None).GetAwaiter().GetResult();
+                var dialog = Assert.IsType<Window>(effect.Dialog);
+                var expected = mod == BuiltInMods.CCPDefaultId ? "possession_doki_title_1" : "possession_doki_title_bambi";
+                Assert.NotEqual(expected, Loc.Get(expected));
+                Assert.Equal(Loc.Get(expected), dialog.Title);
+                Assert.Equal(Loc.Get("possession_doki_window"), named);
+                effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+                Assert.False(dialog.IsVisible);
+            }
+        }
+        finally { CoreMods.ActiveModIdProvider = oldProvider; }
+    });
+
+    [Fact]
+    public void DokiDialog_BarkNamesTheWindow() => Run(rig =>
+    {
+        string? named = null;
+        var ctx = new PossessionContext
+        {
+            Host = rig.Shell, Attribution = new ImmediateAttribution(), Rung = PossessionRung.ItKnows,
+            Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new Random(1),
+            ElapsedFraction = .9, Remaining = TimeSpan.FromMinutes(1), Name = (_, name) => named = name
+        };
+        var effect = new DokiDialogEffect();
+        effect.ApplyAsync(ctx, null, CancellationToken.None).GetAwaiter().GetResult();
+        Assert.NotEqual("possession_doki_window", Loc.Get("possession_doki_window"));
+        Assert.Equal(Loc.Get("possession_doki_window"), named);
+        effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+    });
+
+    [Fact]
+    public void DokiDialog_PanicSurfaceClosesTheLiveWindow() => Run(rig =>
+    {
+        rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+        Frame();
+        typeof(PossessionDirector).GetField("_nextDue", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(rig.Director, DateTime.MaxValue);
+        rig.Clock += TimeSpan.FromMinutes(27);
+        Tick(rig.Lockdown);
+        Frame();
+        var effect = new DokiDialogEffect();
+        var effects = (List<IPossessionEffect>)typeof(PossessionDirector).GetField("_effects", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(rig.Director)!;
+        effects.Clear(); effects.Add(effect);
+        rig.Director.RequestReactive("dokidialog", null);
+        Dispatcher.UIThread.RunJobs();
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1500));
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.IsType<Window>(effect.Dialog);
+        Assert.True(dialog.IsVisible);
+        AvApp.Possession = rig.Director;
+        PanicSurfaces.All.Single(s => s.Id == "possession").Stop(rig.Shell);
+        Assert.False(dialog.IsVisible);
+        Assert.Null(effect.Dialog);
+    }, s => s.LockdownPossessionIntensity = 2);
+
+    [Theory]
+    [InlineData(1, 120)]
+    [InlineData(200, 200)]
+    [InlineData(600, 320)]
+    public Task DokiDialog_UndoFadesAndCloses(int requestedMs, int actualMs) => RunAsync(async rig =>
+    {
+        var effect = new DokiDialogEffect();
+        try
+        {
+            await effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+            var dialog = Assert.IsType<Window>(effect.Dialog);
+            var undo = effect.UndoAsync(TimeSpan.FromMilliseconds(requestedMs));
+            Assert.True(dialog.IsVisible);
+            Assert.False(undo.IsCompleted);
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000 + actualMs / 2));
+            Assert.InRange(dialog.Opacity, 0.49, 0.51);
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000 + actualMs));
+            await undo;
+            Assert.False(dialog.IsVisible);
+            Assert.Null(effect.Dialog);
+            Assert.False(effect.IsLive);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); }
+    });
+
+    [Theory]
+    [InlineData("panic")]
+    [InlineData("director")]
+    [InlineData("detach")]
+    public Task DokiDialog_StopDuringFadeClosesImmediately(string stop) => RunAsync(async rig =>
+    {
+        rig.Shell.AttachPossessionHost();
+        var effect = new DokiDialogEffect();
+        try
+        {
+            await effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+            var dialog = Assert.IsType<Window>(effect.Dialog);
+            // The director has already released its live entry when an animated undo starts.
+            var undo = effect.UndoAsync(TimeSpan.FromMilliseconds(320));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1160));
+            Assert.InRange(dialog.Opacity, 0.49, 0.51);
+            if (stop == "panic") PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+            else if (stop == "director") rig.Director.UndoAll();
+            else rig.Director.DetachHost(rig.Shell);
+            Assert.False(dialog.IsVisible);
+            Assert.Null(effect.Dialog);
+            await undo;
+            Assert.False(effect.IsLive);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); }
     });
 
     [Fact]
@@ -710,4 +851,36 @@ public sealed class PossessionShellTests
         Frame();
         Assert.Equal(1, starts);
     });
+    [Fact]
+    public Task CatalogSwapFindsAndMovesRealShellButtons() => RunAsync(async rig =>
+    {
+        rig.Shell.ShowTab("settings");
+        Frame(); rig.Shell.CompleteTabTransition(); Frame();
+        rig.Shell.InvalidatePossessionTargets();
+        var host = (IAvaloniaPossessionHost)rig.Shell;
+        var effect = Assert.IsType<SwapEffect>(PossessionAvaloniaHead.CreateEffects().Single(e => e.Id == "swap"));
+        var ctx = new PossessionContext { Host = rig.Shell, Attribution = new DodgeAttribution(), Rung = PossessionRung.Drift,
+            Intensity = PossessionIntensity.Gentle, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { } };
+        var target = ((IPossessionHost)rig.Shell).Targets.FirstOrDefault(t => effect.CanApply(ctx, t));
+        Assert.NotNull(target);
+        var partner = SwapEffect.FindPartner(ctx, target!);
+        Assert.NotNull(partner);
+        var a = (Control)target!.Visual; var b = (Control)partner!.Visual;
+        var homeA = host.BoundsOnGhostLayer(a)!.Value; var homeB = host.BoundsOnGhostLayer(b)!.Value;
+        try
+        {
+            var apply = effect.ApplyAsync(ctx, target, CancellationToken.None);
+            Assert.True(PossessionLease.IsLeased(a) && PossessionLease.IsLeased(b));
+            rig.Frames.Frame(TimeSpan.Zero); rig.Frames.Frame(TimeSpan.FromMilliseconds(550)); await apply;
+            Assert.Equal(homeB.X, host.BoundsOnGhostLayer(a)!.Value.X, 1);
+            PointerTestFrame.Render(rig.Shell);
+            var point = host.GhostLayer!.TranslatePoint(host.BoundsOnGhostLayer(a)!.Value.Center, rig.Shell)!.Value;
+            var hit = rig.Shell.InputHitTest(point) as Visual;
+            Assert.True(ReferenceEquals(hit, a) || (hit != null && a.IsVisualAncestorOf(hit)));
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); }
+        Assert.Equal(homeA.X, host.BoundsOnGhostLayer(a)!.Value.X, 1);
+    });
+
 }

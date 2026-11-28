@@ -20,7 +20,7 @@ public sealed class SettingsConcurrentLoadTests
         var writer = new SettingsService(path);
         Assert.True(writer.TrySaveImmediate(true));
         writer.Current.DeeperEditorTimelineHeight = 225;
-        writer.AfterTempFileFlushed = () => { flushed.Set(); release.Wait(TimeSpan.FromSeconds(10)); };
+        writer.BeforeAtomicPublishForTests = _ => { flushed.Set(); release.Wait(TimeSpan.FromSeconds(10)); };
         var saving = Task.Run(() => writer.TrySaveImmediate(true));
         try
         {

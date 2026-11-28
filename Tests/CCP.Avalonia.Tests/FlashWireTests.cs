@@ -177,6 +177,9 @@ public sealed class FlashWireTests
     [InlineData(true)]
     public Task A_lowered_cap_skips_one_frame_but_platform_refusal_stops_the_burst(bool platformRefused) => OnUi((s, _, xp, _) =>
     {
+        using var cache = new FlashLuminanceCacheIsolation();
+        var warning = typeof(FlashOverlay).GetField("_warnedUnavailable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var warned = (bool)warning.GetValue(null)!;
         FlashOverlay.CloseAll(final: false);
         s.HydraLimit = 20;
         var prior = ShowOne();
@@ -189,12 +192,9 @@ public sealed class FlashWireTests
         try
         {
             FlashOverlay.After = (tick, _) => ticks.Add(tick);
-            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
-            var generation = (int)typeof(FlashOverlay).GetField("_generation", flags)!.GetValue(null)!;
             var completed = 0;
-            typeof(FlashOverlay).GetMethod("Schedule", flags)!.Invoke(null, new object?[] {
-                flashes, 0, 100, generation, 1d, TimeSpan.Zero, TimeSpan.FromSeconds(6),
-                true, false, 0, (Action)(() => completed++), null, null });
+            FlashOverlay.Schedule(flashes, 0, 100, FlashOverlay.Generation, 1d, TimeSpan.Zero, TimeSpan.FromSeconds(6),
+                true, false, 0, () => completed++);
             Assert.Equal(2, ticks.Count);
             s.HydraLimit = 1;
             if (platformRefused)
@@ -210,7 +210,7 @@ public sealed class FlashWireTests
             Assert.Equal(platformRefused ? 1 : 2, xp.Count);
             Assert.Equal(1, completed);
         }
-        finally { FlashOverlay.After = schedule; }
+        finally { FlashOverlay.After = schedule; warning.SetValue(null, warned); }
     });
 
     [Fact]

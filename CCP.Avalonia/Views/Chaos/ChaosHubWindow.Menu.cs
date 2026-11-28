@@ -21,7 +21,10 @@ public partial class ChaosHubWindow
     private BeatLoop? _menuMotion;
     private ImageBrush? _menuBase, _menuTop;
     private Border? _menuTopBox;
-    private int _menuPos, _menuShownFrame;
+    private int _menuPos, _menuShownFrame, _menuBaseFrame;
+    private ChaosHubMenuFx? _menuFx;
+    private Grid? _menuArtMotion;
+    private long _menuIntroStart;
     private long _menuClickReady, _menuFadeStart, _menuMotionStart;
     private bool _menuFading, _menuArtOn;
 
@@ -39,6 +42,8 @@ public partial class ChaosHubWindow
 
     private void SetupMenuMotion()
     {
+        _menuFx = Part<ChaosHubMenuFx>("MenuFog");
+        _menuArtMotion = Part<Grid>("MenuArtMotion");
         _menuBase = (ImageBrush)Part<Border>("MenuArtBaseBox").Background!;
         _menuTopBox = Part<Border>("MenuArtTopBox");
         _menuTop = (ImageBrush)_menuTopBox.Background!;
@@ -74,11 +79,14 @@ public partial class ChaosHubWindow
         }
         else
         {
+            _menuBaseFrame = _menuShownFrame = -1;
             _menuBase.Source = art.Still;
             if (art.Banner) _menuBase.Stretch = Stretch.Uniform;
         }
         if (_menuArtOn) StartMenuArt();   // the menu was already showing while the frames decoded
     }
+
+    private void StartMenuIntro() { _menuIntroStart = Environment.TickCount64; _menuArtClip.Opacity = 0; }
 
     private void StartMenuArt()
     {
@@ -108,10 +116,12 @@ public partial class ChaosHubWindow
         var step = _menuSeq[_menuPos];
         _menuTimer.Interval = TimeSpan.FromMilliseconds(step.hold);
         if (step.frame == _menuShownFrame) return;
+        int previous = _menuShownFrame;
         _menuShownFrame = step.frame;
         if (_menuFading && _menuBase != null)
         {
             _menuBase.Source = _menuTop.Source;
+            _menuBaseFrame = previous;
             if (_menuTopBox != null) _menuTopBox.Opacity = 0;
         }
         _menuTop.Source = _menuFrames[step.frame];
@@ -140,14 +150,26 @@ public partial class ChaosHubWindow
             // A 550 ms crossfade (fade only, no flicker): kept under Gentle Visuals and motion off.
             double t = Math.Clamp((now - _menuFadeStart) / 550.0, 0, 1);
             _menuTopBox.Opacity = (1 - Math.Cos(Math.PI * t)) / 2;
-            if (t >= 1) { _menuBase.Source = _menuTop.Source; _menuTopBox.Opacity = 0; _menuFading = false; }
+            if (t >= 1) { _menuBase.Source = _menuTop.Source; _menuBaseFrame = _menuShownFrame; _menuTopBox.Opacity = 0; _menuFading = false; }
         }
+        _menuFx?.SetFrames(_menuBaseFrame, _menuShownFrame, _menuFading ? _menuTopBox?.Opacity ?? 0 : 0);
+        double intro = Math.Clamp((now - _menuIntroStart) / 1100.0, 0, 1);
+        double ease = 1 - Math.Pow(1 - intro, 3);
+        _menuArtClip.Opacity = ease;
         // WPF's breathing zoom and tiny rotate; motion off holds the 1.02 baseline. The WPF glow
         // pulse is not ported: it animates a DropShadowEffect, which re-blurs every frame (P82).
         bool still = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level == MotionLevel.Off;
         double seconds = still ? 0 : (now - _menuMotionStart) / 1000.0;
         double scale = 1.02 + .015 * (1 - Math.Cos(Math.PI * seconds / 6.5)) / 2;
         double angle = still ? 0 : -.2 * Math.Cos(Math.PI * seconds / 7.5);
+        _menuFx?.SetMotion(scale * (1.10 - .10 * ease), angle, (1 - ease) * .03);
+        if (_menuArtMotion != null)
+        {
+            var introTransform = new TransformGroup();
+            introTransform.Children.Add(new ScaleTransform(1.10 - .10 * ease, 1.10 - .10 * ease));
+            introTransform.Children.Add(new TranslateTransform(0, (1 - ease) * _menuArtClip.Bounds.Height * .03));
+            _menuArtMotion.RenderTransform = introTransform;
+        }
         var transform = new TransformGroup();
         transform.Children.Add(new ScaleTransform(scale, scale));
         transform.Children.Add(new RotateTransform(angle));
