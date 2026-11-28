@@ -2346,7 +2346,23 @@ namespace ConditioningControlPanel
                     if (string.Equals(key, settings.MediaSource, StringComparison.Ordinal)) chip.IsChecked = true;
                     return;
                 }
-                if (string.Equals(key, settings.MediaSource, StringComparison.Ordinal)) return;
+                if (string.Equals(key, settings.MediaSource, StringComparison.Ordinal))
+                {
+                    // A fresh install starts on Both before anyone said yes (FirstRunGate
+                    // .ApplyFreshInstallMediaDefault), so a click on the live chip is the one
+                    // place left to ask. The un-click branch above re-checks the chip, which
+                    // lands here. A No leaves the chip where it is: the app stays on local files.
+                    if (!string.Equals(key, MediaSrcLocal, StringComparison.Ordinal)
+                        && !settings.HasRemoteMediaConsent
+                        && AskRemoteMediaConsent(settings))
+                    {
+                        Services.Fyp.Online.FypOnlineCoordinator.ResetAllChannels();
+                        InvalidateAssetPoolsAfterSelectionChange();   // also persists
+                        RefreshRemoteMediaPicker();
+                        App.Logger?.Information("[remote media] consent given on the live {Source} chip", key);
+                    }
+                    return;
+                }
 
                 // Anything but "local" starts fetching third-party content, so it is asked for
                 // exactly once - and never asked again of someone who already said yes to the
@@ -2394,13 +2410,8 @@ namespace ConditioningControlPanel
 
         /// <summary>The ask's title and text, shared with the first show's preset pick (FirstShowDesktopWindow.Pick).</summary>
         internal static (string Title, string Message) RemoteMediaConsentText() => (
-            LocOr("title_remote_media_consent", "Use Reddit media?"),
-            LocOr("msg_remote_media_consent",
-                "Pull media from Reddit?\n\n" +
-                "The app will stream images and clips from the subreddits you pick, straight from your own machine. " +
-                "Nothing is saved to your disk, nothing is uploaded, and none of it goes through our servers.\n\n" +
-                "It is adult content and it is not curated by us - you choose the niches and subreddits, and only those are ever fetched.\n\n" +
-                "Turn it on?"));
+            LocOr(Services.Fyp.Online.RemoteMediaConsentCopy.TitleKey, Services.Fyp.Online.RemoteMediaConsentCopy.Title),
+            LocOr(Services.Fyp.Online.RemoteMediaConsentCopy.MessageKey, Services.Fyp.Online.RemoteMediaConsentCopy.Message));
 
         private void RemoteNicheChip_Changed(object sender, RoutedEventArgs e)
         {

@@ -37,34 +37,36 @@ public class TcMediaRulesTests
     }
 
     [Theory]
-    [InlineData("scrolller", true, false, false, true)]
-    [InlineData("scrolller", false, false, false, false)]   // no app consent, never
-    [InlineData("local", true, false, false, false)]        // the app's source is local
-    [InlineData(null, true, false, false, false)]
-    [InlineData("scrolller", true, true, false, false)]     // offline mode
-    [InlineData("scrolller", true, false, true, false)]     // switched off in this window
-    public void The_gate(string? source, bool consent, bool offline, bool offInWindow, bool expected)
-        => Assert.Equal(expected, TcMediaRules.PicturesOn(source, consent, offline, offInWindow));
+    [InlineData(null, "scrolller", true, false, false, true)]
+    [InlineData(null, "scrolller", false, false, false, false)]   // no app consent, never
+    [InlineData(null, "local", true, false, false, false)]        // the app's source is local, no yes in the game
+    [InlineData(null, null, true, false, false, false)]
+    [InlineData(null, "scrolller", true, true, false, false)]     // offline mode
+    [InlineData(null, "scrolller", true, false, true, false)]     // switched off in this window
+    // 7.4.2: the player's yes in the game opens its own pictures on a local Library source, never without consent,
+    // offline, or after an off in this window.
+    [InlineData(true, "local", true, false, false, true)]
+    [InlineData(true, null, true, false, false, true)]
+    [InlineData(true, "local", false, false, false, false)]
+    [InlineData(true, "local", true, true, false, false)]
+    [InlineData(true, "local", true, false, true, false)]
+    public void The_gate(bool? gameYes, string? source, bool consent, bool offline, bool offInWindow, bool expected)
+        => Assert.Equal(expected, TcMediaRules.PicturesOn(gameYes, source, consent, offline, offInWindow));
 
     [Theory]
-    [InlineData("scrolller", false, false, "declined")]
-    [InlineData("local", true, false, "disabled")]
-    [InlineData("scrolller", true, true, "disabled")]
-    [InlineData("scrolller", true, false, null)]
-    // 7.4 desk run: a local source or Offline mode is "disabled" whatever the consent, never "declined".
-    [InlineData("local", false, false, "disabled")]
-    [InlineData(null, false, false, "disabled")]
-    [InlineData("scrolller", false, true, "disabled")]
-    public void Refusal_reasons_use_the_contract_codes(string? source, bool consent, bool offline, string? expected)
-        => Assert.Equal(expected, TcMediaRules.RefusalReason(source, consent, offline));
+    [InlineData(false, false, "declined")]
+    [InlineData(true, false, null)]
+    // Offline mode is "disabled" whatever the consent, never "declined". A local Library source is no refusal any more.
+    [InlineData(true, true, "disabled")]
+    [InlineData(false, true, "disabled")]
+    public void Refusal_reasons_use_the_contract_codes(bool consent, bool offline, string? expected)
+        => Assert.Equal(expected, TcMediaRules.RefusalReason(consent, offline));
 
     [Theory]
-    [InlineData("scrolller", false, true)]
-    [InlineData("local", false, false)]    // the AppSettings default: asking could not turn anything on
-    [InlineData(null, false, false)]
-    [InlineData("scrolller", true, false)] // Offline mode
-    public void The_consent_question_is_asked_only_when_it_can_matter(string? source, bool offline, bool expected)
-        => Assert.Equal(expected, TcMediaRules.ConsentAskMatters(source, offline));
+    [InlineData(false, true)]   // a local source too: the yes is this game's choice (7.4 desk run)
+    [InlineData(true, false)]   // Offline mode: asking could not turn anything on
+    public void The_consent_question_is_asked_only_when_it_can_matter(bool offline, bool expected)
+        => Assert.Equal(expected, TcMediaRules.ConsentAskMatters(offline));
 
     [Fact]
     public void The_host_asks_only_when_the_answer_can_matter()
@@ -73,7 +75,19 @@ public class TcMediaRulesTests
         var at = media.IndexOf("AskPictureConsent())", StringComparison.Ordinal);
         Assert.True(at > 0);
         var guard = media.Substring(Math.Max(0, at - 300), 300);
-        Assert.Contains("TcMediaRules.ConsentAskMatters(s.MediaSource, s.OfflineMode)", guard);
+        Assert.Contains("TcMediaRules.ConsentAskMatters(s.OfflineMode)", guard);
+    }
+
+    [Fact]
+    public void A_yes_in_the_game_is_the_games_own_and_never_moves_the_library_source()
+    {
+        var media = Src("TcHostService.Media.cs");
+        var start = media.IndexOf("private static void OnPictureSetting(", StringComparison.Ordinal);
+        var body = media.Substring(start, media.IndexOf("private static bool AskPictureConsent()", start, StringComparison.Ordinal) - start);
+        Assert.Contains("if (s.HasRemoteMediaConsent && !s.OfflineMode) s.TcPictures = true;", body);
+        Assert.Contains("s.TcPictures = null;", body);          // an off hands the choice back to the app's source
+        Assert.DoesNotContain("s.TcPictures = false", body);
+        Assert.DoesNotContain("MediaSource =", body);           // the Library's saved source is never changed
     }
 
     [Fact]
@@ -158,7 +172,7 @@ public class TcMediaRulesTests
     {
         var media = Src("TcHostService.Media.cs");
         Assert.Contains("GoonOnlineMedia.ForGame(", media);
-        Assert.Contains("TcMediaRules.PicturesOn(s.MediaSource, s.HasRemoteMediaConsent, s.OfflineMode", media);
+        Assert.Contains("TcMediaRules.PicturesOn(s.TcPictures, s.MediaSource, s.HasRemoteMediaConsent, s.OfflineMode", media);
         Assert.Contains("if (PicturesOnNow) StartPictures();", media);
         Assert.Contains("TcMediaRules.SubsFor(_pictureNiches)", media);
         Assert.Contains("DisposePictures();", Src("TcHostService.cs"));

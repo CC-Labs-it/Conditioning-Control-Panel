@@ -22,6 +22,7 @@ import { setRich } from '../rich-text.js';
 import { brandText } from '../../data/brand.js';
 import { ADCARD_COPY } from '../../data/content/adcard.js';
 import { mountRunPoster } from '../adcard/recap.js';
+import { statusLine } from '../adcard/export.js';
 import { beatCue, playCardCue } from '../adcard/stage.js';
 import { crayonStarSvg, starVariant, LOOPY, RUSHED } from '../unlocks/basics/gold-fx.js';
 import { RECAP_COPY as R } from '../unlocks/extras/copy.js';
@@ -250,7 +251,7 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
       shareStatus.textContent = R.preparingCard;
       try {
         const { status } = await poster.export(format, { filename: 'terms-and-conditioning-' + id, progress: (_i, _n, line) => { shareStatus.textContent = line; } });
-        shareStatus.textContent = status === 'saved' ? ADCARD_COPY.saved : status === 'shared' ? R.sharedCard : '';
+        shareStatus.textContent = statusLine(status, R.sharedCard);
       } catch {
         shareStatus.textContent = R.exportFailed;
       } finally {

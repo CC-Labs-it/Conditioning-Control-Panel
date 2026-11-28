@@ -23,7 +23,7 @@ export function createCards(doc, host) {
 
   function build(spec) {
     const back = doc.createElement('div');
-    /* corner: a quiet note (ui/save-sleep.js) in the bottom corner, no backdrop; the page under it stays live. */
+    /* corner: a quiet note (ui/save-sleep.js) in the bottom-left corner above the dock (styles.css), no backdrop; the page under it stays live. */
     back.className = spec.corner ? 'backdrop clear corner' : spec.clear ? 'backdrop clear' : 'backdrop';
     const card = doc.createElement('div');
     card.className = `card ${spec.className || ''}`;

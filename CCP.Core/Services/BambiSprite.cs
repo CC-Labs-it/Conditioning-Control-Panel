@@ -67,15 +67,22 @@ namespace ConditioningControlPanel.Services
 
                 // The pool: the Bambi mod's shipped DefaultVideoLinks, or the user's own curated
                 // override from Settings → Hypnotube Links. Falls back to the legacy hand-tuned
-                // list only when the pool is empty.
+                // list only when the pool is empty and the user did not empty it on purpose (an
+                // emptied pool means "name no video", ccp-bugs #1754).
                 var sampled = SampleVideoTitles(BambiTitleSample);
+                var userEmptied = sampled.Count == 0 && App.Mods?.UserEmptiedVideoLinks() == true;
                 string bambiVideoTitles = sampled.Count > 0
                     ? string.Join(", ", sampled)
-                    : "Naughty Bambi, Bambi Bae, Bambi Slay, Overload, Dumb Bimbo Brainwash, Yes Brain Loop, Day 1, Day 2";
+                    : userEmptied
+                        ? "(none: the list is empty, so never name a video)"
+                        : "Naughty Bambi, Bambi Bae, Bambi Slay, Overload, Dumb Bimbo Brainwash, Yes Brain Loop, Day 1, Day 2";
 
                 // Draw the example title from the same sample, so the example is always a title the
                 // model can actually see in the list below it.
                 var exampleTitle = sampled.FirstOrDefault() ?? "Bambi Bae";
+                var videoHowTo = userEmptied
+                    ? "VIDEO: none to name, the video list below is empty."
+                    : $@"VIDEO: say the exact title and nothing else, e.g. ""Try {exampleTitle}"", in your own voice.";
 
                 return $@"
 CLICKABLE MEDIA - name these often; the app turns them into real links.
@@ -83,7 +90,7 @@ CLICKABLE MEDIA - name these often; the app turns them into real links.
 ==== HOW TO LINK ====
 PLAYLIST: copy its whole markdown line from the list below, brackets AND URL, exactly as printed.
   Example: ""Listen to [IQ Programming](https://bambicloud.com/playlist/ff15f538-6e6b-433c-b68b-b4af5ee5d14d)""
-VIDEO: say the exact title and nothing else, e.g. ""Try {exampleTitle}"", in your own voice.
+{videoHowTo}
 Never write a URL of your own, and never name audio that is not a playlist below. Asked for old audio by name (""Bambi IQ Lock"", ""Bambi Cockslut""), give the matching Programming playlist instead.
 
 ==== BAMBICLOUD PLAYLISTS (the ONLY audio you can name) ====
@@ -1191,8 +1198,10 @@ LINK RULE (applies to every reply, no exceptions):
             var sb = new StringBuilder();
 
             // Only when there is genuinely nothing to name do we fall back to "browse HypnoTube"
-            // (the LinkFloorRule below is appended AFTER both branches — see its remarks).
-            if (poolNames.Count == 0 && !isBambiMode && !hasUserSHLinks)
+            // (the LinkFloorRule below is appended AFTER both branches — see its remarks). A pool
+            // the user emptied on purpose counts too, Bambi mode included (ccp-bugs #1754).
+            var userEmptied = poolNames.Count == 0 && App.Mods?.UserEmptiedVideoLinks() == true;
+            if (poolNames.Count == 0 && ((!isBambiMode && !hasUserSHLinks) || userEmptied))
             {
                 sb.AppendLine($@"
 You are a ""{companionName}""—a digital, {assistantKind} assistant.

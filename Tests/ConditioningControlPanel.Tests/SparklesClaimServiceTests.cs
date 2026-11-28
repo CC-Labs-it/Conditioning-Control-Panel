@@ -182,6 +182,53 @@ public class SparklesClaimServiceTests
     }
 
     [Fact]
+    public void TcClaimsAreWellFormed_EndingAndSticker()
+    {
+        // The T&C ending (7.4.0 shape) was refused client side before "tc" was on the game list.
+        var ending = SparklesClaim.Create("tc", "solo", SparklesResult.ForMedal("none"), 3120000,
+            new JObject { ["ending"] = "ll_end", ["minutes"] = 52 });
+        Assert.True(ending.IsWellFormed);
+
+        var sticker = SparklesClaim.Create("tc", "sticker", SparklesResult.ForSticker("ac_5k"), 0);
+        Assert.True(sticker.IsWellFormed);
+        var body = sticker.ToJson(Me);
+        Assert.Equal(("tc", "sticker", 0L), ((string?)body["game"], (string?)body["mode"], (long)body["durationMs"]!));
+        Assert.True(JToken.DeepEquals(JObject.Parse("""{"kind":"sticker","id":"ac_5k"}"""), body["result"]));
+        Assert.True(body["endedAt"]!.Value<long>() > 0);
+        Assert.Null(body["proof"]);
+    }
+
+    [Theory]
+    [InlineData("tc", "sticker", "medal", "ac_5k")]       // sticker mode needs a sticker result
+    [InlineData("tc", "solo", "sticker", "ac_5k")]        // a sticker result needs sticker mode
+    [InlineData("rt3d", "sticker", "sticker", "ac_5k")]   // stickers are T&C's only
+    [InlineData("tc", "sticker", "sticker", "AC_5K")]
+    [InlineData("tc", "sticker", "sticker", "")]
+    [InlineData("tc", "sticker", "sticker", null)]
+    [InlineData("tc", "sticker", "sticker", "ac_5k\n")]
+    [InlineData("tc", "sticker", "sticker", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]   // 41
+    public void StickerClaimsOutsideTheWireAreNotSent(string game, string mode, string kind, string? id)
+    {
+        var result = kind == "sticker" ? new SparklesResult("sticker", Id: id) : SparklesResult.ForMedal("none");
+        Assert.False(SparklesClaim.Create(game, mode, result, 0).IsWellFormed);
+    }
+
+    [Fact]
+    public async Task AStickerReceiptIsReadAndAdoptedLikeAnyOther()
+    {
+        var rig = new Rig();
+        rig.Handler.Replies.Enqueue((HttpStatusCode.OK, """
+            { "ok": true, "receipt": { "id": "spr_x", "claimId": "abcdef0123456789abcdef", "kind": "place", "game": "tc",
+              "mode": "sticker", "result": { "kind": "sticker", "id": "ac_5k", "tier": "medium" }, "base": 15, "online": 1,
+              "taper": 1, "lapScale": 1, "fee": false, "paid": 15, "credited": 15, "reason": null, "sp": 515, "shadow": false } }
+            """));
+        var outcome = await rig.Service.ClaimAsync(SparklesClaim.Create("tc", "sticker", SparklesResult.ForSticker("ac_5k"), 0));
+        Assert.True(outcome.Ok && outcome.Adopted);
+        Assert.Equal(new[] { (Me, 515) }, rig.Adopted);
+        Assert.Equal(("sticker", 15), (outcome.Receipt!.Mode, outcome.Receipt.Credited));
+    }
+
+    [Fact]
     public async Task AMalformedClaimOrNoAccountSendsNothing()
     {
         var rig = new Rig();

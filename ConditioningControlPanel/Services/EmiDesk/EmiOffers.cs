@@ -327,7 +327,9 @@ public static class EmiOffers
         {
             var s = App.Settings?.Current;
             if (s == null) return false;
-            if (!string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return false;
+            // UsesRemoteMedia, not the source: a fresh install starts on "mixed" with no consent
+            // yet, and that library is still local-only until the user says yes.
+            if (s.UsesRemoteMedia) return false;
             return MainWin != null;
         }
         catch (Exception ex)
@@ -349,7 +351,7 @@ public static class EmiOffers
         {
             var s = App.Settings?.Current;
             if (s == null) return false;
-            if (!string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return false;
+            if (s.UsesRemoteMedia) return false;   // see AssetsOfferFeasible
             return !HasImages() && !HasVideos();
         }
         catch (Exception ex)

@@ -209,6 +209,27 @@ namespace ConditioningControlPanel
         public static bool ModPickerShownAfterOfflineFlavourStep(int offersAfterShowing) => true;
 
         /// <summary>
+        /// A fresh install's Library source: "mixed" (Library &gt; Both), not "local". A new user
+        /// has an empty assets folder, and "My own assets" left them with an app that showed no
+        /// pictures at all (Discord #general, 2026-11-25). Only a source still at the "local"
+        /// default moves, so a settings file that already holds a choice keeps it; and this runs
+        /// only on the first-run claim, so an existing install is never touched.
+        ///
+        /// <para>This does NOT consent for the user. Every remote fetch still checks
+        /// <see cref="Models.AppSettings.HasRemoteMediaConsent"/>, so until they say yes the app
+        /// draws local files only and the empty-library rescues still fire
+        /// (<see cref="Models.AppSettings.UsesRemoteMedia"/>). Returns true when it changed the
+        /// source.</para>
+        /// </summary>
+        public static bool ApplyFreshInstallMediaDefault(Models.AppSettings? settings)
+        {
+            if (settings == null) return false;
+            if (!string.Equals(settings.MediaSource, "local", StringComparison.Ordinal)) return false;
+            settings.MediaSource = "mixed";
+            return true;
+        }
+
+        /// <summary>
         /// Must this launch stop, given what the settings say about the 18+ gate?
         ///
         /// <para>The question is not "did the user decline" - it is "is this process about to keep
@@ -368,6 +389,8 @@ namespace ConditioningControlPanel
                 settings.Welcomed = true;
                 settings.FirstRunAssetsPromptShown = true;
                 settings.LastSeenVersion = UpdateService.AppVersion;
+                if (FirstRunGate.ApplyFreshInstallMediaDefault(settings))
+                    App.Logger?.Information("[FirstRun] Library source set to Both for a fresh install");
                 App.Settings?.Save();
                 FirstRunClaimedThisLaunch = true;
                 return true;

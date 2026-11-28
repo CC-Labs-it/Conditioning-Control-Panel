@@ -146,6 +146,9 @@ public class LeaderboardService : IDisposable
     /// </summary>
     public Task<UserLookupResult?> LookupUserAsync(string displayName) => _client.LookupUserAsync(displayName);
 
+    // The rank line is asked for every second; it is logged only when it changes (it filled the flight recorder, 7.4.2).
+    private readonly Diagnostics.LogOnChange _percentileLog = new();
+
     /// <summary>
     /// Get the current player's rank percentile.
     /// Returns 0 if not found or not enough data.

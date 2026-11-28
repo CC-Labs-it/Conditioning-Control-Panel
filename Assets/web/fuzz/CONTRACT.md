@@ -33,6 +33,7 @@ this file disagree, this file wins until it is amended here first. Shape and hyg
 | `haptic` | `level, ms, tag?` | Optional toy pulse on crits and the Drop; hosts clamp. |
 | `open-url` | `url` | The player pressed a real link. The page only ever sends https on `cclabs.app`, `www.cclabs.app` or `app.cclabs.app` (any path) or exactly `https://discord.gg/YxVAMt4qaZ`, `https://neal.fun/` or `https://neal.fun/stimulation-clicker/` (the credit, `ui/links.js`), from inside a press; the page is untrusted, so the host checks the same rule and opens it in the system browser (the website: a new tab, `noopener`). Unhosted the page opens a new tab itself. |
 | `tab` | `title: string or null, icon?: 'sheet' or null` | A framed page cannot rename the browser tab: the Disguised Tab and the away titles ask the host to. `title` null = the host's own title; `icon` omitted = unchanged, null = the host's own icon, else a NAME from the host's fixed set (only `sheet`), never a URL. The host trims the title to 80 plain characters. The desktop host may ignore it (its window title is its own). |
+| `achievement` | `id` | A sticker (the game's achievement, `data/content/stickers.js` id) went in this save's Sticker Book for the FIRST time, earned while playing with the Achievements row owned. Additive and optional: a host that ignores it changes nothing, and the page never waits for an answer. Never sent for the backlog the row finds when it is bought, nor on a reload or a loaded save (those go in the book quietly), nor again for a sticker the save already holds, so a host may reward each id once per save. Hidden stickers are only ever sent once earned. Pricing, if any, is the host's (no amount on the wire). |
 
 ## 2. Host -> page
 
@@ -64,6 +65,7 @@ caps: {
   account: bool,               // section 3.3; the host has an account page of its own (sign in, sign out)
   ownMedia: { folder: bool, path?: string, library?: bool, mediaOrigin?: url },  // section 3.3; the host keeps and serves the player's own folder, or (library) the app's own pictures
   dev: bool,                   // the hidden dev console (ui/preview-bar-model.js): only a host that prices nothing sends it (the standalone program); never the website, never the CCP app
+  unsealed: bool,              // section 6.1; the host's small edition plays now, never the sealed notice (the standalone program); never the CCP app
 }
 mod: 'default' | 'bambi' | 'sissy' | 'locked' | 'drone'
 ```
