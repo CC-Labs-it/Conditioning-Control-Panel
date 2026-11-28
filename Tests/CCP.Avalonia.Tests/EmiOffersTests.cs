@@ -1,5 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
+using Avalonia.Headless;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -9,6 +13,34 @@ namespace CCP.Avalonia.Tests;
 
 public class EmiOffersTests
 {
+    [Fact]
+    public void ShrinkOfferResizesAndPersists() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previous = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var desk = EmiDeskService.Instance;
+        try
+        {
+            var win = desk.BeginPresentation()!;
+            win.ApplyBodyWidth(EmiDeskWindow.MinBodyWidth + 50);
+            Assert.True(EmiOffers.EffectFeasible("shrink"));
+            EmiOffers.Run("shrink", true);
+            Assert.Equal(EmiDeskWindow.MinBodyWidth, win.BodyWidth);
+            Assert.Equal(EmiDeskWindow.MinBodyWidth, CoreSettings.Current.EmiDeskWidth);
+            Assert.False(EmiOffers.EffectFeasible("shrink"));
+        }
+        finally
+        {
+            desk.Window?.ShutDown();
+            CoreSettings.ServiceProvider = previous;
+        }
+    });
+
     [Fact]
     public void OfferFeasibilityChecksTargetsAndBedtime()
     {

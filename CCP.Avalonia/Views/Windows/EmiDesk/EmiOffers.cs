@@ -20,6 +20,7 @@ internal static class EmiOffers
             return desk.IsTargetAvailable(id) && !EmiState.Current.Pins.Contains(id, StringComparer.OrdinalIgnoreCase);
         }
         return (e.Equals("rain", StringComparison.OrdinalIgnoreCase) && EmiGifRain.Images().Count > 0) ||
+            (e.Equals("shrink", StringComparison.OrdinalIgnoreCase) && desk.Window is { } w && w.BodyWidth > EmiDeskWindow.MinBodyWidth + 1) ||
             e.Equals("none", StringComparison.OrdinalIgnoreCase) ||
             (e.Equals("bedtime", StringComparison.OrdinalIgnoreCase) && !EmiLineEngine.BedtimeSet);
     }
@@ -34,6 +35,18 @@ internal static class EmiOffers
         else if (e.Equals("rain", StringComparison.OrdinalIgnoreCase))
         {
             if (EmiGifRain.Start(desk.Window)) desk.Fire("effectFired", new { channel = "rain", fromAsk });
+        }
+        else if (e.Equals("shrink", StringComparison.OrdinalIgnoreCase) && desk.Window is { } win)
+        {
+            win.ApplyBodyWidth(EmiDeskWindow.MinBodyWidth);
+            win.SnapToNearestCorner();
+            win.SavePlacement();
+            if (Math.Abs(CoreSettings.Current.EmiDeskWidth - EmiDeskWindow.MinBodyWidth) > 0.5)
+            {
+                CoreSettings.Current.EmiDeskWidth = EmiDeskWindow.MinBodyWidth;
+                CoreSettings.Save();
+            }
+            desk.Fire("resized", new { n = (int)EmiDeskWindow.MinBodyWidth, bigger = false });
         }
         else if (e.Equals("bedtime", StringComparison.OrdinalIgnoreCase))
         {
