@@ -77,6 +77,39 @@ public sealed class ProfilePrivacyCompletionTests
     });
 
     [Fact]
+    public Task OwnCardLinkDiscordShowsOnlySignedInWithoutDiscordAndUsesTheLoginFlow() => Run((shell, tab) =>
+    {
+        // WPF MainWindow.ProfileCard.cs:86-96: own card, signed in, no Discord session.
+        var button = tab.FindControl<Button>("BtnProfileLinkDiscord")!;
+        tab.DisplayOwnProfile();
+        Assert.False(button.IsVisible); // the harness Discord session is live
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        try
+        {
+            CoreSecrets.RetrieveProvider = _ => null;
+            AccountSeed.Seed();
+            CoreSettings.Current.OfflineMode = false;
+            CoreAccount.IsLoggedInProvider = () => true;
+            tab.DisplayOwnProfile();
+            Assert.True(button.IsVisible);
+            var calls = 0;
+            tab.PrivacyPanel.DiscordAction = host => { Assert.Same(shell, host); calls++; return Task.CompletedTask; };
+            shell.Show();
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, calls); // WPF DiscordTabView.xaml:712 uses BtnDiscordTabLogin_Click
+            CoreSettings.Current.UserDisplayName = "me";
+            tab.DisplayProfileEntry(new LeaderboardRow { DisplayName = "other" });
+            Assert.False(button.IsVisible);
+            tab.DisplayOwnProfile();
+            CoreAccount.IsLoggedInProvider = () => false;
+            shell.UpdateQuickLoginUI();
+            Assert.False(button.IsVisible);
+        }
+        finally { CoreAccount.IsLoggedInProvider = oldLogin; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task OwnDmConsentRepaintsImmediatelyAndClickUsesStoredId() => Run((shell, tab) =>
     {
         CoreSettings.Current.AllowDiscordDm = true;
