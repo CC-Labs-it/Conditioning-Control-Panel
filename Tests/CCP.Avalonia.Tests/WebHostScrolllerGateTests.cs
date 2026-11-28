@@ -39,6 +39,45 @@ public sealed class WebHostScrolllerGateTests
     });
 
     [Fact]
+    public Task BrowserInstallsFrameReporterBeforeNavigation() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var page = new ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView();
+        var web = page.FindControl<WebHost>("BrowserWebHost")!;
+        string? installed = null;
+        web.AllFramesDocumentStartInstaller = script => { installed = script; return Task.FromResult(true); };
+        web.NewScrolllerEngine();
+        await web.PrepareScrolllerGate(1, true);
+        Assert.Equal(ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.FrameMediaScript, installed);
+        Assert.Contains("window.top.postMessage", installed);
+        Assert.True(web.ScrolllerGate);
+    });
+
+    [Fact]
+    public Task AllFrameScriptInstallsBeforeNavigationOncePerEngine() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var pending = new TaskCompletionSource<bool>();
+        var installs = 0;
+        var web = new WebHost { AllFramesDocumentStartScript = "wheel", AllFramesDocumentStartInstaller = script =>
+        {
+            Assert.Equal("wheel", script);
+            installs++;
+            return pending.Task;
+        }};
+        web.NewScrolllerEngine();
+        var gate = web.PrepareScrolllerGate(1, true);
+        Assert.Null(web.ScrolllerGate);
+        Assert.Equal(1, installs);
+        pending.SetResult(true);
+        await gate;
+        Assert.True(web.ScrolllerGate);
+        await web.PrepareScrolllerGate(1, true);
+        Assert.Equal(1, installs);
+        web.NewScrolllerEngine();
+        await web.PrepareScrolllerGate(2, true);
+        Assert.Equal(2, installs);
+    });
+
+    [Fact]
     public Task FailedDocumentStartDoesNotLeaveNavigationHeld() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var web = new WebHost { WindowsDocumentStartScript = "test", DocumentStartInstaller = _ => Task.FromException(new InvalidOperationException()) };
@@ -85,6 +124,83 @@ public sealed class WebHostScrolllerGateTests
         web.OnNavigationStarted(null, new WebViewNavigationStartingEventArgs { Request = local });
         web.NewScrolllerEngine(); // native adapter was destroyed or recreated
         Assert.Null(web.ActiveNavigation);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task GateRefusal_KeepsTheExistingNavigationAndSource() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var web = new WebHost();
+        var page = new Uri("http://127.0.0.1:5555/page");
+        web.NewScrolllerEngine()(false);
+        web.AllowNavigation = _ => true;
+        web.NavigationInvoker = _ => true;
+        web.Source = page;
+        var start = new WebViewNavigationStartingEventArgs { Request = page };
+        web.OnNavigationStarted(null, start);
+        Assert.False(start.Cancel);
+        Assert.False(web.Navigate(new Uri("https://example.test/")));
+        Assert.Equal(page, web.Source);
+        Assert.Equal(page, web.ActiveNavigation);
+        web.OnNavigationCompleted(page);
+        Assert.Equal(page, web.CurrentUrl);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task ProgrammaticNavigation_PreservesReplacedLoad(bool sameUrl, bool failureBeforeStart) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var web = new WebHost();
+        var first = new Uri("http://127.0.0.1:5555/first");
+        var second = sameUrl ? first : new Uri(first, "/second");
+        web.NewScrolllerEngine()(true);
+        web.AllowNavigation = _ => true;
+        web.NavigationInvoker = _ => true;
+        web.Source = first;
+        void Start(Uri url)
+        {
+            var e = new WebViewNavigationStartingEventArgs { Request = url };
+            web.OnNavigationStarted(null, e);
+            Assert.False(e.Cancel);
+        }
+        var finished = new List<(Uri, bool)>();
+        web.NavigationFinished += (url, ok) => finished.Add((url, ok));
+        Start(first);
+        Assert.True(web.Navigate(second));
+        if (failureBeforeStart) web.OnNavigationCompleted(first, success: false);
+        Start(second);
+        if (!failureBeforeStart) web.OnNavigationCompleted(first, success: false);
+        Assert.Equal(second, web.ActiveNavigation);
+        Assert.Null(web.CurrentUrl);
+        Assert.Empty(finished);
+        web.OnNavigationCompleted(second);
+        Assert.Null(web.ActiveNavigation);
+        Assert.Equal(second, web.CurrentUrl);
+        Assert.Equal((second, true), Assert.Single(finished));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FailedProgrammaticNavigation_DoesNotMaskLaterFailure() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var web = new WebHost();
+        var page = new Uri("http://127.0.0.1:5555/page");
+        web.NewScrolllerEngine()(true);
+        web.AllowNavigation = _ => true;
+        web.NavigationInvoker = _ => false;
+        web.OnNavigationStarted(null, new WebViewNavigationStartingEventArgs { Request = page });
+        Assert.False(web.Navigate(page));
+        web.OnNavigationStarted(null, new WebViewNavigationStartingEventArgs { Request = page });
+        var finished = new List<bool>();
+        web.NavigationFinished += (_, ok) => finished.Add(ok);
+        web.OnNavigationCompleted(page, success: false);
+        Assert.Null(web.ActiveNavigation);
+        Assert.Equal(page, web.CurrentUrl);
+        Assert.False(Assert.Single(finished));
         return Task.CompletedTask;
     });
 

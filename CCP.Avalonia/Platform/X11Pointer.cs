@@ -37,9 +37,15 @@ internal static class X11Pointer
     public static (PixelPoint At, bool Pressed, bool Escape)? Read() =>
         OperatingSystem.IsWindows() ? Win32Pointer.Read() : Read(out _);
 
+    // Left button only, as WPF's VK_LBUTTON reads where a right click means something else (Rabbit Caller aim).
+    public static (PixelPoint At, bool Pressed, bool Escape)? ReadLeft() =>
+        OperatingSystem.IsWindows() ? Win32Pointer.Read(leftOnly: true) : Read(out _, leftOnly: true);
+
+    internal static bool ButtonDown(uint mask, bool leftOnly) => (mask & (leftOnly ? Button1Mask : Button1Mask | Button3Mask)) != 0;
+
     // On XWayland, a root child confirms an X surface has pointer focus. Coordinates alone
     // can remain at the last position after the pointer enters a native Wayland surface.
-    public static (PixelPoint At, bool Pressed, bool Escape)? Read(out bool overWindow)
+    public static (PixelPoint At, bool Pressed, bool Escape)? Read(out bool overWindow, bool leftOnly = false)
     {
         overWindow = false;
         try
@@ -63,7 +69,7 @@ internal static class X11Pointer
             XQueryKeymap(_display, ref MemoryMarshal.GetReference(keys));
             bool esc = _esc != 0 && (keys[_esc >> 3] & (1 << (_esc & 7))) != 0;
             keys.Clear();
-            return (new PixelPoint(x, y), (mask & (Button1Mask | Button3Mask)) != 0, esc);
+            return (new PixelPoint(x, y), ButtonDown(mask, leftOnly), esc);
         }
         catch (Exception ex)
         {

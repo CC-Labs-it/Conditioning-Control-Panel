@@ -24,7 +24,8 @@ public partial class EmiDeskWindow
         try
         {
             _dismissPending = false; _dismissDone = null; // #3329: the show abandons a running dismissal
-            FinishSummon(); CancelChain(); CancelAsk(); CancelHold(); CloseGlass(); CloseRing(); CloseOptionsPanel(); CloseBook();
+            CancelAsk(visual: false);
+            FinishSummon(); CancelChain(); CancelHold(); CloseGlass(); CloseRing(); CloseOptionsPanel(); CloseBook();
             StopIdleBeats(); StopAlive(); DisarmPet();
             var pointer = _dragPointer;
             EndDragHold();

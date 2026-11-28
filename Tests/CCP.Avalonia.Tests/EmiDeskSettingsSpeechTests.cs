@@ -91,7 +91,7 @@ public sealed class EmiDeskSettingsSpeechTests
             desk.Fire("fypOpened");
             Assert.True(window.AskLive);
             Assert.Equal(".", window.BubbleText);
-            for (int i = 0; i < 3; i++) window.AdvanceAsk();
+            window.AdvanceAskTimer(); window.AdvanceAskTimer(); window.AdvanceAskTimer();
             Assert.Equal("put the feed up top?", window.BubbleText);
             var border = window.BubbleHost.Children.OfType<Border>().Single();
             var panel = Assert.IsType<StackPanel>(border.Child);
@@ -104,7 +104,7 @@ public sealed class EmiDeskSettingsSpeechTests
             desk.LineEngine = EmiLineEngine.FromJson(lines.ToString());
             desk.Fire("fypOpened");
             Assert.True(window.AskLive);
-            for (int i = 0; i < 3; i++) window.AdvanceAsk();
+            window.AdvanceAskTimer(); window.AdvanceAskTimer(); window.AdvanceAskTimer();
             Assert.IsType<Button>(chips.Children[0]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.False(window.AskLive);
             Assert.Equal("fyp", state.Pins[0]);
@@ -300,6 +300,96 @@ public sealed class EmiDeskSettingsSpeechTests
     });
 
     [Fact]
+    public Task NoChipRunsItsOwnEffect() => InDesk(async desk =>
+    {
+        var window = desk.Window!;
+        for (int i = 0; window.Transiting && i < 150; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+        var reply = new LineDraw("reply", "test", "ok", "^_^", null, 3, false, 0);
+        var ask = new AskDraw("test", "test", "question", "^_^", new[] { "yes", "no" }, reply, reply, "none", "bedtime");
+        EmiState.Current.BedtimeUntil = DateTime.MinValue;
+        window.ShowAsk(ask, desk.LineEngine);
+        window.AdvanceAskTimer(); window.AdvanceAskTimer(); window.AdvanceAskTimer();
+        window.AnswerAsk(1);
+        Assert.True(EmiLineEngine.BedtimeSet);
+    });
+
+    [Fact]
+    public Task AskCadenceAndEscapeReactionCleanUp() => InDesk(async desk =>
+    {
+        var window = desk.Window!;
+        for (int i = 0; window.Transiting && i < 150; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+        var reply = new LineDraw("reply", "test", "ok", "^_^", null, 3, false, 0);
+        var ask = new AskDraw("test", "test", "question", "^_~", new[] { "yes", "no" }, reply, reply, "none", null);
+        window.ShowAsk(ask, desk.LineEngine);
+        var panel = Assert.IsType<StackPanel>(window.BubbleHost.Children.OfType<Border>().Single().Child);
+        var chips = Assert.IsType<StackPanel>(panel.Children[1]);
+        Assert.Equal(".", window.BubbleText); Assert.Equal(420, window.AskDelayMs); Assert.Empty(chips.Children);
+        for (int i = 0; window.BubbleText == "." && i < 100; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+        Assert.Equal("..", window.BubbleText); Assert.Equal(420, window.AskDelayMs); Assert.Empty(chips.Children);
+        window.AdvanceAskTimer();
+        Assert.Equal("...", window.BubbleText); Assert.Equal(520, window.AskDelayMs); Assert.Empty(chips.Children);
+        window.AdvanceAskTimer();
+        Assert.Equal("question", window.BubbleText); Assert.Equal("^_~", window.Face);
+        Assert.Equal(2, chips.Children.Count); Assert.Equal(0, window.AskDelayMs);
+        window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        Assert.False(window.AskLive); Assert.Empty(chips.Children); Assert.Null(window.BubbleText);
+        Assert.Equal("-_-", window.Face); Assert.Equal(1400, window.AskDelayMs);
+        window.AdvanceAskTimer();
+        Assert.Equal("...", window.BubbleText); Assert.Equal(700, window.AskDelayMs);
+        window.AdvanceAskTimer();
+        Assert.Null(window.BubbleText); Assert.Equal(EmiChains.RestFace, window.Face); Assert.Equal(0, window.AskDelayMs);
+        window.ShowAsk(ask, desk.LineEngine);
+        window.BeginPresentation(() => { });
+        Assert.False(window.AskLive); Assert.Equal(0, window.AskDelayMs); Assert.Null(window.BubbleText);
+        window.AdvanceAskTimer(); Assert.Null(window.BubbleText);
+    });
+
+    [Fact]
+    public Task AskKeepsQuestionAndChipsDuringChains() => InDesk(async desk =>
+    {
+        var window = desk.Window!;
+        for (int i = 0; window.Transiting && i < 150; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+        var reply = new LineDraw("reply", "test", "ok", "^_^", null, 3, false, 0);
+        var ask = new AskDraw("test", "test", "question", "^_^", new[] { "yes", "no" }, reply, reply, "none", null);
+        window.ShowAsk(ask, desk.LineEngine);
+        window.AdvanceAskTimer(); window.AdvanceAskTimer(); window.AdvanceAskTimer();
+        var panel = Assert.IsType<StackPanel>(window.BubbleHost.Children.OfType<Border>().Single().Child);
+        var chips = Assert.IsType<StackPanel>(panel.Children[1]);
+        Assert.Equal("question", window.BubbleText);
+        window.PlayChain("dizzy");
+        Assert.True(window.AskLive); Assert.Equal("question", window.BubbleText);
+        Assert.True(chips.IsVisible); Assert.Equal(2, chips.Children.Count);
+        window.Say("other line");
+        for (int i = 0; i < 5; i++)
+        {
+            Assert.Equal("question", window.BubbleText);
+            window.AdvanceSpeech();
+        }
+        window.CancelChain();
+        Assert.Equal("question", window.BubbleText);
+        Assert.IsType<Button>(chips.Children[1]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(window.AskLive); Assert.Equal(".", window.BubbleText);
+    });
+
+    [Fact]
+    public Task DismissStopsIgnoredReaction() => InDesk(async desk =>
+    {
+        var window = desk.Window!;
+        for (int i = 0; window.Transiting && i < 150; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+        var reply = new LineDraw("reply", "test", "ok", "^_^", null, 3, false, 0);
+        window.ShowAsk(new AskDraw("test", "test", "question", "^_^", new[] { "yes", "no" }, reply, reply, "none", null), desk.LineEngine);
+        window.CancelAsk();
+        Assert.Equal(1400, window.AskDelayMs);
+        window.CancelAsk(visual: false);
+        Assert.Equal(0, window.AskDelayMs);
+        window.ShowAsk(new AskDraw("test", "test", "question", "^_^", new[] { "yes", "no" }, reply, reply, "none", null), desk.LineEngine);
+        window.CancelAsk();
+        window.RunDismiss();
+        Assert.Equal(0, window.AskDelayMs);
+        window.AdvanceAskTimer(); Assert.Null(window.BubbleText);
+    });
+
+    [Fact]
     public async Task DeskHelperRestoresEmiStateAndItsPendingSave()
     {
         string before = "";
@@ -366,6 +456,8 @@ public sealed class EmiDeskSettingsSpeechTests
         bool sharedArmed = shared.HotkeyArmed;
         Assert.NotSame(shared, desk);
         var oldRegister = desk.RegisterChord;
+        var oldWindows = desk.IsWindows;
+        desk.IsWindows = () => false;
         Action? press = null;
         desk.RegisterChord = (_, _, callback) => { press = callback; return true; };
         desk.LineEngine = EmiLineEngine.FromJson("""{"version":1,"moments":{"firstContact":{"priority":3,"pools":["g"]}},"pools":{"g":[{"id":"g","t":"{via}","spice":0}]}}""");
@@ -382,7 +474,11 @@ public sealed class EmiDeskSettingsSpeechTests
             for (int i = 0; i < 3; i++) desk.Window!.AdvanceSpeech();
             Assert.Equal("hotkey", desk.Window!.BubbleText);
         }
-        finally { desk.RegisterChord = oldRegister; }
+        finally
+        {
+            desk.RegisterChord = oldRegister;
+            desk.IsWindows = oldWindows;
+        }
     }, isolated: true);
 
     [Fact]

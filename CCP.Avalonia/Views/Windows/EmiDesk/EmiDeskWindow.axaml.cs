@@ -315,6 +315,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _bodyRoot.LayoutUpdated += (_, _) => ApplyInputRegion();
             _faceView.RenderTransform = _gazeShift;
 
+            WireGazePointer();
             _bodyRoot.PointerPressed += OnBodyPointerPressed;
             _bodyRoot.PointerMoved += OnBodyPointerMoved;
             _bodyRoot.PointerReleased += OnBodyPointerReleased;
@@ -362,7 +363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // layered-window compositor bug and has no X11 twin.
             ScalingChanged += OnScalingSettled;
             Closed += OnClosedCleanup;
-            Opened += (_, _) => ApplyInputRegion();
+            Opened += (_, _) => { ApplyInputRegion(); StartTopmostWatch(OperatingSystem.IsWindows() && TryGetPlatformHandle()?.HandleDescriptor == "HWND" && TryGetPlatformHandle()?.Handle != IntPtr.Zero); };
             // WPF Bubble.cs:666/757 opens the bubble layer to clicks only while the ask chips show.
             _bubbleCanvas.PropertyChanged += (_, e) => { if (e.Property == IsHitTestVisibleProperty) ApplyInputRegion(); };
 
@@ -989,6 +990,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void PlayChain(EmiChain? chain, Action? done = null, string? bodyFrameOverride = null)
         {
             if (chain == null || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
+            if (!AskLive) StopAskTimer();
             // A chain pose supplies its voice mood; a pose-free chain retains the caller's mood.
             // #3329: the goodbye wink owns her until the dismissal lands, and any other chain during the
             // wake completes the summon first (WPF React.cs:132-138 order), so its done hook still runs once.
@@ -1019,6 +1021,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>P06: also invalidate an intro that has not reached its wake chain yet.</summary>
         internal void StopChainForPanic()
         {
+            CloseGlassForPanic();
             if (_dismissPending)
             {
                 // Panic must not strand her mid-goodbye: the wink is cut, the dismiss still lands.
@@ -1045,36 +1048,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private bool Busy()
         {
             // A full chain or wordless pat owns the face until its last hold ends.
-            if (PresentationActive || _transiting || ChainLive || InputLocked) return true;
+            if (PresentationActive || _transiting || ChainLive || InputLocked || HoldPending) return true;
             bool glass = false;
             try { OnGlassLiveQuery(ref glass); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] glass-live seam threw"); }
             return glass;
-        }
-
-        /// <summary>Start (or restart) the idle blink cycle and the idle sway.</summary>
-        // ponytail: needs EmiAlive.BlinkDelayMs and EmiChains.SwayCycle / SwayStepMs /
-        // SwayCentreMinMs / SwayCentreMaxMs (Services/EmiDesk/), neither in Core. The two timers
-        // themselves port straight across once those numbers do - the blink clock re-rolls its
-        // jitter every tick so the cadence is 5200 +/- 600 ms and never a metronome.
-        //
-        // AUDITED 2026-09-04 rather than repeated, because "neither in Core" said nothing about how
-        // far away either one is, and they are close. EmiAlive.cs is 428 lines whose ONLY using is
-        // System, and its whole head coupling is two signatures - GazeTarget and WithinApproach
-        // take System.Windows.Point / Rect - so it is one Core geometry type away, the same single
-        // blocker EmiRingLayout has. EmiChains.cs is 654 lines whose only head type is the
-        // DispatcherTimer inside Player (its file probing is AppContext.BaseDirectory, which Core
-        // already uses in EmiProps), so it is ONE seam swap: a System.Threading.Timer ticking
-        // through CoreDispatch.Post. Neither is a re-derivation candidate - inlining these numbers
-        // here would be a second copy of a table EmiAlive's own header forbids retuning outside the
-        // plan, and it would still leave SetPose with no art to swap.
-        public void RestartIdleBeats()
-        {
-        }
-
-        /// <summary>Stop the idle blink cycle and the sway.</summary>
-        public void StopIdleBeats()
-        {
         }
 
         // ---------------------------------------------------------------- pointer
@@ -1282,7 +1260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (PresentationActive || InputLocked || _transiting) { e.Handled = true; return; }   // the show owns her
             try
             {
-                _rainGlassClick = _rainGlass && GlassRect.Contains(e.GetPosition(_bodyRoot));
+                _rainGlassClick = (_rainGlass || _glassChannel == "spiral") && GlassRect.Contains(e.GetPosition(_bodyRoot));
                 try { RaiseActivity(); } finally { _rainGlassClick = false; }
                 DisarmPet();
                 // Moving her walks the pointer off her silhouette in the first few pixels at any
@@ -1817,8 +1795,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     CoreSettings.Current.EmiDeskWidth = _bodyWidth;
                     CoreSettings.Save();
                 }
-                // ponytail: needs App.EmiDesk.Fire("resized") - her own event bus, which moves with
-                // the app shell.
                 FireDeskEvent("resized");
             }
             catch (Exception ex)
@@ -2715,10 +2691,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // React.cs and Fx.cs are no longer among them: both are real, above.
 
         /// <summary>ponytail: EmiDeskWindow.Alive.cs - the 100 ms gaze/idle poll. Starts with her.</summary>
-        private void StartAlive() { _patPokes.Reset(); }
+        private void StartAlive() { _patPokes.Reset(); StartGaze(); }
 
         /// <summary>ponytail: EmiDeskWindow.Alive.cs - stops the poll when she goes.</summary>
-        private void StopAlive() { StopPatFeedback(); _patPokes.Reset(); }
+        private void StopAlive() { StopPatFeedback(); _patPokes.Reset(); StopGaze(); }
 
         /// <summary>WPF React.cs:119: the click pat shares the hover cooldown and books each poke.</summary>
         internal void PetFromClick()
@@ -2793,8 +2769,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// and the dock chip cannot disagree with the screen.</summary>
         private void Dismiss() => EmiDeskService.Instance.Dismiss();
 
-        /// <summary>ponytail: needs App.EmiDesk.ResetOnboarding() - the QA gesture replay.</summary>
-        private void ResetOnboarding() { }
+        /// <summary>WPF EmiDeskWindow.xaml.cs:1606: the QA gesture replays onboarding through the service.</summary>
+        private void ResetOnboarding() => EmiDeskService.Instance.ResetOnboarding();
 
         /// <summary>WPF EmiDeskService.cs:661: widget moments feed the shared line engine.</summary>
         private void FireDeskEvent(string name) => EmiDeskService.Instance.Fire(name);
@@ -2840,6 +2816,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 _closingForGood = true;
+                CancelAsk(visual: false);
                 StopGlassWatch();
                 _player.Dispose();
                 UnhookDeskItems();

@@ -93,6 +93,7 @@ public partial class MainShellWindow
     // A manual Look has already shown this offer, but other queued offers still wait.
     private void OnLeashOfferShown(LeashOffer offer)
     {
+        if (!ReferenceEquals(_askService, LeashHead.Service)) RebindLeashAsks();
         // Another shell may show the offer before this shell receives the same snapshot.
         _seenLeashOffers.Add(OfferKey(offer));
         _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());

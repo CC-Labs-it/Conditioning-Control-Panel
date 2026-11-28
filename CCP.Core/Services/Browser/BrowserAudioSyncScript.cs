@@ -8,6 +8,7 @@ namespace ConditioningControlPanel.Services.Browser
     if (window.__hapticSyncInjected) return;
     window.__hapticSyncInjected = true;
     window.__hapticReady = false;
+    window.__hapticCancelled = false;
     window.__hapticVideoReported = false;
     window.__hapticProcessing = false;
     window.__hapticOverlay = null;
@@ -150,6 +151,7 @@ namespace ConditioningControlPanel.Services.Browser
         video.play = function() {
             console.log('[HapticSync] Play intercepted, ready=' + window.__hapticReady + ', processing=' + window.__hapticProcessing);
 
+            if (window.__hapticCancelled) return originalPlay();
             if (window.__hapticReady) {
                 // Haptics ready, allow play
                 console.log('[HapticSync] Haptics ready, allowing play');
@@ -173,6 +175,10 @@ namespace ConditioningControlPanel.Services.Browser
                         url: url,
                         duration: video.duration || 0
                     }));
+                } else {
+                    window.__hapticProcessing = false;
+                    window.__hapticVideoReported = false;
+                    return originalPlay();
                 }
             }
 
@@ -183,7 +189,7 @@ namespace ConditioningControlPanel.Services.Browser
         // Setup other event listeners
         video.addEventListener('pause', () => {
             console.log('[HapticSync] Video pause event');
-            if (window.__hapticReady) {
+            if (window.__hapticReady && !window.__hapticCancelled) {
                 window.invokeCSharpAction(JSON.stringify({
                     type: 'audioSyncState',
                     currentTime: video.currentTime,
@@ -194,7 +200,7 @@ namespace ConditioningControlPanel.Services.Browser
 
         video.addEventListener('seeked', () => {
             console.log('[HapticSync] Video seeked to ' + video.currentTime);
-            if (window.__hapticReady) {
+            if (window.__hapticReady && !window.__hapticCancelled) {
                 window.invokeCSharpAction(JSON.stringify({
                     type: 'audioSyncSeek',
                     currentTime: video.currentTime
@@ -205,7 +211,7 @@ namespace ConditioningControlPanel.Services.Browser
         video.addEventListener('ended', () => {
             console.log('[HapticSync] Video ended');
             stopSync();
-            window.invokeCSharpAction(JSON.stringify({
+            if (!window.__hapticCancelled) window.invokeCSharpAction(JSON.stringify({
                 type: 'audioSyncEnded'
             }));
         });
@@ -228,6 +234,14 @@ namespace ConditioningControlPanel.Services.Browser
         }
     };
 
+    // Stop without resuming the page. A later manual play remains available without sync.
+    window.__hapticCancel = () => {
+        stopSync();
+        window.__hapticCancelled = true;
+        window.__hapticProcessing = false;
+        hideOverlay();
+    };
+
     // Re-arm after a LATE device connection (toy turned on while the page /
     // video was already open). The first play() may have already fired with no
     // device, so the one-shot guards are set and the video is running un-synced.
@@ -237,6 +251,7 @@ namespace ConditioningControlPanel.Services.Browser
         const v = findVideo();
         if (!v) { console.log('[HapticSync] Re-arm: no video yet'); return; }
         setupVideoInterception(v);
+        window.__hapticCancelled = false;
         window.__hapticReady = false;
         window.__hapticProcessing = true;
         window.__hapticVideoReported = true;
@@ -249,6 +264,9 @@ namespace ConditioningControlPanel.Services.Browser
                 url: url,
                 duration: v.duration || 0
             }));
+        } else {
+            window.__hapticProcessing = false;
+            window.__hapticVideoReported = false;
         }
     };
 
