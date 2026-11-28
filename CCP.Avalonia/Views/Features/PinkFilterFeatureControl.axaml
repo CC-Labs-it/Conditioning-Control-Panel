@@ -82,6 +82,9 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            <!-- Accessibility limit (Settings > Performance) holds this value back: say so. -->
+                            <TextBlock x:Name="TxtComfortClip" IsVisible="False" TextWrapping="Wrap"
+                                       FontSize="11" Margin="0,0,0,4" Foreground="{StaticResource TextMutedBrush}"/>
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
