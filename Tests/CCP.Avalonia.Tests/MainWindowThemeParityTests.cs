@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -25,6 +26,57 @@ public sealed class MainWindowThemeParityTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
+
+    [Fact]
+    public Task CollapsibleCardChevronUsesExpandAndCollapseTransition() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var card = new Expander { Theme = (ControlTheme)Application.Current!.FindResource("CollapsibleCard")!, Header = "Header", Content = "Content", IsExpanded = false };
+        var host = new Window { Width = 300, Height = 200, Content = card };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var chevron = card.GetVisualDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>().Single(c => c.Name == "Chevron");
+            var transition = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(chevron.Transitions!));
+            Assert.Equal(TimeSpan.FromMilliseconds(200), transition.Duration);
+            Assert.Equal(Visual.RenderTransformProperty, transition.Property);
+            Assert.Equal(1, chevron.GetBaseValue(Visual.RenderTransformProperty).Value!.Value.M11, 3);
+            card.IsExpanded = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, chevron.GetBaseValue(Visual.RenderTransformProperty).Value!.Value.M11, 3);
+            card.IsExpanded = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, chevron.GetBaseValue(Visual.RenderTransformProperty).Value!.Value.M11, 3);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task CollapsibleCardChevronTurnsWhiteOverHeaderAndRestoresAccent() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var card = new Expander { Theme = (ControlTheme)Application.Current!.FindResource("CollapsibleCard")!, Header = "Header", Content = "Content", IsExpanded = true };
+        var host = new Window { Width = 300, Height = 200, Content = card };
+        host.Resources["PinkBrush"] = Brushes.Cyan;
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var chevron = card.GetVisualDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>().Single(c => c.Name == "Chevron");
+            var header = card.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.ToggleButton>().Single(c => c.Name == "PART_toggle");
+            Assert.Same(Brushes.Cyan, chevron.Foreground);
+            host.MouseMove(header.TranslatePoint(new Point(10, 10), host)!.Value);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Colors.White, ((ISolidColorBrush)chevron.Foreground!).Color);
+            host.MouseMove(new Point(299, 199));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(Brushes.Cyan, chevron.Foreground);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task SmallPinkButtonUsesPressAndReleaseMotion() => AvaloniaTestDispatcher.RunAsync(() =>
@@ -172,6 +224,31 @@ public sealed class MainWindowThemeParityTests
             view.FindControl<Button>("BtnQuestSubRoadmap")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Same(inactive, view.FindControl<Button>("BtnQuestSubDaily")!.Theme);
             Assert.Same(active, view.FindControl<Button>("BtnQuestSubRoadmap")!.Theme);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+    // WPF MainWindow.xaml:57,89 suppresses the keyboard focus visual on both quest tab styles.
+    [Theory]
+    [InlineData("BtnQuestSubDaily")]
+    [InlineData("BtnQuestSubRoadmap")]
+    public Task QuestTabHasNoKeyboardFocusAdorner(string name) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var view = new QuestsTabView();
+        var host = new Window { Width = 900, Height = 700, Content = view };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var button = view.FindControl<Button>(name)!;
+            var layer = AdornerLayer.GetAdornerLayer(button)!;
+            Assert.NotNull(layer.DefaultFocusAdorner);
+            Assert.True(button.Focus(NavigationMethod.Tab));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(button.IsSet(Control.FocusAdornerProperty));
+            Assert.Null(button.FocusAdorner);
+            Assert.DoesNotContain(layer.Children, child => AdornerLayer.GetAdornedElement(child) == button);
         }
         finally { host.Close(); }
         return Task.CompletedTask;

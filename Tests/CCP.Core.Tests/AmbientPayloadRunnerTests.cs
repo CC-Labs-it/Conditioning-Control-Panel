@@ -41,6 +41,18 @@ public sealed class AmbientPayloadRunnerTests
     }
 
     [Fact]
+    public void TriggerRollUsesTheSuppliedRandomForVariantSize()
+    {
+        var s = new AppSettings { BubbleTriggersEnabled = true, BubbleTriggerChance = 100, BubbleTriggerVariants = new() { "flash" } };
+        var first = AmbientBubblePayloads.Roll(s, new Random(1), 0)!;
+        var repeated = AmbientBubblePayloads.Roll(s, new Random(1), 0)!;
+        var different = AmbientBubblePayloads.Roll(s, new Random(3), 0)!;
+        Assert.Equal(first.SizePx, repeated.SizePx);
+        Assert.Equal(first.Payload.Strength, repeated.Payload.Strength);
+        Assert.NotEqual(first.SizePx, different.SizePx);
+    }
+
+    [Fact]
     public void TriggerRollHonoursSwitchChanceCapAndRetiredIds()
     {
         var s = new AppSettings { BubbleTriggersEnabled = true, BubbleTriggerChance = 100, BubbleTriggerVariants = new() { "flash" } };
