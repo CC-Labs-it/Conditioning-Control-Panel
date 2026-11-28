@@ -18,7 +18,7 @@ UninstallDisplayName={#MyAppName}
 ; Inno can detect the running app and cleanly close+restart it when files are in use during
 ; a silent auto-update. Without this, /CLOSEAPPLICATIONS has nothing registered to close and
 ; the in-app updater could race the still-locked exe (#499).
-AppMutex=ConditioningControlPanel_SingleInstance_Mutex
+AppMutex={#MyAppMutex}
 CloseApplications=yes
 RestartApplications=yes
 
