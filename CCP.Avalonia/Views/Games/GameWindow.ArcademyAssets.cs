@@ -21,8 +21,8 @@ internal sealed partial class GameWindow
     private readonly Dictionary<string, List<object>> _arcademyAssetBuffer = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string[]> _arcademyPileSubs = new(StringComparer.Ordinal);
     // WPF TaggedFetchesInFlight/TaggedWaiters (:4803-4828): a pile ask that finds its fetch in the air waits for that batch.
-    private readonly Dictionary<string, string[]> _arcademyPileFetching = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, List<(int Want, Action<object[], bool> Reply)>> _arcademyPileWaiters = new(StringComparer.Ordinal);
+    // Waiters ride with the fetch they queued behind, so a pile that changes subs mid-fetch never answers them from the new batch.
+    private readonly Dictionary<string, (string[] Subs, List<(int Want, Action<object[], bool> Reply)> Waiters)> _arcademyPileFetching = new(StringComparer.Ordinal);
     private static bool ArcademyRemoteAllowed() => !CoreSettings.Current.OfflineMode
         && CoreSettings.Current.MediaSource != "local" && CoreSettings.Current.HasRemoteMediaConsent;
 
@@ -58,13 +58,13 @@ internal sealed partial class GameWindow
         if (served.Length >= count) { Reply(served, true); return; }
         Reply(served, false);
         int want = count - served.Length;
-        if (tagged && _arcademyPileFetching.TryGetValue(key, out var flying) && flying.SequenceEqual(subs, StringComparer.OrdinalIgnoreCase))
+        if (tagged && _arcademyPileFetching.TryGetValue(key, out var flying) && flying.Subs.SequenceEqual(subs, StringComparer.OrdinalIgnoreCase))
         {
-            if (!_arcademyPileWaiters.TryGetValue(key, out var waiters)) _arcademyPileWaiters[key] = waiters = new();
-            waiters.Add((want, Reply));
+            flying.Waiters.Add((want, Reply));
             return;
         }
-        if (tagged) _arcademyPileFetching[key] = subs;
+        var waiters = new List<(int Want, Action<object[], bool> Reply)>();
+        if (tagged) _arcademyPileFetching[key] = (subs, waiters);
         _ = Task.Run(async () =>
         {
             var mediaKind = kind == "loop" ? FeedMediaKind.Video : FeedMediaKind.Image;
@@ -104,28 +104,30 @@ internal sealed partial class GameWindow
             Dispatcher.UIThread.Post(() =>
             {
                 if (_closing) return;
-                // A newer fetch for new subs owns the key and its waiters (WPF drains per key, :5034).
-                var waiters = new List<(int Want, Action<object[], bool> Reply)>();
-                if (tagged && _arcademyPileFetching.TryGetValue(key, out var owner) && ReferenceEquals(owner, subs))
-                {
+                // A newer fetch for new subs may own the key by now; this batch still answers its own waiters (WPF :5034).
+                if (tagged && _arcademyPileFetching.TryGetValue(key, out var owner) && ReferenceEquals(owner.Waiters, waiters))
                     _arcademyPileFetching.Remove(key);
-                    if (_arcademyPileWaiters.Remove(key, out var queued)) waiters = queued;
-                }
                 if (!ArcademyRemoteAllowed())
                 {
                     Reply(Array.Empty<object>(), true);
                     foreach (var w in waiters) w.Reply(Array.Empty<object>(), true);
                     return;
                 }
-                // A batch for subs the pile has since left is still this request's answer, but not the pile's stock.
+                Reply(rows.Take(want).ToArray(), true);
+                var spare = rows.Skip(want).ToList();
+                foreach (var w in waiters)
+                {
+                    var take = spare.Take(w.Want).ToArray();
+                    spare.RemoveRange(0, take.Length);
+                    w.Reply(take, true);
+                }
+                // A batch for subs the pile has since left is still its askers' answer, but not the pile's stock.
                 if (!tagged || (_arcademyPileSubs.TryGetValue(tag, out var now) && now.SequenceEqual(subs, StringComparer.OrdinalIgnoreCase)))
                 {
                     if (!_arcademyAssetBuffer.TryGetValue(key, out var buf)) _arcademyAssetBuffer[key] = buf = new List<object>();
-                    buf.AddRange(rows.Skip(want));
+                    buf.AddRange(spare);
                     if (buf.Count > 120) buf.RemoveRange(0, buf.Count - 120);
                 }
-                Reply(rows.Take(want).ToArray(), true);
-                foreach (var w in waiters) w.Reply(TakeArcademyBuffered(key, w.Want), true);
             });
         });
     }
