@@ -241,6 +241,69 @@ public sealed class ChaosEStimOverlayTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void Halo_pinning_controls_preparation_birth_arm_and_raise(bool pinned) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        var canShow = ChaosEStimOverlay.CanShow;
+        var click = ChaosEStimOverlay.SetClickThrough;
+        var redirect = ChaosEStimOverlay.SetOverrideRedirect;
+        var raise = ChaosEStimOverlay.RaiseWindow;
+        var skip = ChaosEStimOverlay.SkipPlatformChecksForTests;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.ChaosPinOnTop = pinned;
+        ChaosEStimOverlay.CanShow = () => true;
+        ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+        ChaosEStimOverlay.SetClickThrough = (_, _) => true;
+        var bands = new System.Collections.Generic.List<bool>();
+        ChaosEStimOverlay.SetOverrideRedirect = (window, _, _, topmost) =>
+        {
+            if (window is ChaosEStimGlow) { bands.Add(topmost); Assert.Equal(window.Topmost, topmost); }
+            return true;
+        };
+        var raised = new System.Collections.Generic.List<global::Avalonia.Controls.Window>();
+        ChaosEStimOverlay.RaiseWindow = w => raised.Add(w);
+        try
+        {
+            ChaosEStimOverlay.EnsureCreated();
+            var halo = ChaosEStimGlow.Active!;
+            Assert.NotNull(halo);
+            Assert.Equal(pinned, halo.Topmost);
+            Assert.Equal(new[] { pinned }, bands);
+            ChaosEStimOverlay.Arm();
+            Assert.Equal(pinned, halo.Topmost);
+            Assert.Equal(pinned ? 1 : 0, raised.Count);
+            if (pinned) Assert.Same(halo, raised[0]);
+            raised.Clear();
+            ChaosEStimOverlay.RaiseActive();
+            Assert.Equal(pinned ? 1 : 0, raised.Count);
+            if (pinned) Assert.Same(halo, raised[0]);
+            settings.Current.ChaosPinOnTop = false;
+            halo.Topmost = true;
+            raised.Clear();
+            ChaosEStimOverlay.RaiseActive();
+            Assert.False(halo.Topmost);
+            Assert.Empty(raised);
+            halo.Topmost = true;
+            ChaosEStimOverlay.Arm();
+            Assert.False(halo.Topmost);
+            Assert.Empty(raised);
+        }
+        finally
+        {
+            ChaosEStimOverlay.CloseActive();
+            ChaosEStimOverlay.CanShow = canShow;
+            ChaosEStimOverlay.SetClickThrough = click;
+            ChaosEStimOverlay.SetOverrideRedirect = redirect;
+            ChaosEStimOverlay.RaiseWindow = raise;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = skip;
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void Run_start_precreates_only_for_equipped_estim_and_panic_closes_it(bool equipped) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)

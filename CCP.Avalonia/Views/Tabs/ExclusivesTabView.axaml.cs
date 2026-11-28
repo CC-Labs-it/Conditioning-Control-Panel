@@ -604,12 +604,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>
         /// ponytail: "fyp" opens the feed and "justdrop" opens its GameWindow; Breakout and Down the Rabbit Hole open the
-        /// Play wall's doors and Focus Gaze shows its Play-wall switch (OpenExclusiveFeature). "backroom" (WPF
-        /// BtnStartBackRoom_Click), Goon hosting and Arcademy have no host on this head.
-        /// Their cards stay visible but inert (no hand, honest tooltip) and never reach ShowTab or a bark.
+        /// Play wall's doors and Focus Gaze shows its Play-wall switch (OpenExclusiveFeature). Back Room (PR #3553), Goon and
+        /// Arcademy follow their registered host (GameWindow.Games), as the Play wall door does (PlayTabView.SetGameDoor).
+        /// Cards without a host stay visible but inert (no hand, honest tooltip) and never reach ShowTab or a bark.
         /// </summary>
-        internal static bool IsOnThisBuild(string key) =>
-            key is not ("backroom" or "goon" or "arcademy");
+        internal static bool IsOnThisBuild(string key) => key switch
+        {
+            "backroom" or "goon" or "arcademy" => Games.GameWindow.Games.ContainsKey(key),
+            _ => true,
+        };
 
         /// <summary>WPF Views/Tabs/ExclusivesTabView.xaml.cs:175: Account &amp; Plans links to the full page.</summary>
         private void SeePremium_Click(object? sender, RoutedEventArgs e)
@@ -630,7 +633,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static void CardHover(object? sender, bool on)
         {
             if (sender is not Border card) return;
-            if (card.RenderTransform is not ScaleTransform scale)
+            var scale = card.RenderTransform as ScaleTransform ?? (card.RenderTransform as TransformGroup)?.Children.OfType<ScaleTransform>().FirstOrDefault();
+            if (scale == null)
             {
                 card.RenderTransformOrigin = RelativePoint.Center; // WPF Services/MotionFx.cs:300
                 card.RenderTransform = scale = new ScaleTransform();

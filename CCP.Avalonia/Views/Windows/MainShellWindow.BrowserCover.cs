@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// covering while the controller's own video plays (WPF RevealBrowserForRemoteVideo).</summary>
         internal bool BrowserCovered =>
             (Named<Border>("RemoteControlOverlay")?.IsVisible == true && !_remoteOverlayBrowserRevealed)
+            || Named<Border>("GlobalDropOverlay")?.IsVisible == true
             || _leashGate?.IsUp == true
             || Named<Control>("MainTutorialOverlay")?.IsVisible == true
             || Tours.TutorialHead.ShellOverlay != null;

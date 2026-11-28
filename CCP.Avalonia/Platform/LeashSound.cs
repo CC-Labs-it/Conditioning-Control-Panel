@@ -10,6 +10,13 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 internal static class LeashSound
 {
+    private static Action? _stopRefusal;
+    internal static void StopRefusal()
+    {
+        try { System.Threading.Interlocked.Exchange(ref _stopRefusal, null)?.Invoke(); }
+        catch (Exception ex) { Serilog.Log.Debug("[Leash] refusal stop failed: {E}", ex.Message); }
+    }
+
     internal static LeashSfxRules Rules { get; set; } = new();   // tests swap it (the gate is shared and timed)
 
     internal static void Tick(DateTime now) => Play(LeashCue.Tick, "chaos/countdown_tick.mp3", 0.10f, now);
@@ -20,6 +27,24 @@ internal static class LeashSound
     internal static void Ask(DateTime now) => Play(LeashCue.Ask, "chaos/reveal_chime.mp3", 0.18f, now);
 
     internal static void Denied(DateTime now) => Play(LeashCue.Denied, "chaos/ui_denied.mp3", 0.16f, now);
+
+    // The close refusal must stop with the caged window and every panic route.
+    internal static void RefusedClose(DateTime now)
+    {
+        try
+        {
+            var level = CoreSettings.Current.MasterVolume;
+            if (level <= 0 || CoreAudio.IsOutputSuppressed || CoreAudio.PlayStoppableProvider == null) return;
+            if (!Rules.TryPlay(LeashCue.Denied, now, LeashPunishWindow.Current != null, CoreEngine.Video?.IsPlaying == true)) return;
+            const string cue = "chaos/ui_denied.mp3";
+            var path = CoreModArt.AudioOverridePath(cue)
+                ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", cue.Replace('/', Path.DirectorySeparatorChar)));
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            StopRefusal();
+            _stopRefusal = CoreAudio.PlayStoppable(path, Math.Clamp(level / 100f * 0.16f, 0f, 1f), "leash-denied");
+        }
+        catch (Exception ex) { Serilog.Log.Debug("[Leash] refusal sound failed: {E}", ex.Message); }
+    }
 
     // WPF LeashFx.Sent: an offer the server took.
     internal static void Sent(DateTime now) => Play(LeashCue.Sent, "chaos/chip_pop.mp3", 0.16f, now);

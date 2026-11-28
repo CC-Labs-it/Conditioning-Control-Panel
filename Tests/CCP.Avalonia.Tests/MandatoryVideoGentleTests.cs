@@ -264,6 +264,7 @@ public sealed class MandatoryVideoGentleTests
 
     private sealed class VerdictHost(MandatoryVideoOverlay overlay) : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public readonly List<AttentionVerdict> Verdicts = new();
         public void Show(string path, bool strict) { }
         public double CloseAll() => overlay.CloseAll();

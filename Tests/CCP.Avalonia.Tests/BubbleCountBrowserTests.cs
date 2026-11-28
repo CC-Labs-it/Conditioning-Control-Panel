@@ -37,6 +37,24 @@ public sealed class BubbleCountBrowserTests {
         return Task.CompletedTask;
     });
     [Fact]
+    public Task BrowserDurationCorrectionReachesTheHostCallback() => AvaloniaTestDispatcher.RunAsync(() => {
+        EnsureApp();
+        using var game = new BrowserGame();
+        var durations = new List<double>();
+        BubbleCountHost.Instance.Show(game.Clip, 0, true, _ => { }, () => { }, durations.Add);
+        var browser = Assert.Single(BubbleCountWindow.OpenWindows).Browser!;
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        Send(browser, "meta", durationMs: 600000);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(600, Assert.Single(durations));
+        BubbleCountWindow.ForceCloseAll();
+        Send(browser, "meta", durationMs: 700000);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Single(durations);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task ReplacingOrClosingGameKeepsRemixGateBusyUntilBrowserStops() => AvaloniaTestDispatcher.RunAsync(() => {
         EnsureApp();
         using var game = new BrowserGame();

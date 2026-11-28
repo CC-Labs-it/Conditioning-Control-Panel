@@ -9,9 +9,8 @@
 // attribution = this head's EmberAttribution, barks = BarkHead's Core engine with WPF BarkService's
 // context fields (BarkService.cs:398-416).
 //
-// Not on this head yet (honest no-ops, recorded in docs/avalonia-parity.html shell-possession):
-// the scenes (Scenes = none), the reactive adapter (WPF PossessionEvents), the warden (Warden stays
-// null, so every warden verb is skipped as WPF does when the tube is unavailable).
+// The director, reactive adapter and warden run on this head; remaining scenes and effects are
+// recorded in docs/avalonia-parity.html shell-possession.
 
 using System;
 using System.Collections.Generic;
@@ -61,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         private IDisposable? _possessed;
         private CancellationTokenSource? _cts;
         private bool _applying;
+        private PossessionRung _rung;
 
         public DirectedHeadEffect(HeadEffect inner) => _inner = inner ?? throw new ArgumentNullException(nameof(inner));
 
@@ -68,9 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         public string Id => _inner.Id;
         public PossessionRung MinRung => _inner.MinRung;
         public PossessionIntensity MinIntensity => _inner.MinIntensity;
-        /// <summary>Nudge, drift, breathe and wobble are micro-tics on WPF (IsBig false): charged and
-        /// tinted, never named by the warden.</summary>
-        public bool IsBig => false;
+        public bool IsBig => _inner.IsBig(_rung);
         public bool UsesFlicker => _inner.UsesFlicker;
         public double Weight => _inner.Weight;
         public TimeSpan HoldFor => _inner.HoldFor;
@@ -84,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             try
             {
                 if (IsLive || ctx?.Host is not IAvaloniaPossessionHost) return false;
+                _rung = ctx.Rung;
                 if (target?.Visual is not Control c) return false;
                 if (!Contains(Roles, target.Role)) return false;
                 if (!c.IsEffectivelyVisible || c.Bounds.Width <= 0 || c.Bounds.Height <= 0) return false;
@@ -98,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         public async Task ApplyAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
         {
             if (IsLive || ctx.Host is not IAvaloniaPossessionHost host || target?.Visual is not Control c) return;
+            _rung = ctx.Rung;
             _applying = true;
             try
             {
@@ -109,6 +109,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 catch (Exception ex) { Serilog.Log.Warning("Possession {Id} charge failed: {Error}", Id, ex.Message); }
                 if (token.IsCancellationRequested) return;
 
+                try { if (IsBig) ctx.Name(Id, string.IsNullOrWhiteSpace(target.DisplayName) ? null : target.DisplayName); }
+                catch (Exception ex) { Serilog.Log.Warning("Possession {Id} name failed: {Error}", Id, ex.Message); }
                 var runtime = _runtime = host.PossessionEffectRuntime;
                 runtime.Photosafe = ctx.Photosafe;
                 if (!runtime.TryApply(_inner, new PossessionHeadTarget(c, target.Role, target.Key), directed: true)) return;
@@ -151,6 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             var list = new List<IPossessionEffect>();
             foreach (var e in PossessionRuntime.CreateAll()) list.Add(new DirectedHeadEffect(e));
             list.Add(new RetitleEffect());
+            list.Add(new RetitleHeadingEffect());
             list.Add(new DokiDialogEffect());
             list.Add(new DeleteDialogEffect());
             list.Add(new DodgeEffect());
@@ -161,9 +164,14 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new CrackEffect());
             list.Add(new RelabelEffect());
             list.Add(new MisrouteEffect());
+            list.Add(new ReorderDoorsEffect());
             list.Add(new RoomWarpEffect());
             list.Add(new GlitchPortraitEffect());
             list.Add(new StealCardEffect());
+            list.Add(new ToastEffect());
+            list.Add(new SwapEffect());
+            list.Add(new GhostCursorEffect());
+            list.Add(new FallEffect());
             return list;
         }
 
@@ -178,11 +186,13 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         internal static PossessionDirectorHead CreateDirectorHead() => new()
         {
+            Scenes = () => new[] { new WhereYouAreScene() },
             OnUi = OnUi,
             UiAlive = () => Application.Current != null && !_shutdownStarted,
             Settings = () => CoreSettings.Service?.Current,
             MainHost = () => (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as IPossessionHost,
             Attribution = AttributionFor,
+            StopReleasedEffects = host => DokiDialogEffect.StopFades(host),
             Pointer = () => LastPointer(),
             BoundsOf = (host, el) => host is IAvaloniaPossessionHost h && el is Control c && h.BoundsOnGhostLayer(c) is { } r
                 ? (r.X, r.Y, r.Width, r.Height)
@@ -214,10 +224,14 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         /// <summary>WPF App.xaml.cs:3506-3515 + 2975: the director over this lockdown, the ember tick / dip
         /// cues, the remembered charge and the companion prompt's possession state.</summary>
+        internal static Warden? Warden { get; set; }
+
         internal static PossessionDirector Install(LockdownService lockdown)
         {
             HookShutdown();
-            var director = new PossessionDirector(lockdown, CreateEffects(), CreateDirectorHead());
+            Warden?.Dispose();
+            Warden = new Warden(lockdown);
+            var director = new PossessionDirector(lockdown, CreateEffects(), CreateDirectorHead()) { Warden = Warden };
             PossessionAudio.Install(lockdown, director);
             InstallRemember(lockdown);
             global::ConditioningControlPanel.Services.Companion.Brain.PromptAssembler.PossessionState = () =>
