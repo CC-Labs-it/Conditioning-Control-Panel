@@ -549,37 +549,52 @@ public sealed class PlayWallTests
                 var targets = MainShellWindow.FindStaggerTargets(play).ToArray();
                 Assert.Equal(8, targets.Length);
                 Assert.Equal("GamesGrid", targets[2].Name);
+                // The compositor draws the entrance (MainShellWindow.TabTransitions.cs); these are the animations it was handed.
+                MainShellWindow.EntranceTrack Track(Control target, string property) =>
+                    Assert.Single(shell.EntranceTracks, t => t.Target == target && t.Property == property);
                 void AtRest(Control target)
                 {
                     Assert.Equal(1, target.Opacity);
-                    Assert.Equal(0, Assert.IsType<global::Avalonia.Media.TranslateTransform>(target.RenderTransform).Y);
+                    Assert.DoesNotContain(shell.EntranceTracks, t => t.Target == target);
                 }
 
-                shell.ShowTab("play");
-                Assert.Same(play, shell.EnteringTab);
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                Dispatcher.UIThread.RunJobs();
-                shell.StepTabTransition(0);
-                // WPF Services/MotionFx.cs:123-138: BeginTime leaves delayed cards at base values.
-                // Rendering is essential: a competing backward-fill animation overrides local values.
-                AtRest(targets[^1]);
-                for (var i = 0; i < targets.Length; i++)
+                using (var time = CompositorTime.Freeze(shell))
                 {
-                    var delay = 40 * Math.Min(i, 6);
-                    if (delay > 0)
+                    shell.ShowTab("play");
+                    Assert.Same(play, shell.EnteringTab);
+                    for (var i = 0; i < targets.Length; i++)
                     {
-                        shell.StepTabTransition(delay - 1);
-                        AtRest(targets[i]);
+                        var delay = 40 * Math.Min(i, 6);
+                        var (fade, rise) = (Track(targets[i], "Opacity"), Track(targets[i], "Translation"));
+                        Assert.Equal((delay, 220, delay, 260), (fade.DelayMs, fade.DurationMs, rise.DelayMs, rise.DurationMs));
                     }
-                    shell.StepTabTransition(delay);
-                    Assert.Equal(0, targets[i].Opacity);
-                    Assert.Equal(10, Assert.IsType<global::Avalonia.Media.TranslateTransform>(targets[i].RenderTransform).Y);
-                    shell.StepTabTransition(delay + 110);
-                    Assert.Equal(0.75, targets[i].Opacity, 5); // half of the 220 ms quadratic fade
+                    // What the compositor draws (WPF Services/MotionFx.cs:123-138): each card holds its base value
+                    // until its BeginTime, then starts at 0 and 10 px low while the card before it is already moving.
+                    (float, double) Drawn(Control c) => (CompositorTime.Opacity(c), CompositorTime.Translation(c).Y);
+                    for (var slot = 0; slot <= 6; slot++)
+                    {
+                        time.RenderAt(40 * slot);
+                        foreach (var later in slot < 6 ? targets.Skip(slot + 1) : Enumerable.Empty<Control>())
+                            Assert.Equal((1f, 0d), Drawn(later));
+                        if (slot > 0)
+                        {
+                            Assert.InRange(CompositorTime.Opacity(targets[slot - 1]), 0.01, 0.99);
+                            Assert.InRange(CompositorTime.Translation(targets[slot - 1]).Y, 0.01, 9.99);
+                        }
+                        time.RenderAt(40 * slot + 1);
+                        Assert.InRange(CompositorTime.Opacity(targets[slot]), 0, 0.02);
+                        Assert.InRange(CompositorTime.Translation(targets[slot]).Y, 9.8, 10);
+                        Assert.Equal(1, targets[slot].Opacity); // the UI thread never animates the client value
+                    }
+                    Assert.Equal(Drawn(targets[6]), Drawn(targets[7])); // the eighth card shares the capped slot
+                    time.RenderAt(350); // six-slot cap: the seventh and eighth cards share 240 ms, half of the 220 ms fade
+                    Assert.Equal(0.75, CompositorTime.Opacity(targets[6]), 3);
+                    Assert.Equal(Drawn(targets[6]), Drawn(targets[7]));
+                    Assert.Equal(0.62, play.FindControl<Border>("PlayFocusCard")!.Opacity);
+                    Assert.Equal(0.62, CompositorTime.Opacity(play.FindControl<Border>("PlayFocusCard")!), 5);
+                    time.RenderAt(620);
+                    Assert.All(targets, t => Assert.Equal((1f, 0d), Drawn(t)));
                 }
-                shell.StepTabTransition(250);
-                Assert.Equal(targets[6].Opacity, targets[7].Opacity); // six-slot cap
-                Assert.Equal(0.62, play.FindControl<Border>("PlayFocusCard")!.Opacity);
 
                 shell.ShowTab("appsettings");
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
@@ -590,8 +605,7 @@ public sealed class PlayWallTests
                 shell.ShowTab("play");
                 Assert.Same(play, shell.EnteringTab);
                 Assert.All(targets, AtRest);
-                shell.StepTabTransition(100);
-                Assert.Equal(0.75, play.Opacity, 5); // WPF ChromeFx.cs:244 retains the crossfade
+                Assert.Equal(0.75, Track(play, "Opacity").At(100), 5); // WPF ChromeFx.cs:244 retains the crossfade
                 settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
                 shell.ShowTab("appsettings");
                 shell.ShowTab("play");

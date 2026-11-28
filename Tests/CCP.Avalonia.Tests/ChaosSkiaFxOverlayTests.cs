@@ -515,4 +515,62 @@ public sealed class ChaosSkiaFxOverlayTests
         }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task DvdSweepOfLiveBubbleEmitsSnapBurst() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var field = BubbleOverlay.Field;
+        var held = field.HoldChaos;
+        AmbientBubble? off = null, on = null;
+        try
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.FramesForTests = new SteppedFrames();
+            field.HoldChaos = false;
+            AmbientBubble Live() => new() { X = 150, Y = 150, Size = 100, Spec = new EffectBubbleSpec { Tint = 0xFFFF0000, IsLive = true } };
+            CoreSettings.Current.ChaosSkiaFxEnabled = false;
+            off = Live();
+            field.Bubbles.Add(off);
+            BubbleOverlay.PopChaosInRect(new Rect(190, 190, 20, 20));
+            Assert.True(off.Popping);
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+            CoreSettings.Current.ChaosSkiaFxEnabled = true;
+            on = Live();
+            field.Bubbles.Add(on);
+            BubbleOverlay.PopChaosInRect(new Rect(190, 190, 20, 20));
+            Assert.True(on.Popping);
+            var w = ChaosSkiaFxOverlay.Active;
+            Assert.NotNull(w);
+            var count = w.Fx.ParticleCount;
+            Assert.InRange(count, 20, 24);
+            using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(400, 400));
+            w.Fx.Render(surface.Canvas, new SkiaSharp.SKRectI(0, 0, 400, 400), 1, TimeSpan.Zero);
+            using var image = surface.Snapshot();
+            using var bitmap = SkiaSharp.SKBitmap.FromImage(image);
+            var body = bitmap.GetPixel(225, 200);
+            Assert.True(body.Blue > body.Red); // SnapColor, not the red tint
+            BubbleOverlay.PopChaosInRect(new Rect(190, 190, 20, 20));
+            Assert.Equal(count, w.Fx.ParticleCount);
+        }
+        finally
+        {
+            if (off != null) field.Bubbles.Remove(off);
+            if (on != null) field.Bubbles.Remove(on);
+            field.HoldChaos = held;
+            ChaosSkiaFxOverlay.CloseActive();
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            ChaosSkiaFxOverlay.FramesForTests = null;
+            CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
+        }
+        return Task.CompletedTask;
+    });
 }

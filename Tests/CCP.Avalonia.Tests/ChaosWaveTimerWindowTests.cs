@@ -53,6 +53,9 @@ public sealed class ChaosWaveTimerWindowTests
             Setup();
             ChaosWaveTimerWindow.SkipPlatformChecksForTests = true;
             CoreSettings.Current.ChaosPinOnTop = true;
+            // The Story backdrop's full-screen frames rasterise on the headless UI thread and starve the 60 ms kick.
+            var backdrop = CoreSettings.Current.BackdropEnabled;
+            CoreSettings.Current.BackdropEnabled = false;
             var originalRaise = ChaosWaveTimerWindow.RaiseWindow;
             int raises = 0;
             ChaosWaveTimerWindow.RaiseWindow = w =>
@@ -112,6 +115,7 @@ public sealed class ChaosWaveTimerWindowTests
                 video?.Close();
                 ChaosRunHost.ForceShutdown();
                 ChaosWaveTimerWindow.SkipPlatformChecksForTests = false;
+                CoreSettings.Current.BackdropEnabled = backdrop;
             }
         });
     }

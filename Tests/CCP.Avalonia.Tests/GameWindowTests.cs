@@ -697,7 +697,7 @@ public sealed partial class GameWindowTests
         w.HandleMessage("{\"type\":\"ready\"}");
         w.HandleMessage("{\"type\":\"ready\"}");
         Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
-        Assert.Equal(false, (bool?)sent[0]["prizeCounter"]);
+        Assert.Null(sent[0]["prizeCounter"]);
         Assert.Equal(reduced, (bool)sent[0]["reducedMotion"]!);
         Assert.Equal(speed, (double)sent[0]["gentleIntroSpeed"]!);
     });
@@ -953,6 +953,43 @@ public sealed partial class GameWindowTests
         return w;
     }
 
+    // WPF CaucusHostService.cs:131,219,263: launch, ready and relaunch return steering to the page.
+    [Theory]
+    [InlineData("open")]
+    [InlineData("ready")]
+    [InlineData("reopen")]
+    public void ClassicRace_ReturnsKeyboardToPage(string path) => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var race = new GameWindow(GameWindow.Games["raceclassic"]);
+        race.Web.Focusable = true;
+        race.Load(GameWindow.Server());
+        race.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            if (path != "open")
+            {
+                var other = new global::Avalonia.Controls.Button { Content = "Focus probe" };
+                var panel = new global::Avalonia.Controls.StackPanel();
+                race.Content = null;
+                panel.Children.Add(race.Web);
+                panel.Children.Add(other);
+                race.Content = panel;
+                Assert.True(other.Focus());
+                Assert.False(race.Web.IsFocused);
+                if (path == "ready") race.HandleMessage("{\"type\":\"ready\"}");
+                else Assert.Same(race, GameWindow.Launch("raceclassic"));
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.True(race.Web.IsFocused);
+            GameWindow.CloseAllForPanic();
+            race.HandleMessage("{\"type\":\"exit-done\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(race.IsVisible);
+        }
+        finally { race.Close(); }
+    });
+
     [Fact]
     public void ClassicDoor_OpensThe2DHostAndLauncherTile() => RunRace("rt.original.03", (launcher, _, _) =>
     {
@@ -1034,12 +1071,16 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Race_BootAndOnePayoutPerRun() => RunRace("rt.original.03", (_, xp, sparks) =>
     {
+        Directory.CreateDirectory(Path.Combine(CorePaths.EffectiveAssets, "images"));
+        File.WriteAllBytes(Path.Combine(CorePaths.EffectiveAssets, "images", "pic.png"), new byte[] { 1 });
         var w = OpenRetiredRace();
         Assert.Contains("dtrh/race.html", w.PageUrl!.AbsolutePath);
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
         Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
+        // Root-relative, the shape dtrh/hostMedia.js counts as local (WebGL draws it), as GameWindow.Dtrh sends.
+        Assert.Equal("/ccp.assets/images/pic.png", (string?)sent[1]["images"]!.Single()["url"]);
         // WPF 7.2.3: the door is open, so init hands every track, not just the one owned.
         Assert.Equal(Enumerable.Range(0, ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1), sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
