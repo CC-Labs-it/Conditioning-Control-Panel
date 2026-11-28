@@ -296,6 +296,92 @@ public sealed class WallpaperHostTests
             Directory.Delete(folder, true);
         }
     });
+    /// <summary>WPF WallpaperService.cs:211,1011: panic drops the deferred remote retry, so a pool that lands
+    /// after it never puts a picture up.</summary>
+    [Fact]
+    public async Task PanicDropsThePendingRemoteRetry()
+    {
+        var previous = WallpaperHead.Service;
+        var folder = Directory.CreateTempSubdirectory("wallpaper-panic-remote-").FullName;
+        var s = CoreSettings.Current;
+        var saved = (s.WallpaperSourceFolder, s.WallpaperOriginalPath, s.MediaSource, s.RemoteMediaConsented);
+        try
+        {
+            (s.WallpaperSourceFolder, s.WallpaperOriginalPath, s.MediaSource, s.RemoteMediaConsented) = (Directory.CreateDirectory(Path.Combine(folder, "empty")).FullName, "", "online", true);
+            var file = Path.Combine(folder, "ccp_temp_remote_late.jpg");
+            File.WriteAllText(file, "fixture");
+            var gate = new TaskCompletionSource<List<string>>();
+            var applied = new List<string>();
+            var host = new WallpaperHost(new Recorder(applied)) { RemoteFetch = (_, _) => gate.Task, ReleaseRemote = _ => { } };
+            WallpaperHead.Service = host;
+            Assert.False(await host.ShuffleAsync()); // both pools empty: the retry is armed
+            PanicSurfaces.All.Single(x => x.Id == "wallpaper").Stop(null);
+            gate.SetResult(new() { Path.Combine(folder, "ccp_temp_remote_other.jpg"), file });
+            await host.LastFill;
+            await host.WhenIdle;
+            Assert.Empty(applied);
+            Assert.False(host.IsActive);
+        }
+        finally
+        {
+            WallpaperHead.Service = previous;
+            (s.WallpaperSourceFolder, s.WallpaperOriginalPath, s.MediaSource, s.RemoteMediaConsented) = saved;
+            Directory.Delete(folder, true);
+        }
+    }
+    /// <summary>WPF ScrolllerCopySweeper.cs:35,46: the hourly sweep takes an online wallpaper at the day limit and
+    /// the licence off switch takes every one; the desktop moves off them.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ScrolllerSweepAndOffSwitchReleaseTheRemoteWallpapers(bool offSwitch)
+    {
+        var previous = (WallpaperHead.Service, ScrolllerHead.TempDirs, LegacyWebViewCaches.RootsProvider);
+        var folder = Directory.CreateTempSubdirectory("wallpaper-off-switch-").FullName;
+        var s = CoreSettings.Current;
+        var saved = (s.WallpaperSourceFolder, s.WallpaperOriginalPath, s.MediaSource, s.RemoteMediaConsented);
+        try
+        {
+            (s.WallpaperSourceFolder, s.WallpaperOriginalPath, s.MediaSource, s.RemoteMediaConsented) = (Directory.CreateDirectory(Path.Combine(folder, "empty")).FullName, "", "online", true);
+            ScrolllerHead.TempDirs = () => Array.Empty<string>();
+            LegacyWebViewCaches.RootsProvider = () => Array.Empty<string>();
+            var file = Path.Combine(folder, "ccp_temp_remote_up.jpg");
+            File.WriteAllText(file, "fixture");
+            var batch = new List<string> { file };
+            var released = new List<string>();
+            var applied = new List<string>();
+            var host = new WallpaperHost(new Recorder(applied)) { RemoteFetch = (_, _) => { var b = batch; batch = new(); return Task.FromResult(b); }, ReleaseRemote = released.Add };
+            WallpaperHead.Service = host;
+            Assert.False(await host.ShuffleAsync());
+            await host.LastFill;
+            await host.WhenIdle;
+            Assert.Equal(new[] { file }, applied); // the retry put the online picture up
+            if (offSwitch) ScrolllerHead.PurgeAll("test");
+            else
+            {
+                ScrolllerHead.SweepAll();
+                await host.WhenIdle;
+                Assert.Empty(released); // a fresh one stays
+                File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddHours(-30));
+                ScrolllerHead.SweepAll();
+            }
+            await host.WhenIdle;
+            Assert.Equal(new[] { file }, released);
+            Assert.False(host.IsActive);
+        }
+        finally
+        {
+            (WallpaperHead.Service, ScrolllerHead.TempDirs, LegacyWebViewCaches.RootsProvider) = previous;
+            (s.WallpaperSourceFolder, s.WallpaperOriginalPath, s.MediaSource, s.RemoteMediaConsented) = saved;
+            Directory.Delete(folder, true);
+        }
+    }
+    private sealed class Recorder(List<string> applied) : IWallpaperPlatform
+    {
+        public string? Capture() => "original";
+        public bool Apply(string path) { applied.Add(path); return true; }
+        public bool Restore(string snapshot) => true;
+    }
     [Fact]
     public async Task PanicWallpaperEntryRestoresEvenWithoutShell()
     {
