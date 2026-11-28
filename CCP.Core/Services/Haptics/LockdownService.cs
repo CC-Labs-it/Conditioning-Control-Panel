@@ -220,7 +220,7 @@ public class LockdownService : IDisposable
         if (!_isActive) return;
 
         // Freeze hunt (#1747 #1748 #1760 #1721): one line with each step's ms when the end is slow.
-        var trace = Services.Diagnostics.StopTrace.Begin("lockdown end");
+        var trace = Services.Diagnostics.CoreStopTrace.Begin("lockdown end");
 
         // Stop timer
         _countdownTimer?.Dispose();
@@ -258,14 +258,14 @@ public class LockdownService : IDisposable
     /// throws, and the quest credit (ccp-bugs #1388) subscribes after the Possession, dose and audio
     /// layers, so one bad teardown would silently cost the player the Lockdown quest.
     /// </summary>
-    internal static void RaiseEach(Action? handlers, Services.Diagnostics.StopTrace? trace = null)
+    internal static void RaiseEach(Action? handlers, Services.Diagnostics.IStopTrace? trace = null)
     {
         if (handlers == null) return;
         foreach (var d in handlers.GetInvocationList())
         {
             try { ((Action)d)(); }
             catch (Exception ex) { Log.Warning("Lockdown: a deactivation handler failed: {Error}", ex.Message); }
-            trace?.Mark(Services.Diagnostics.StopTrace.HandlerName(d));
+            trace?.Mark(Services.Diagnostics.CoreStopTrace.HandlerName(d));
         }
     }
 

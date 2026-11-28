@@ -82,7 +82,7 @@ public class AssetsNudgeCardTests
     [Fact]
     public void Every_language_file_carries_the_text()
     {
-        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var f in files)

@@ -277,7 +277,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             try { return BambiSprite.StableMediaTitles(); }
             catch (Exception ex)
             {
-                App.Logger?.Debug("PromptAssembler: pool titles unavailable: {Error}", ex.Message);
+                Log.Debug("PromptAssembler: pool titles unavailable: {Error}", ex.Message);
                 return Array.Empty<string>();
             }
         }

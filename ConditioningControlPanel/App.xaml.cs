@@ -337,6 +337,8 @@ namespace ConditioningControlPanel
             // The settings model now lives in Core; Core code reads the live instance through
             // this. Settings is created later in OnStartup; the delegate reads it lazily.
             CoreSettings.ServiceProvider = () => Settings;
+            // Core stop paths (Lockdown end) time their steps with the head's StopTrace (7.4.2 freeze hunt).
+            Services.Diagnostics.CoreStopTrace.BeginProvider = Services.Diagnostics.StopTrace.Begin;
             // Web page audio into the recent-sounds ring (#1540 / #1549): the gate is in Core, the ring writer here.
             Services.Fyp.Online.ScrolllerWebGate.AttachHook = Services.Audio.WebAudioWatch.Attach;
             // The browser video gate's rules live in Core; the WebView2 engine half stays here.
