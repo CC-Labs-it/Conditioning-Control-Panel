@@ -1213,7 +1213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 var v = (_sliderVolume.Value / 100.0).ToString("0.###", CultureInfo.InvariantCulture);
                 var raw = await _videoBrowser.InvokeScriptAsync(DeeperPreview.LargestVideo(
                     "if(l._ccpVol!==" + v + "){" + VideoVolumeScript() + "}"
-                    + "return l.currentTime+'|'+(l.duration||0)+'|'+(l.paused?0:1);"));
+                    + "return l.currentTime+'|'+(l.duration||0)+'|'+(l.paused?0:1);", playerScroll: true));
 
                 if (load != _videoLoad || _pollDisabled || !_videoNavigated) return;
                 var parts = DeeperPreview.Unquote(raw).Split('|');
