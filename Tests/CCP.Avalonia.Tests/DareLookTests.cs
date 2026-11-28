@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -161,4 +162,43 @@ public class DareLookTests
         }
         finally { w.Close(); }
     });
+
+    // WPF DareLook.cs:1154: the card comes up 12 px and in, then rests at 0.
+    [Fact]
+    public void CardRisesIntoPlaceOnEntry() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        PanicSurfacesTests.EnsureApp();
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var saved = (s.MotionLevel, s.GentleVisuals);
+        var clock = new StepClock();
+        var w = new Window();
+        w.SetValue(StepClock.Property, clock.Instance);
+        try
+        {
+            s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            s.GentleVisuals = false;
+            DareLook.Shell(w, 400, "dares-probe");
+            w.Show();
+            var card = (Border)w.Content!;
+            double Y() => card.RenderTransform?.Value.M32 ?? 0;
+            clock.Step(0); clock.Step(1);
+            Assert.True(Y() > 3, $"entry starts low, was {Y()}");
+            Assert.True(card.Opacity < 0.2);
+            clock.Step(1000);
+            Assert.Equal(0, Y(), 3);
+            Assert.Equal(1, card.Opacity, 3);
+        }
+        finally { (s.MotionLevel, s.GentleVisuals) = saved; w.Close(); }
+    });
+
+    private sealed class StepClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(global::Avalonia.Animation.Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property =
+            (AvaloniaProperty)typeof(global::Avalonia.Animation.Animatable).GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
 }
