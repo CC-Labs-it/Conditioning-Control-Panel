@@ -205,6 +205,27 @@ public sealed class LeashPunishTests
         finally { LockCardWindow.ForceCloseAll(); (PanicSurfaces.All, s.PanicKeyEnabled) = (oldSurfaces, oldKey); }
     });
 
+    [Fact]
+    public void BlinkStopParksLinesBeforeClosingCards() => Run((shell, launcher, svc, host, runner) =>
+    {
+        var previous = PanicSurfaces.All;
+        try
+        {
+            StartFromTheGate(shell, launcher, host, runner);
+            LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
+            PanicSurfaces.All = previous.Where(x => x.Id is "leash-task" or "lock-cards").ToArray();
+            MainShellWindow.StopAllForRecalibration(shell);
+            Now += LeashTaskRunner.LockCardRetry + TimeSpan.FromSeconds(1);
+            runner.Tick();
+            Assert.False(runner.IsRunning);
+            Assert.Equal(1, host.Shows);
+            Assert.NotNull(svc.GateDue);
+            shell.CheckLeashGate();
+            Assert.False(shell.LeashGate!.IsUp);
+        }
+        finally { LockCardWindow.ForceCloseAll(); PanicSurfaces.All = previous; }
+    });
+
     /// <summary>The real LeashTaskHost: a pending video punishment opens LOCKED (refuses a close), a task watch does not;
     /// the page's 'leash-ended' / 'leash-error' reach the runner; the clock sample and local media lookups.</summary>
     [Fact]

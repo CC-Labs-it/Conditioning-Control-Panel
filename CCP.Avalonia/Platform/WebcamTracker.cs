@@ -517,6 +517,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (!run.Thread!.Join(TimeSpan.FromSeconds(5)))
             {
                 _wedged = run.Thread;
+                SetTrackingState(WebcamTrackingState.Error);
                 Log.Warning("[Webcam] capture thread did not exit in 5s; abandoned, it closes the camera when it exits");
             }
             Log.Information("[Webcam] tracking stopped");

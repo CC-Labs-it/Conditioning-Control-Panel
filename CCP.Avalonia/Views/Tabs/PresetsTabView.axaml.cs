@@ -556,6 +556,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ConditioningControlPanel.Services.LockdownPanicHold.RestoreAfterApply(cur, panicBefore);
             CoreSettings.Save();
             CoreEngine.Reconcile();
+            Controls.AppSettings.AudioSettingsBinder.RaiseChanged(); // WPF LoadSettings mirrors audio to Home.
             RefreshPresetsList();
             Serilog.Log.Information("Loaded preset: {Name}", preset.Name);
             return true;
@@ -1253,7 +1254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 (global::Avalonia.Data.Binding)new global::ConditioningControlPanel.Avalonia.Localization.StrExtension(key).ProvideValue(null!));
 
         /// <summary>WPF BtnRevealSpoilers_Click (MainWindow.Presets.cs:641): hide at once, or three
-        /// sequential warnings before the spoilers show. Enter keeps the mystery (safe answer).</summary>
+        /// sequential warnings before the spoilers show.</summary>
         private async void BtnRevealSpoilers_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
             if (SessionSpoilerPanel.IsVisible)
@@ -1265,10 +1266,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (TopLevel.GetTopLevel(this) is not Window owner) return;
             for (var i = 1; i <= 3; i++)
             {
-                if (!await Dialogs.MessageDialog.ConfirmAsync(owner, Loc.Get($"spoiler_warning{i}_title"),
-                        Loc.Get($"spoiler_warning{i}_body"), defaultToCancel: true,
-                        okText: Loc.Get($"spoiler_warning{i}_yes"), cancelText: Loc.Get($"spoiler_warning{i}_no")))
-                    return;
+                var dialog = new Dialogs.MessageDialog(Loc.Get($"spoiler_warning{i}_title"),
+                    Loc.Get($"spoiler_warning{i}_body"), showCancel: true,
+                    okText: Loc.Get($"spoiler_warning{i}_yes"), cancelText: Loc.Get($"spoiler_warning{i}_no"));
+                dialog.UseStyledYesNoOrder();
+                if (await dialog.ShowDialogSafe<bool?>(owner) != true) return;
             }
             SessionSpoilerPanel.IsVisible = true;
             SetRevealLabel("btn_hide_details");
