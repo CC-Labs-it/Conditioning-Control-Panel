@@ -61,16 +61,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 if (!window.__ccpMuted) video.muted = false;
                 const goFullscreen = () => {
                     if (window._ccpTakeoverStopped) return;
+                    post({ type: 'fsAsk' });
                     if (video.requestFullscreen) {
                         const request = video.requestFullscreen();
                         if (request && request.catch) request.catch(err => post({ type: 'fsDenied',
-                            reason: String((err && (err.name || err.message)) || err).slice(0, 60) }));
+                            reason: String((err && ((err.name || '') + ': ' + (err.message || ''))) || err).slice(0, 90),
+                            connected: video.isConnected, visibility: document.visibilityState,
+                            activation: !!(navigator.userActivation && navigator.userActivation.isActive) }));
                     } else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
                     else if (video.msRequestFullscreen) video.msRequestFullscreen();
                 };
                 video.play().then(goFullscreen).catch(() => {
                     video.addEventListener('playing', goFullscreen, { once: true });
                 });
+            })();
+            """;
+
+        // WPF MainWindow.Browser.cs:2999-3018. Never restart a stopped or ended video.
+        internal const string FullscreenRecheckScript = """
+            (function() {
+                if (window._ccpTakeoverStopped || document.fullscreenElement || document.webkitFullscreenElement) return;
+                var v = document.querySelector('video');
+                if (!v || v.ended || !v.requestFullscreen) return;
+                try {
+                    var p = v.requestFullscreen();
+                    if (p && p.catch) p.catch(function(err) {
+                        try {
+                            var message = JSON.stringify({ type: 'fsDenied',
+                                reason: 'recheck ' + String((err && ((err.name || '') + ': ' + (err.message || ''))) || err).slice(0, 80),
+                                activation: !!(navigator.userActivation && navigator.userActivation.isActive), focus: document.hasFocus() });
+                            if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(message);
+                            else window.chrome.webview.postMessage(message);
+                        } catch (_) {}
+                    });
+                } catch (_) {}
             })();
             """;
 

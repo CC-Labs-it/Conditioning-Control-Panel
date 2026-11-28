@@ -23,7 +23,9 @@ internal static class Win32Windows
     [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint from, uint to, bool attach);
 
     // WPF AvatarTubeWindow.ChatInput.cs:680. Never leave input threads attached.
-    internal static void FocusChatWindow(Window window)
+    internal static void FocusChatWindow(Window window) => FocusWindow(window);
+
+    internal static void FocusWindow(Window window)
     {
         if (!OperatingSystem.IsWindows()) return;
         try
@@ -44,7 +46,7 @@ internal static class Win32Windows
             }
             finally { if (attached) AttachThreadInput(thisThread, otherThread, false); }
         }
-        catch (Exception ex) { Serilog.Log.Debug(ex, "Chat foreground failed"); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Window foreground failed"); }
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]

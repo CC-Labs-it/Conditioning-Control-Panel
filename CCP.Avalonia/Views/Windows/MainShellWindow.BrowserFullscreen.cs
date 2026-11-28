@@ -69,6 +69,7 @@ public partial class MainShellWindow
 
     private void BrowserFullscreenNavigationStarted()
     {
+        CancelTakeoverGestureRetry();
         _browserNavigationFullscreenSession = _browserFullscreenWindow == null ? null : _browserFullscreenSession;
         ExitBrowserPopoutFullscreen();
     }
@@ -88,6 +89,7 @@ public partial class MainShellWindow
     private void EnterBrowserFullscreen()
     {
         if (_browserFullscreenWindow != null || _browserFullscreenHost is not { } host) return;
+        CancelTakeoverGestureRetry();
         // WPF :2821-2828 RemoteBrowserStopRule.HideBrowser: the remote card refuses page fullscreen unless the
         // page is the controller's own video (#4423).
         if (Named<Border>("RemoteControlOverlay")?.IsVisible == true && !_remoteBrowserVideoActive)
@@ -226,6 +228,7 @@ public partial class MainShellWindow
 
     private void DisposeBrowserFullscreen()
     {
+        CancelTakeoverGestureRetry();
         ExitBrowserPopoutFullscreen();
         if (_browserFullscreenHost is not { } host) return;
         host.NativeFullscreenEntered -= EnterBrowserFullscreen;

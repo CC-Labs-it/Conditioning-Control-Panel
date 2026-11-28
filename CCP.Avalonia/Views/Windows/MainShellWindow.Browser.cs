@@ -141,6 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void CancelVideoAutoPlay()
         {
             ++_browserRequestGeneration;
+            CancelTakeoverGestureRetry();
             LockCardWindow.CancelWebVideoTakeover();
             if (_cutHost != null)
             {
@@ -185,6 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             await BrowserAutoPlayDelay();
             if (request != _browserRequestGeneration) return;
+            if (!playlist) ArmTakeoverGestureRetry(host);
             // BambiCloud playlists take their own autoplay script (WPF AutoPlayBambiCloudPlaylistAsync).
             if (playlist)
             {

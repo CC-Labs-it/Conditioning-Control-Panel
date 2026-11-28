@@ -52,4 +52,25 @@ public partial class WebHost
         };
         await core.AddScriptToExecuteOnDocumentCreatedAsync(script);
     }
+    // DevTools gesture execution is provided by WebView2; WebKit has no equivalent here.
+    internal Func<string, Task>? FullscreenGestureInvoker { get; set; }
+    internal bool CanRetryFullscreenGesture => FullscreenGestureInvoker != null ||
+        (OperatingSystem.IsWindows() && _web?.TryGetPlatformHandle() is IWindowsWebView2PlatformHandle w && w.CoreWebView2 != IntPtr.Zero);
+
+    internal Task RetryFullscreenWithGesture(string parameters)
+    {
+        if (FullscreenGestureInvoker is { } invoke) return invoke(parameters);
+        if (!OperatingSystem.IsWindows()) return Task.CompletedTask;
+        return RetryFullscreenWindows(parameters);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private Task RetryFullscreenWindows(string parameters)
+    {
+        if (_web?.TryGetPlatformHandle() is not IWindowsWebView2PlatformHandle win || win.CoreWebView2 == IntPtr.Zero)
+            return Task.CompletedTask;
+        var core = Microsoft.Web.WebView2.Core.CoreWebView2.CreateFromComICoreWebView2(win.CoreWebView2);
+        return core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", parameters);
+    }
 }
