@@ -51,7 +51,8 @@ public partial class InstallerHandoffContractTests
         Assert.Equal("dialog", Directive(iss, "PrivilegesRequiredOverridesAllowed"));
         Assert.DoesNotMatch(@"(?im)^\s*UninstallFilesDir\s*=", iss);
         Assert.Contains("Path.Combine(exeDir, \"unins000.exe\")", Read("CCP.Core/Services/Update/ReleaseFeed.cs"));
-        var mutex = Directive(iss, "AppMutex");
+        // Main 7c880bf4d2 (installer.iss:21,104,648,662) names the mutex through the MyAppMutex define.
+        var mutex = Expand(iss, Directive(iss, "AppMutex"));
         Assert.Equal("ConditioningControlPanel_SingleInstance_Mutex", mutex);
         foreach (var head in new[] { "ConditioningControlPanel/App.xaml.cs", "CCP.Avalonia/Platform/SingleInstance.cs" })
             Assert.Contains("const string MutexName = \"" + mutex + "\"", Read(head));
@@ -61,7 +62,7 @@ public partial class InstallerHandoffContractTests
             Assert.Contains("DestName: \"{#MyAppExeName}\"", iss);
             var checks = Regex.Matches(iss, @"CheckForMutexes\('([^']+)'\)");
             Assert.Equal(2, checks.Count);
-            foreach (Match check in checks) Assert.Equal(mutex, check.Groups[1].Value);
+            foreach (Match check in checks) Assert.Equal(mutex, Expand(iss, check.Groups[1].Value));
         }
         var exe = Define(iss, "MyAppExeName");
         Assert.Equal("ConditioningControlPanel.exe", exe);

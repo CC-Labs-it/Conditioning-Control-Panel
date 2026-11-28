@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
                     StartConditioningTimeTracker();   // ... and StartEngine :423
-                    PinkFilterOverlay.Refresh(this);
+                    PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);
                     SpiralOverlay.Refresh(this);
                     Log.Information("Started session: {Name} ({Difficulty}, +{XP} XP)", session.Name, session.Difficulty, session.BonusXP);
                 }
@@ -156,7 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (App.Sessions is not { IsPaused: true } r) return;
                     if (SessionClockSafety.ResumeStartsEngine(CoreEngine.IsRunning, RemoteControllerConnected)) StartEngineFromUser();
                     else r.Resume();
-                    PinkFilterOverlay.Refresh(this);
+                    PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);
                     SpiralOverlay.Refresh(this);
                     SetPauseButton(false);
                     OnSessionTick();
@@ -184,7 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF SessionEngine.cs:530 -> OverlayService.Stop:471: pause drops sustained holds too.
             SpiralOverlay.Stop();
             PinkFilterOverlay.Stop();
-            PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
+            PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
             OnSessionTick();
@@ -268,7 +268,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF Session/SessionEngine.cs:799,814: ramps reclaim opacity after a voice command.
             PinkFilterOverlay.ApplySessionOpacity(runner.PinkOpacity);
             var voiceSpiralChanged = SpiralOverlay.ApplySessionOpacity(runner.SpiralOpacity);
-            PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
+            PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
             // The same for SessionRunner.SpiralOpacity (SessionEngine.cs:731, 823), only when the start or the
             // ramp moved it: a Refresh enumerates screens and probes the file. A landing decode refreshes itself.
             var spiralKey = (CoreSettings.Current.SpiralEnabled, runner.SpiralOpacity);

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.FirstShow;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;
@@ -33,6 +34,9 @@ public class FirstShowRemoteConsentTests
                 var emi = new EmiDeskWindow { Left = -10000, Top = -10000, Opacity = 0 };
                 var show = new FirstShowDesktopWindow(true, emi, null)
                 {
+                    // The preview voice plays at 65% with no App.Settings: in the shared test process
+                    // that loaded wmp.dll and failed every later RowsRender.AssertSilent (sync/73-linux CI).
+                    Silent = true,
                     CurrentSettings = () => s,
                     ConsentOverride = (title, message) =>
                     {
@@ -47,6 +51,7 @@ public class FirstShowRemoteConsentTests
                     var pick = show.Pick(preset);
                     Assert.True(pick.IsCompleted);   // every seam answers at once
                     pick.GetAwaiter().GetResult();
+                    Assert.False(show.AudioHasPlayer);   // silent: no MediaPlayer, so no wmp.dll
                 }
                 finally { show.Close(); emi.Close(); }
             });
@@ -118,25 +123,16 @@ public class FirstShowRemoteConsentTests
             foreach (var key in new[] { "title_remote_media_consent", "msg_remote_media_consent" })
                 Assert.False(string.IsNullOrWhiteSpace((string?)file[key]), $"{lang}.json lacks {key}");
             if (lang != "en") continue;
-            // Read from source, not through Loc: other suites switch the live language.
-            foreach (var head in new[] { "ConditioningControlPanel/MainWindow/MainWindow.Assets.cs", "CCP.Avalonia/Views/Tabs/AssetsTabView.MediaPicker.cs" })
-            {
-                var source = System.IO.File.ReadAllText(System.IO.Path.Combine(SourceRoots.RepoRoot, head));
-                Assert.Equal((string?)file["title_remote_media_consent"], Fallback(source, "title_remote_media_consent"));
-                Assert.Equal((string?)file["msg_remote_media_consent"], Fallback(source, "msg_remote_media_consent"));
-            }
+            // Both heads fall back to the shared RemoteMediaConsentCopy; read the file, not Loc: other suites switch the live language.
+            Assert.Equal(RemoteMediaConsentCopy.Title, (string?)file["title_remote_media_consent"]);
+            Assert.Equal(RemoteMediaConsentCopy.Message, (string?)file["msg_remote_media_consent"]);
         }
-    }
-
-    /// <summary>The English a <c>LocOr("key", "..." + "...")</c> call falls back to, unescaped.</summary>
-    private static string Fallback(string source, string key)
-    {
-        int start = source.IndexOf("LocOr(\"" + key + "\",", StringComparison.Ordinal);
-        Assert.True(start >= 0, "no LocOr for " + key);
-        start += key.Length + 9;
-        int end = source.IndexOf(')', start);
-        var parts = System.Text.RegularExpressions.Regex.Matches(source[start..end], "\"((?:[^\"\\\\]|\\\\.)*)\"");
-        return string.Concat(System.Linq.Enumerable.Select(parts, m => System.Text.RegularExpressions.Regex.Unescape(m.Groups[1].Value)));
+        // Each head's helper must fall back to those constants: the title pair first, then the message pair.
+        const string Shared = @"RemoteMediaConsentText\(\)\s*=>\s*\(\s*"
+            + @"LocOr\([\w.]*RemoteMediaConsentCopy\.TitleKey,\s*[\w.]*RemoteMediaConsentCopy\.Title\),\s*"
+            + @"LocOr\([\w.]*RemoteMediaConsentCopy\.MessageKey,\s*[\w.]*RemoteMediaConsentCopy\.Message\)\);";
+        foreach (var head in new[] { "ConditioningControlPanel/MainWindow/MainWindow.Assets.cs", "CCP.Avalonia/Views/Tabs/AssetsTabView.MediaPicker.cs" })
+            Assert.Matches(Shared, System.IO.File.ReadAllText(System.IO.Path.Combine(SourceRoots.RepoRoot, head)));
     }
 
     /// <summary>Not consent, so not asked: the licence switch off, a spent share or Offline mode load as before
