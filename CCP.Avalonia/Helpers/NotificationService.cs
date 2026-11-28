@@ -24,6 +24,8 @@ namespace ConditioningControlPanel.Avalonia.Helpers
     /// </summary>
     public sealed class NotificationService
     {
+        public NotificationHistoryBuffer<NotificationType> History { get; } = new();
+
         private Panel? _host;
         private readonly List<(string message, NotificationType type, TimeSpan? duration, string? key,
             string? actionLabel, Action? action, string? secondaryLabel, Action? secondaryAction)> _pending = new();
@@ -94,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         private Border BuildToast(string message, NotificationType type, string? stickyKey,
             string? actionLabel, Action? action, string? secondaryActionLabel = null, Action? secondaryAction = null)
         {
+            History.Record(DateTime.Now, type, message);
             var accent = new SolidColorBrush(Color.Parse(type switch
             {
                 NotificationType.Success => "#4CAF50",
