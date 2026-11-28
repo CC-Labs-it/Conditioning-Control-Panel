@@ -36,6 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 _videoAnnouncementShowing = false;
                 LockReactionGeneration++;
                 try { StopAvatarGlow(); } catch { }
+                try { StopClickBounce(); } catch { }
                 // WPF Speech.cs:1881 leaves look-picker fades running; only settle pending roster paint.
                 try { if (_rosterAvatarSwitchPending) CancelAvatarSwitch(finishRoster: true); } catch { }
                 try { _stopSpoken(); } catch { }

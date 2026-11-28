@@ -2,6 +2,7 @@
 using System;
 using Avalonia;
 using Avalonia.Data;
+using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
@@ -16,6 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal void HandleAvatarClick()
         {
             PulseAvatarGlow();
+            PlayClickBounce();
             App.Achievements?.TrackAvatarClick();
             var now = SpeechNow;
             if ((now - _avatarLastClick).TotalMilliseconds < 300)
@@ -24,6 +26,50 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 else if (CoreSettings.Current.AiChatEnabled && CoreAi.IsAvailable) OpenChatInput();
             }
             _avatarLastClick = now;
+        }
+
+        // WPF ChatInput.cs:154-177. A separate host composes with the chat reply bounce.
+        private BeatLoop? _clickBounceLoop;
+        private ScaleTransform? _clickBounceScale;
+
+        private void PlayClickBounce()
+        {
+            StopClickBounce();
+            var host = this.FindControl<global::Avalonia.Controls.Grid>("ClickBounceHost");
+            if (host == null) return;
+            _clickBounceScale = new ScaleTransform(1, 1);
+            host.RenderTransform = _clickBounceScale;
+            _clickBounceLoop = new BeatLoop(host, seconds => StepClickBounce(seconds * 1000)) { OnParked = StopClickBounce };
+            _clickBounceLoop.Start();
+        }
+
+        internal void StepClickBounce(double ms)
+        {
+            if (_clickBounceScale == null) return;
+            if (ms >= 300) { StopClickBounce(); return; }
+            double t = Math.Clamp(ms / 80, 0, 1);
+            double value;
+            if (ms <= 80) value = 1 + 0.015 * (1 - Math.Pow(1 - t, 3));
+            else
+            {
+                t = (ms - 80) / 220;
+                // WPF ElasticEase, one oscillation, springiness 7, ease out.
+                double u = 1 - t;
+                double easeIn = (Math.Exp(7 * u) - 1) / (Math.Exp(7) - 1) * Math.Sin((2 * Math.PI + Math.PI / 2) * u);
+                value = 1 + 0.015 * easeIn;
+            }
+            _clickBounceScale.ScaleX = _clickBounceScale.ScaleY = value;
+        }
+
+        private void OnClickBounceEngineStopped(object? sender, EventArgs e) => RunOnAvatar(StopClickBounce);
+
+        private void StopClickBounce()
+        {
+            _clickBounceLoop?.Stop();
+            _clickBounceLoop = null;
+            var host = this.FindControl<global::Avalonia.Controls.Grid>("ClickBounceHost");
+            if (host != null) host.RenderTransform = null;
+            _clickBounceScale = null;
         }
 
         // WPF ChatInput.cs:116-142: pulse the active image shadow, then restore it.
