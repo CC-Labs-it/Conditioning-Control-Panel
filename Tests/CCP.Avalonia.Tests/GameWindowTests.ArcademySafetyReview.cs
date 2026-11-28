@@ -133,6 +133,44 @@ public sealed partial class GameWindowTests
         }
         finally { w.Close(); (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = old; }
     });
+    /// <summary>WPF ArcademyHostService.cs:4971-4981, 5034: a waiter stays behind the fetch it queued on, and a fetch for new subs waits for the one in the air.</summary>
+    [Fact]
+    public void Arcademy_PileChangeKeepsWaitersWithTheirFetch() => Run((_, _) =>
+    {
+        var s = CoreSettings.Current; var old = (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource);
+        var w = new GameWindow(GameWindow.ArcademySpec); var frames = new List<JObject>();
+        var pending = new System.Collections.Concurrent.ConcurrentDictionary<string, TaskCompletionSource<List<FypAssetManifest.Entry>>>();
+        w.Posted += json => frames.Add(JObject.Parse(json));
+        w.ArcademyFetchForTests = (_, subs) => (pending[subs[0]] = new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+        void Land(string pile) => (SpinWait.SpinUntil(() => pending.ContainsKey(pile), TimeSpan.FromSeconds(10)) ? pending[pile] : throw new TimeoutException(pile)).SetResult(Enumerable.Range(1, 3).Select(i => new FypAssetManifest.Entry
+            { Id = "scrolller/" + pile + "/" + i, Url = $"https://example.com/{pile}{i}.jpg", Type = "image", Folder = "r/" + pile }).ToList());
+        string[] Final(string id)
+        {
+            Assert.True(SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return frames.Any(f => (string?)f["reqId"] == id && (bool?)f["done"] == true); }, TimeSpan.FromSeconds(10)));
+            return ((JArray)frames.Last(f => (string?)f["reqId"] == id)["urls"]!).Select(u => (string)u["url"]!).ToArray();
+        }
+        void Ask(string id, string pile) => w.HandleMessage($"{{\"type\":\"assets-request\",\"reqId\":\"{id}\",\"count\":1,\"subs\":[\"{pile}\"],\"tag\":\"target\"}}");
+        try
+        {
+            (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = (false, true, "online");
+            Ask("a", "cats"); Ask("b", "cats");
+            Assert.True(SpinWait.SpinUntil(() => pending.ContainsKey("cats"), TimeSpan.FromSeconds(10)));
+            Ask("d", "dogs"); Ask("e", "dogs");
+            // The pile's coordinator reads one shared sub list: the dogs fetch waits until the cats one has its rows (WPF :4971-4981).
+            Assert.False(SpinWait.SpinUntil(() => pending.ContainsKey("dogs"), TimeSpan.FromMilliseconds(300)));
+            Assert.DoesNotContain(frames, f => (string?)f["reqId"] is "b" or "e" && (bool?)f["done"] == true);
+            Land("cats");
+            Assert.Equal(new[] { "https://example.com/cats1.jpg" }, Final("a"));
+            Assert.Equal(new[] { "https://example.com/cats2.jpg" }, Final("b"));
+            Land("dogs");
+            Assert.Equal(new[] { "https://example.com/dogs1.jpg" }, Final("d"));
+            Assert.Equal(new[] { "https://example.com/dogs2.jpg" }, Final("e"));
+            Ask("f", "dogs");   // the stale cats batch is not the dogs pile's stock
+            Assert.Equal(new[] { "https://example.com/dogs3.jpg" }, Final("f"));
+            Assert.Equal(2, pending.Count);
+        }
+        finally { w.Close(); (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = old; }
+    });
     [Theory]
     [InlineData("samples")]
     [InlineData("settings")]
