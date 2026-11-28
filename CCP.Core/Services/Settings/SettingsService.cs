@@ -22,6 +22,10 @@ namespace ConditioningControlPanel.Services
         // settings.json aside. See that method for why nothing may write after it.
         private volatile bool _sealed;
 
+        // Recovery and publication may run in different service instances for the same file.
+        // Keep a loader from deleting an in-flight temp or holding the destination during replace.
+        private static readonly object SettingsFileGate = new();
+
         // Serializes the rotate+write half of SaveImmediate. Without it two overlapping saves
         // (debounce timer thread + a direct UI-thread call) could File.Move each other's
         // half-written temp over settings.json (#761). Never taken while _timerLock is held,
@@ -82,6 +86,7 @@ namespace ConditioningControlPanel.Services
 
         // Per-instance seam for deterministic lifecycle proofs; production keeps the 500ms default.
         internal int SaveDebounceDueTimeMilliseconds { get; set; } = 500;
+        internal Action? BeforeAtomicPublishForTest { get; set; }
         internal Action<bool>? DebouncedSaveCompletedForTest { get; set; }
 
         public AppSettings Current { get; private set; }
@@ -201,14 +206,21 @@ namespace ConditioningControlPanel.Services
                 // per-write temp name now, so glob (the legacy fixed settings.json.tmp matches too)
                 // and only adopt a candidate that still parses — a truncated temp must never be
                 // promoted to settings.json.
-                RecoverAndCleanTempFiles();
-
-                if (File.Exists(_settingsPath))
+                string? json;
+                lock (SettingsFileGate)
                 {
-                    using var stream = OpenSettingsRead(_settingsPath);
-                    using var reader = new StreamReader(stream);
-                    var json = reader.ReadToEnd();
+                    RecoverAndCleanTempFiles();
+                    json = null;
+                    if (File.Exists(_settingsPath))
+                    {
+                        using var stream = OpenSettingsRead(_settingsPath);
+                        using var reader = new StreamReader(stream);
+                        json = reader.ReadToEnd();
+                    }
+                }
 
+                if (json != null)
+                {
                     // Use explicit settings to ensure lists are REPLACED, not merged with defaults.
                     // Error handler makes the load RESILIENT: a single unparseable member (e.g. an
                     // enum value renamed/removed in a new release, which StringEnumConverter throws
@@ -973,6 +985,7 @@ namespace ConditioningControlPanel.Services
                 Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
 
                 lock (_saveLock)
+                lock (SettingsFileGate)
                 {
                     // Sealed while this snapshot was being serialized: the reset owns the file now.
                     if (_sealed) return false;
@@ -1006,6 +1019,7 @@ namespace ConditioningControlPanel.Services
                             writer.Flush();
                             stream.Flush(true);
                         }
+                        BeforeAtomicPublishForTest?.Invoke();
                         BeforeAtomicPublishForTests?.Invoke(tempPath);
                         PublishAtomicFile(tempPath);
                     }
