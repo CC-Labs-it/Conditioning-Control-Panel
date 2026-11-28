@@ -97,7 +97,7 @@ public sealed class MandatoryVideoFloatingTests
         var saved = (s.MandatoryVideoFloating, s.AttentionChecksEnabled, s.AudioDuckingEnabled, s.MandatoryVideoFloatingSizePercent);
         var o = MandatoryVideoOverlay.Instance;
         var clip = Path.Combine(Path.GetTempPath(), "ccp-missing-" + Guid.NewGuid().ToString("N") + ".mp4");
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             EnsureApp();
             try
@@ -105,6 +105,7 @@ public sealed class MandatoryVideoFloatingTests
                 (s.MandatoryVideoFloating, s.AttentionChecksEnabled, s.AudioDuckingEnabled, s.MandatoryVideoFloatingSizePercent) = (true, true, false, 33);
 
                 o.Show(clip, strict: false);
+                await MandatoryVideoOverlayTests.Until(() => o.Windows.Count == 1);
                 var w = Assert.Single(o.Windows);
                 Assert.True(o.Floating);
                 Assert.False(o.AttentionArmed, "a floating video has no attention checks");
@@ -123,6 +124,7 @@ public sealed class MandatoryVideoFloatingTests
 
                 // Strict always covers the screen, and keeps its attention checks.
                 o.Show(clip, strict: true);
+                await MandatoryVideoOverlayTests.Until(() => o.Windows.Count == 1);
                 w = Assert.Single(o.Windows);
                 Assert.False(o.Floating);
                 Assert.True(o.AttentionArmed);
@@ -132,6 +134,7 @@ public sealed class MandatoryVideoFloatingTests
                 // Floating off: full screen as always.
                 s.MandatoryVideoFloating = false;
                 o.Show(clip, strict: false);
+                await MandatoryVideoOverlayTests.Until(() => o.Windows.Count == 1);
                 Assert.False(o.Floating);
                 Assert.Equal(WindowState.FullScreen, Assert.Single(o.Windows).WindowState);
             }
@@ -140,7 +143,6 @@ public sealed class MandatoryVideoFloatingTests
                 o.CloseAll();
                 (s.MandatoryVideoFloating, s.AttentionChecksEnabled, s.AudioDuckingEnabled, s.MandatoryVideoFloatingSizePercent) = saved;
             }
-            return Task.CompletedTask;
         });
     }
 }

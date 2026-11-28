@@ -6,7 +6,7 @@
 // snapshot the UI thread keeps fresh on every focus change, never a tree walk off-thread.
 // The dashboard's ClickChoiceBody is marked (SettingsTabView.ClickChoice.cs, WPF SettingsTabView.xaml.cs:18),
 // as is Circe's Tab price box (ChasterTabView.PriceEdit.cs); both call Taken() in their Escape handler.
-// The friends drawer is marked by type below.
+// The popup friends drawer marks its instance; the Friends page does not claim Escape.
 // X11 also matches palette and lock-card presses by their shared native event timestamp.
 
 using System;

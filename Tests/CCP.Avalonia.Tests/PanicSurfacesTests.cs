@@ -17,6 +17,42 @@ namespace CCP.Avalonia.Tests;
 /// capture, a player or a host is in that registry (or allowlisted with the reason it needs no entry).</summary>
 public sealed class PanicSurfacesTests
 {
+    internal sealed class CountHost : ConditioningControlPanel.Services.IBubbleCountHost
+    {
+        public Action<bool>? Done;
+        public double LastVideoDurationSeconds => 60;
+        public void Show(string path, int difficulty, bool strict, Action<bool> done) => Done = done;
+        public void ShowMessage(string text, int ms, Action then) { }
+        public void CloseAll() { }
+    }
+
+    [Fact]
+    public void EnginePanicSuppressesLateBubbleCountResults() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var clock = new BubbleCountQueueTests.Clock(); var host = new CountHost();
+        var previous = CoreEngine.BubbleCount;
+        using var game = new ConditioningControlPanel.Services.BubbleCountScheduler(host, clock, () => new[] { "/test.mp4" });
+        int events = 0; game.GameCompleted += () => events++; game.GameFailed += () => events++;
+        CoreEngine.BubbleCount = game;
+        try
+        {
+            game.Trigger(true); clock.Advance(ConditioningControlPanel.Services.BubbleCountScheduler.LeadIn);
+            Assert.NotNull(host.Done);
+            PanicSurfaces.All.Single(s => s.Id == "engine").Stop(null!);
+            host.Done!(true); host.Done!(false);
+            Assert.False(game.IsBusy); Assert.Equal(0, events);
+        }
+        finally { game.ForceCleanup(); CoreEngine.BubbleCount = previous; }
+    });
+
+    [Fact]
+    public void Remote_haptics_panic_surface_invalidates_pending_remote_commands()
+    {
+        var generation = ConditioningControlPanel.Services.RemoteCommands.PanicGeneration;
+        PanicSurfaces.All.Single(s => s.Id == "remote-haptics").Stop(null);
+        Assert.NotEqual(generation, ConditioningControlPanel.Services.RemoteCommands.PanicGeneration);
+    }
+
     [Fact]
     public void Bubble_surface_clears_variant_bubbles_on_panic() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -180,9 +216,11 @@ public sealed class PanicSurfacesTests
         "intake",
         "leash-task",
         "personality-studio",
+        "deeper-editor-error",
         "deeper-tutorial",
         "workshop-trigger-editor",
         "awareness-companion",
+        "awareness-observer",
         "tour",
         "games",
         "upgrade-intro",

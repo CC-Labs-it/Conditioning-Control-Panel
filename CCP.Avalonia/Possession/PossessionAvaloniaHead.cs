@@ -9,9 +9,8 @@
 // attribution = this head's EmberAttribution, barks = BarkHead's Core engine with WPF BarkService's
 // context fields (BarkService.cs:398-416).
 //
-// Not on this head yet (honest no-ops, recorded in docs/avalonia-parity.html shell-possession):
-// two scenes, the reactive adapter (WPF PossessionEvents), the warden (Warden stays
-// null, so every warden verb is skipped as WPF does when the tube is unavailable).
+// The director, reactive adapter and warden run on this head; remaining scenes and effects are
+// recorded in docs/avalonia-parity.html shell-possession.
 
 using System;
 using System.Collections.Generic;
@@ -165,12 +164,14 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new CrackEffect());
             list.Add(new RelabelEffect());
             list.Add(new MisrouteEffect());
+            list.Add(new ReorderDoorsEffect());
             list.Add(new RoomWarpEffect());
             list.Add(new GlitchPortraitEffect());
             list.Add(new StealCardEffect());
             list.Add(new ToastEffect());
             list.Add(new SwapEffect());
             list.Add(new GhostCursorEffect());
+            list.Add(new FallEffect());
             return list;
         }
 
@@ -191,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             Settings = () => CoreSettings.Service?.Current,
             MainHost = () => (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as IPossessionHost,
             Attribution = AttributionFor,
+            StopReleasedEffects = host => DokiDialogEffect.StopFades(host),
             Pointer = () => LastPointer(),
             BoundsOf = (host, el) => host is IAvaloniaPossessionHost h && el is Control c && h.BoundsOnGhostLayer(c) is { } r
                 ? (r.X, r.Y, r.Width, r.Height)
@@ -222,10 +224,14 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         /// <summary>WPF App.xaml.cs:3506-3515 + 2975: the director over this lockdown, the ember tick / dip
         /// cues, the remembered charge and the companion prompt's possession state.</summary>
+        internal static Warden? Warden { get; set; }
+
         internal static PossessionDirector Install(LockdownService lockdown)
         {
             HookShutdown();
-            var director = new PossessionDirector(lockdown, CreateEffects(), CreateDirectorHead());
+            Warden?.Dispose();
+            Warden = new Warden(lockdown);
+            var director = new PossessionDirector(lockdown, CreateEffects(), CreateDirectorHead()) { Warden = Warden };
             PossessionAudio.Install(lockdown, director);
             InstallRemember(lockdown);
             global::ConditioningControlPanel.Services.Companion.Brain.PromptAssembler.PossessionState = () =>
