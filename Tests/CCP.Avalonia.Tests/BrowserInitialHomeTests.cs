@@ -144,7 +144,14 @@ public sealed class BrowserInitialHomeTests
         Assert.Equal(before, host.BrowserZoom); // no engine
         host.ScriptInvoker = _ => Task.FromResult<string?>(null);
         System.Threading.CancellationToken pending = default;
-        host.ZoomInvoker = (_, token) => pending = token;
+        double native = 1;
+        host.ZoomInvoker = (value, token) => { native = value; pending = token; };
+        host.ZoomStepInvoker = (direction, token, done) =>
+        {
+            pending = token;
+            native = Math.Round(Math.Clamp(native + direction * 0.1, 0.25, 5.0), 2);
+            done(native);
+        };
         host.BrowserZoomAdapterReady();
         host.SetBrowserZoom(0.5);
         Click(plus);
@@ -161,6 +168,41 @@ public sealed class BrowserInitialHomeTests
         foreach (var surface in PanicSurfaces.All)
             if (surface.Id == "browser-media") surface.Stop(shell);
         Assert.True(pending.IsCancellationRequested);
+    });
+
+    [Fact]
+    public Task ToolbarZoomUsesTheCurrentNativeValue() => Run((shell, page, host, mod) =>
+    {
+        host.ScriptInvoker = _ => Task.FromResult<string?>(null);
+        double native = 1;
+        host.ZoomInvoker = (value, _) => native = value;
+        host.ZoomStepInvoker = (direction, _, completed) =>
+        {
+            native = Math.Round(Math.Clamp(native + direction * 0.1, 0.25, 5.0), 2);
+            completed(native);
+        };
+        host.BrowserZoomAdapterReady();
+        host.SetBrowserZoom(0.5);
+        native = 1.4; // a Ctrl+scroll change made inside the browser
+        page.FindControl<Button>("BtnBrowserZoomIn")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(1.5, native);
+        Assert.Equal(1.5, host.BrowserZoom);
+    });
+
+    [Fact]
+    public Task ToolbarZoomBeforeAdapterReadyIsDiscarded() => Run((shell, page, host, mod) =>
+    {
+        host.ScriptInvoker = _ => Task.FromResult<string?>(null);
+        var steps = 0;
+        host.ZoomStepInvoker = (_, _, _) => steps++;
+        var plus = page.FindControl<Button>("BtnBrowserZoomIn")!;
+        plus.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(0, steps);
+        Assert.Null(host.BrowserZoom);
+        host.BrowserZoomAdapterReady();
+        Assert.Equal(0, steps); // the earlier click must not be replayed
+        plus.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(1, steps);
     });
 
     private static void WithVideoSettings(Action check)

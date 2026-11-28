@@ -49,4 +49,22 @@ public class WebViewZoomTests
         }
         finally { Marshal.FreeHGlobal(controller); Marshal.FreeHGlobal(table); GC.KeepAlive(set); }
     }
+    [Fact]
+    public void WindowsStepReadsTheLiveControllerValue()
+    {
+        double value = 1.4;
+        WebViewZoom.WinGetFn get = (IntPtr _, out double zoom) => { zoom = value; return 0; };
+        WebViewZoom.WinSetFn set = (IntPtr _, double zoom) => { value = zoom; return 0; };
+        var table = Marshal.AllocHGlobal(9 * IntPtr.Size);
+        var controller = Marshal.AllocHGlobal(IntPtr.Size);
+        try
+        {
+            Marshal.WriteIntPtr(table, 7 * IntPtr.Size, Marshal.GetFunctionPointerForDelegate(get));
+            Marshal.WriteIntPtr(table, 8 * IntPtr.Size, Marshal.GetFunctionPointerForDelegate(set));
+            Marshal.WriteIntPtr(controller, table);
+            Assert.Equal(1.5, WebViewZoom.StepWindows(controller, 1));
+            Assert.Equal(1.5, value);
+        }
+        finally { Marshal.FreeHGlobal(controller); Marshal.FreeHGlobal(table); GC.KeepAlive(get); GC.KeepAlive(set); }
+    }
 }

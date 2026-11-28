@@ -13,6 +13,7 @@ public partial class WebHost
     private bool _zoomAdapterReady;
     private int _zoomGeneration;
     internal Action<double, CancellationToken>? ZoomInvoker { get; set; }
+    internal Action<int, CancellationToken, Action<double>>? ZoomStepInvoker { get; set; }
     internal double? BrowserZoom => _zoom;
     internal bool BrowserZoomReady { get; private set; }
 
@@ -55,6 +56,37 @@ public partial class WebHost
             ApplyBrowserZoom();
             BrowserZoomReady = _zoomAdapterReady;
         }
+    }
+
+    // Unlike a navigation zoom request, a toolbar click is discarded until the adapter exists.
+    internal void StepBrowserZoom(int direction)
+    {
+        if (!HasEngine || !_zoomAdapterReady || direction == 0) return;
+        try
+        {
+            var handle = _web?.TryGetPlatformHandle();
+            if (ZoomStepInvoker == null && !WebViewZoom.IsReady(handle)) return;
+            _zoomEnabled = true;
+            _zoomPending ??= new CancellationTokenSource();
+            var token = _zoomPending.Token;
+            var generation = _zoomGeneration;
+            void Completed(double value)
+            {
+                void Update()
+                {
+                    if (!token.IsCancellationRequested && generation == _zoomGeneration && _zoomAdapterReady)
+                    {
+                        _zoom = value;
+                        BrowserZoomReady = true;
+                    }
+                }
+                if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Update();
+                else global::Avalonia.Threading.Dispatcher.UIThread.Post(Update);
+            }
+            if (ZoomStepInvoker is { } step) step(direction, token, Completed);
+            else WebViewZoom.Step(handle, direction, token, Completed);
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: zoom step failed"); }
     }
 
     internal void CancelBrowserZoom()

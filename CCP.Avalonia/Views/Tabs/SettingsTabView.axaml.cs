@@ -407,13 +407,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BtnReloadBrowser_Click(object? sender, RoutedEventArgs e) => Shell?.BtnReloadBrowser_Click(sender, e);
 
         // WPF MainWindow.Browser.cs AdjustBrowserZoom: only an available browser receives a step.
-        private void AdjustBrowserZoom(int direction)
-        {
-            if (!BrowserWebHost.HasEngine) return;
-            var current = BrowserWebHost.BrowserZoom ?? 1.0;
-            if (!double.IsFinite(current) || current <= 0) current = 1.0;
-            BrowserWebHost.SetBrowserZoom(Math.Round(Math.Clamp(current + direction * 0.10, 0.25, 5.0), 2));
-        }
+        private void AdjustBrowserZoom(int direction) => BrowserWebHost.StepBrowserZoom(direction);
         // Webcam, Mute, Pop out, Enhance and the BambiCloud override: SettingsTabView.BrowserCard.cs.
 
         // -- home audio card ------------------------------------------------------------
