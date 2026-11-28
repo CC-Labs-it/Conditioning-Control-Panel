@@ -552,19 +552,17 @@ public sealed class JustDropWindowTests
     });
 
     [Fact]
-    public void TheStripPillOpensTheShopOnlyAfterOpenIt() => Run(shell =>
+    public void TheStripHasNoPillAndTheWindowKeyOpensTheShop() => Run(shell =>
     {
         JustDropService.SetServerEnabledForTests(true);
         shell.ShowTab("presets");
-        var strip = shell.PageStrip!;
-        strip.PillFor("justdrop")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        // Declutter wave 2: Just Drop left the Studio strip for the launcher's Tools door (CCP.Core/Services/UI/
+        // NavSections.cs:70-72, hidden); WPF still opens the window from ShowTab("justdrop") (MainWindow.TabNavigation.cs:315).
+        Assert.Null(shell.PageStrip!.PillFor("justdrop"));
+        Assert.Null(Open());
+        shell.ShowTab("justdrop");
         Dispatcher.UIThread.RunJobs();
-        Assert.Null(Open());                              // the pill only asks
-        var yes = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(strip.ConfirmationCard!)
-            .OfType<global::Avalonia.Controls.Button>().Single(b => b.Name == "NavOpenWindowYes");
-        yes.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
-        Dispatcher.UIThread.RunJobs();
-        Assert.NotNull(Open());                           // Open it -> ShowTab -> OpenJustDrop -> GameWindow.Launch
+        Assert.NotNull(Open());                           // ShowTab -> OpenJustDrop -> GameWindow.Launch
         Assert.Equal("presets", shell.CurrentTab);
     });
 

@@ -89,7 +89,8 @@ public class LobbyDepthSeamTests
     [Fact]
     public void WashFeedsTheExistingRailAndQuestsPainters() => WithShell(w =>
     {
-        foreach (var tab in new[] { "play", "quests" })
+        // WPF MainWindow.TabNavigation.cs:265-276: "play" opens the launcher's Games door; Play paints on "playeyes".
+        foreach (var tab in new[] { "playeyes", "quests" })
         {
             w.ShowTab(tab); Dispatcher.UIThread.RunJobs();
             var hue = Color.FromUInt32(NavStripTable.AccentRgb(NavSections.SectionForTab(tab)!) | 0xFF000000);

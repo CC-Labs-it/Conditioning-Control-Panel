@@ -14,6 +14,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.UI;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -45,7 +46,9 @@ public sealed class WhatMovedCardParityTests
     [InlineData("lobby", "availablesubjects", null)]
     [InlineData("monitors", "appsettings", "monitors")]
     [InlineData("tabs", "studio", null)]
-    [InlineData("games", "play", null)]
+    // WPF MainWindow.WhatMoved.cs:91 ShowTab("play") and MainWindow.TabNavigation.cs:265-276: the old Games key
+    // opens the launcher's Games door and leaves the panel on its tab (the dashboard here).
+    [InlineData("games", "settings", null)]
     public Task EveryShowMeButtonClosesAndLandsOnItsRealDestination(string id, string tab, string? section) => WithShell(shell =>
     {
         var card = shell.ShowWhatMovedCard(readMode: true);
@@ -64,8 +67,16 @@ public sealed class WhatMovedCardParityTests
         Assert.Equal(WhatMovedPlan.Rows.Count, icons.Count);
         Assert.All(icons, g => Assert.False(g.IsFallback, $"unmapped row icon {g.Emoji}"));
         var show = buttons.Single(b => ((WhatMovedRow)b.Tag!).Id == id);
-        show.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, show));
-        Dispatcher.UIThread.RunJobs();
+        var oldDoor = PanelDoorLink.OpenLauncherDoor;
+        string? door = null;
+        PanelDoorLink.OpenLauncherDoor = d => door = d;
+        try
+        {
+            show.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, show));
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally { PanelDoorLink.OpenLauncherDoor = oldDoor; }
+        Assert.Equal(id == "games" ? PanelDoorLink.Games : null, door);
         Assert.False(card.IsVisible);
         Assert.Equal(tab, shell.CurrentTab);
         Assert.Equal(7, CoreSettings.Current.WhatMovedCardShown); // Help replay never spends another offer

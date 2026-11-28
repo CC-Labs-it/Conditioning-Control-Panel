@@ -116,6 +116,10 @@ public sealed class LauncherEntranceTests
     [Fact]
     public void Buttons_PressAndReleaseSquish() => Run(MotionLevel.Off, (_, w, _) =>
     {
+        // WPF Windows/Launcher/LauncherWindow.Doors.cs:57-60: the launcher lands on its doors and the
+        // games grid is the Games door's page, so a user reaches a tile's Play through that door.
+        w.SeatDoorPage(LauncherDoor.Games);
+        w.UpdateLayout(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();   // one frame of the page before a pointer can reach it
         var tile = (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[0];
         var play = tile.GetVisualDescendants().OfType<Button>().Last();
         foreach (var button in new[] { play, w.FindControl<Button>("PanelCta")! })

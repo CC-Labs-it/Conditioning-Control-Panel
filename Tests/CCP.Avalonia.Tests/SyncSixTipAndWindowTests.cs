@@ -67,7 +67,7 @@ public sealed class SyncSixTipAndWindowTests
     });
 
     [Fact]
-    public Task JustDropPillAsksAndOnlyAnAffirmativeAnswerRequestsTheWindow() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task WindowPillAsksAndOnlyAnAffirmativeAnswerRequestsTheWindow() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Platform();
         var enabled = typeof(JustDropService).GetField("ServerEnabled", BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -78,19 +78,21 @@ public sealed class SyncSixTipAndWindowTests
         {
             enabled.SetValue(null, true);
             Assert.True((bool)canOpen.Invoke(null, new object[] { tab })!);
-            // Observe the strip's request without opening a web host.
+            // Observe the strip's request without opening a web host. Just Drop has no pill since declutter
+            // wave 2 (CCP.Core/Services/UI/NavSections.cs:70-72, hidden; WPF opens it from the launcher's Tools
+            // door), so the strip's one visible window pill, Play's Games (NavSections.cs:96), carries the ask.
             var isolated = new SectionTabStrip { MotionOverride = MotionLevel.Off };
             var host = new Window { Content = isolated, Width = 1400, Height = 160 };
             try
             {
                 host.Show();
-                isolated.Show(NavSections.Studio, "presets");
+                isolated.Show(NavSections.Play, "playeyes");
                 host.UpdateLayout();
                 int requests = 0;
                 isolated.TabRequested += _ => requests++;
-                void Click() => isolated.PillFor("justdrop")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                void Click() => isolated.PillFor("play")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Click();
-                Assert.Equal("justdrop", isolated.ConfirmingKey);
+                Assert.Equal("play", isolated.ConfirmingKey);
                 Assert.Equal(0, requests);
                 isolated.AnswerConfirmForTests(false);
                 Assert.Null(isolated.ConfirmingKey);
@@ -98,7 +100,7 @@ public sealed class SyncSixTipAndWindowTests
                 Click();
                 isolated.AnswerConfirmForTests(true);
                 Assert.Equal(1, requests);
-                Assert.Equal("presets", isolated.ActivePillKey);
+                Assert.Equal("playeyes", isolated.ActivePillKey);
                 Click();
                 isolated.Rebuild();
                 Assert.Null(isolated.ConfirmingKey);
