@@ -2053,6 +2053,8 @@ namespace ConditioningControlPanel.Avalonia
                     s.ActiveCompanionId = (int)og.CompanionId;
                 }
                 if (changed) settings.Save();
+                // WPF App.xaml.cs:2798 retries legacy personality migration on every launch.
+                new ConditioningControlPanel.Services.PersonalityService().MigrateFromLegacy(s);
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Settings migration failed (non-fatal, defaults apply)"); }
         }
