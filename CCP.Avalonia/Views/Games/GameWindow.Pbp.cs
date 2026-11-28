@@ -282,6 +282,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             PostPbpWardrobe();
             PbpEquipPending = PullPbpEquip();
             RefreshPbpOwnership();
+            _ = PullPbpStock();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>

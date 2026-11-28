@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.PrizeCounter;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -82,6 +83,28 @@ internal sealed partial class GameWindow
         var grants = PbpChessGrants();
         Post(PbpLookRules.OwnedFrame(grants));
         Post(PbpLookRules.LookFrame(PbpLookRules.Clamp(PbpLookRules.Read(CoreSettings.Current.ChessLook).Look, grants)));
+    }
+    // WPF PieceByPieceHostService.Wardrobe.cs:141-158: away chess rows and their return dates.
+    private async Task PullPbpStock()
+    {
+        var uid = CoreAccount.UnifiedUserId;
+        var token = PbpAuthToken();
+        var url = PbpServerBase()?.TrimEnd('/');
+        if (string.IsNullOrEmpty(uid) || string.IsNullOrEmpty(token) || string.IsNullOrEmpty(url)) return;
+        var ct = _pbpEquipLifetime.Token;
+        try
+        {
+            using var request = PrizeCounterRelay.BuildRequest(PrizeCounterRelay.OpState, (uid, token), null, null, url);
+            using var response = await PbpHttpClient().SendAsync(request, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return;
+            var frame = PbpLookRules.StockFrame(JToken.Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false)));
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (!ct.IsCancellationRequested && !_closing && _pbpOpen && CoreAccount.UnifiedUserId == uid)
+                    Post(frame);
+            });
+        }
+        catch (Exception ex) { Log.Debug("PieceByPiece: stock pull failed: {E}", ex.Message); }
     }
     private void PickPbpLook(JObject message)
     {
