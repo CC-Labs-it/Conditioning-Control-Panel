@@ -346,7 +346,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
             Floating = Floats(strict);
             _videoFadeSeconds = Floating ? Services.Safety.GentleVisuals.FadeSeconds : 0;
-            _revealAudioHeld = false;
+            _revealAudioHeld = _volumeHeld = false;
             // WPF LightsDownService.Attach: VideoStarted posts TryStart, after the windows exist.
             Dispatcher.UIThread.Post(() => LightsDownOverlay.Start(this));
 
@@ -392,7 +392,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _playingEngine = vlc;
             _player = new MediaPlayer(vlc!) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
             _playback = new NativeMandatoryPlayback(_player);
+            // Silent until the volume re-applied after Play lands (WPF VideoService.cs:4007-4015).
+            _volumeHeld = true;
+            _playback.SetAudioOff(true);
             ApplyVolume(_player);
+            var volume = _volumePlayer;
             var blur = s.VideoBlurredBackgroundEnabled;
             Media? sinkMedia = null;
             _sink = new VlcFrameSink(_player, () => sinkMedia, GuardPresentation<WriteableBitmap>(bmp =>
@@ -439,6 +443,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
             }));
             var live = _player;
+            _player.Playing += (_, _) => volume?.Reapply(() => Dispatcher.UIThread.Post(() => { if (_player == live) ReleaseVolumeHold(); }));
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (OnPlayerPlaying(_player == live))
             {
@@ -522,7 +527,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// Settings · Audio live. UI thread (teardown runs there too).</summary>
         internal void UpdateVolume()
         {
-            if (_player is { } p) ApplyVolume(p);
+            PlayerVolume = EffectivePlayerVolume;
+            _sessionVolume.Push(PlayerVolume);
             foreach (var f in _floaters) ApplyInstanceVolume(f);
             _browser?.SetVolume(PlayerVolume = EffectivePlayerVolume);
             _refreshFloating?.Invoke();
@@ -587,7 +593,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
             var buttons = inst == null ? new VideoButtons(ToggleUserMute, CloseFromButton)
-                : new VideoButtons(() => ToggleInstanceMute(inst),   // WPF VideoService.Controls.cs:157-159: a lock refuses and hides the X
+                : new VideoButtons(ToggleUserMute,   // WPF VideoService.Controls.cs:67,157-159: the shared mute; a lock refuses and hides the X
                     () => { if (!CloseAllowed) HideCloseButtons(); else CloseInstance(inst, "close button"); });
             var w = new Window
             {
@@ -616,7 +622,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
                 Func<bool> audible = inst == null
                     ? () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0 && HasFloatingSound(w)
-                    : () => inst.Playback?.IsPlaying == true && !inst.UserMuted && !inst.Held && HasFloatingSound(w);
+                    : () => inst.Playback?.IsPlaying == true && !_userMuted && !inst.Held && HasFloatingSound(w);
                 w.Opened += (_, _) =>
                 {
                     ApplyFloatingPassive(w);
@@ -1497,7 +1503,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 SafetyDeadline.Reset();
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
-                _userMuted = false;
+                if (!retire) _userMuted = false;
                 _graceTimer?.Stop();
                 _guard?.Stop();
                 _graceTimer = _guard = null;
@@ -1511,6 +1517,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var owner = _playingEngine;
                 var media = _media;
                 var sink = _sink;
+                sink?.Detach();
+                if (playback is NativeMandatoryPlayback native) native.PrepareForTeardown();
+                var volumeClose = _volumePlayer?.CloseAsync() ?? Task.CompletedTask;
+                _volumePlayer = null;
                 _playback = null;
                 _browser = null;
                 CloseControlHosts();
@@ -1557,6 +1567,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         try
                         {
                             await stop.ConfigureAwait(false);
+                            await volumeClose.ConfigureAwait(false);
                             playback.Dispose();
                             media?.Dispose();
                             Dispatcher.UIThread.Post(() => sink?.Free());

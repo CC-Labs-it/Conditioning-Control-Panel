@@ -30,6 +30,7 @@ internal sealed partial class MandatoryVideoOverlay
         public Window Window => Surface.Window;
         public IMandatoryPlayback? Playback { get; set; }
         public MediaPlayer? Player;
+        public VlcVolumePump.Player? VolumePlayer;
         public Media? Media;
         public VlcFrameSink? Sink;
         public WriteableBitmap? Fill;
@@ -37,7 +38,7 @@ internal sealed partial class MandatoryVideoOverlay
         public VideoReveal? Fade;
         public readonly Stopwatch SinceReady = new();
         public long StartMs, PlayedMs;
-        public bool FrameSeen, Revealed, Closed, UserMuted, Held, CutStartChosen;
+        public bool FrameSeen, Revealed, Closed, Held, VolumeHeld, CutStartChosen;
     }
 
     /// <summary>Joined windows, oldest first; the run's own clip is older than all of them. UI thread only.</summary>
@@ -162,8 +163,17 @@ internal sealed partial class MandatoryVideoOverlay
                 var player = f.Player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
                 f.Playback = new NativeMandatoryPlayback(player);
                 f.Playback.SetAudioOff(true);   // WPF :534-535 (WatchInstance re-applies once the track exists)
+                f.VolumeHeld = true;   // until the volume re-applied after Play lands (WPF VideoService.cs:4007-4015)
                 ApplyInstanceVolume(f);
-                f.Sink = new VlcFrameSink(player, () => f.Media, bmp => f.Surface.Video.Source = bmp, () =>
+                var volume = f.VolumePlayer;
+                player.Playing += (_, _) => volume?.Reapply(() => Dispatcher.UIThread.Post(() =>
+                {
+                    if (f.Closed || !f.VolumeHeld) return;
+                    f.VolumeHeld = false;
+                    ApplyInstanceVolume(f);
+                }));
+                Media? sinkMedia = null;
+                f.Sink = new VlcFrameSink(player, () => sinkMedia, bmp => f.Surface.Video.Source = bmp, () =>
                 {
                     f.FrameSeen = true;
                     if (f.Sink?.Bitmap is { } frame) UpdateFloatingFill(f, frame, s.VideoBlurredBackgroundEnabled);
@@ -179,7 +189,7 @@ internal sealed partial class MandatoryVideoOverlay
                 // Never torn down on LibVLC's own thread.
                 player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => CloseInstance(f, "clip ended", watchedToEnd: true));
                 player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => CloseInstance(f, "player error"));
-                f.Media = new Media(vlc, play, VideoSelectionRules.IsRemoteMediaPath(play) ? FromType.FromLocation : FromType.FromPath);
+                f.Media = sinkMedia = new Media(vlc, play, VideoSelectionRules.IsRemoteMediaPath(play) ? FromType.FromLocation : FromType.FromPath);
                 foreach (var option in RemoteVideoOptions.For(play)) f.Media.AddOption(option);
                 if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } sw) f.Media.AddOption(sw);
                 player.Play(f.Media);
@@ -279,33 +289,29 @@ internal sealed partial class MandatoryVideoOverlay
         if (f.Closed || !ControlsAllowed) return;
         WatchForLocks();   // WPF VideoService.Controls.cs:66
         f.Surface.Buttons.Close.IsVisible = CloseAllowed;
-        f.Surface.Buttons.SetMuted(f.UserMuted);
+        f.Surface.Buttons.SetMuted(_userMuted);   // WPF VideoService.Controls.cs:67: the shared mute
         f.Surface.Buttons.Row.IsVisible = true;
     }
 
-    private void ToggleInstanceMute(FloatingInstance f)
-    {
-        if (f.Closed) return;
-        f.UserMuted = !f.UserMuted;
-        ApplyInstanceVolume(f);
-        f.Surface.Buttons.SetMuted(f.UserMuted);
-        _refreshFloating?.Invoke();
-    }
-
     /// <summary>LibVLC volume is shared by the whole process on Windows (one audio session for every player), so a
-    /// joined window's own mute and its reveal hold go through its audio track, like WPF ApplyPrimaryAudioTrack
-    /// (VideoService.FloatingInstances.cs:74-75, :378-401); the volume only follows Settings, the same for all.</summary>
+    /// joined window's audio focus and its reveal hold go through its audio track, like WPF ApplyPrimaryAudioTrack
+    /// (VideoService.FloatingInstances.cs:74-75, :378-401); volume and global mute are shared.</summary>
     private void ApplyInstanceVolume(FloatingInstance f)
     {
         if (f.Player is { } p)
-            p.Volume = MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
+        {
+            if (f.VolumePlayer == null)
+            {
+                f.VolumePlayer = _sessionVolume.Add(value => p.Volume = value, EffectivePlayerVolume);
+            }
+        }
         if (f.Surface is null) return;   // the reveal holds the sound while the window is still being built
         try { f.Playback?.SetAudioOff(InstanceAudioOff(f)); }
         catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
     }
 
-    /// <summary>Silent unless it holds the focus, is not muted by its own button and is not held by its reveal.</summary>
-    private bool InstanceAudioOff(FloatingInstance f) => f.UserMuted || f.Held || !_audioFocus.HasSound(f.Window);
+    /// <summary>Silent unless it holds the focus and is not held by its reveal (the mute button is the shared volume).</summary>
+    private bool InstanceAudioOff(FloatingInstance f) => f.Held || f.VolumeHeld || !_audioFocus.HasSound(f.Window);
 
     /// <summary>WPF OnFloatingTouched (:256-260): a pressed window takes the sound.</summary>
     internal void TouchFloating(Window w)
@@ -317,7 +323,7 @@ internal sealed partial class MandatoryVideoOverlay
     private void ApplyAudioFocus()
     {
         var primary = Floating && _surfaces.Count > 0 ? _surfaces[0].Window : null;
-        try { if (primary != null && _audioFocus.Items.Contains(primary)) _playback?.SetAudioOff(!_audioFocus.HasSound(primary)); }
+        try { if (primary != null) _playback?.SetAudioOff(_revealAudioHeld || _volumeHeld || !_audioFocus.HasSound(primary)); }
         catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
         foreach (var f in _floaters)
         {
@@ -387,10 +393,28 @@ internal sealed partial class MandatoryVideoOverlay
         catch (Exception ex) { Log.Debug("VideoService: floating position read failed - {Error}", ex.Message); }
         if (f.PlayedMs >= 1000) CoreProgression.TrackVideoWatched(f.PlayedMs / 1000.0);
         if (watchedToEnd) App.ChasterNote("video");
-        // As CloseAll: Stop joins the decoder thread, so no frame callback outlives the buffer.
-        try { f.Playback?.Stop(); } catch { }
-        try { f.Playback?.Dispose(); } catch { }
-        try { f.Media?.Dispose(); } catch { }
+        var playback = f.Playback;
+        var media = f.Media;
+        var sink = f.Sink;
+        sink?.Detach();
+        if (playback is NativeMandatoryPlayback native)
+        {
+            native.PrepareForTeardown();
+            _ = VlcPlaybackRetirement.Retire(f.VolumePlayer, native.Stop, native.Dispose,
+                () => Dispatcher.UIThread.Post(() =>
+                        {
+                            try { media?.Dispose(); } catch (Exception ex) { Log.Debug("Video media disposal failed: {Error}", ex.Message); }
+                            sink?.Free();
+                        }));
+        }
+        else
+        {
+            try { playback?.Stop(); } catch { }
+            try { playback?.Dispose(); } catch { }
+            try { media?.Dispose(); } catch { }
+            sink?.Free();
+        }
+        f.VolumePlayer = null;
         f.Playback = null;
         f.Player = null;
         f.Media = null;
@@ -405,7 +429,6 @@ internal sealed partial class MandatoryVideoOverlay
             x.Reveal?.Cancel();
             x.Window.Close();
         }
-        f.Sink?.Free();
         f.Sink = null;
         f.Fill?.Dispose();
         f.Fill = null;

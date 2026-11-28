@@ -22,6 +22,7 @@ using ConditioningControlPanel.Services.Video;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Avalonia.Threading;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -97,6 +98,7 @@ public sealed class MandatoryVideoFloatingHostTests
             return Task.CompletedTask;
         });
 
+    private static int Sound() => MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
     [Fact]
     public Task Joined_blur_uses_its_own_frames_and_panic_releases_it() => Run((o, decoders) =>
     {
@@ -577,20 +579,22 @@ public sealed class MandatoryVideoFloatingHostTests
         Assert.False(decoders[1].AudioOff, "then the newest takes the sound");
     });
 
-    // LibVLC volume is one process-wide session on Windows (WPF VideoService.FloatingInstances.cs:74-75): a joined
-    // window's own mute and its closing hold silence its audio track, never the shared volume the other window plays at.
+    // LibVLC volume is one process-wide session on Windows (WPF VideoService.FloatingInstances.cs:74-75): every window's
+    // mute button is the shared mute (WPF VideoService.Controls.cs:67,80,157) and a closing hold silences only its own track.
     [Fact]
-    public Task A_joined_windows_mute_and_close_silence_only_its_own_track() => Run((o, decoders) =>
+    public Task A_joined_windows_mute_is_shared_and_its_close_silences_only_its_own_track() => Run((o, decoders) =>
     {
         o.Scheduler.Trigger();
         o.Scheduler.Trigger();
         Assert.Same(decoders[2], decoders.Single(d => d.AudioOff != true));   // the newest has the sound
         var newest = o.Floaters[1];
         newest.Surface.Buttons.Mute.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.True(newest.UserMuted);
-        Assert.True(decoders[2].AudioOff, "its own mute deselects its track");
+        Assert.True(o.UserMuted && o.PlayerVolume == 0, "a joined window's button mutes the shared volume");
+        Assert.All(o.Floaters, f => Assert.Equal(IconKind.SpeakerMute, f.Surface.Buttons.MuteGlyph.Kind));
+        Assert.False(decoders[2].AudioOff, "the audio focus stays a separate track-level switch");
         newest.Surface.Buttons.Mute.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.False(decoders[2].AudioOff, "unmuted, the focus holder plays again");
+        Assert.True(!o.UserMuted && o.PlayerVolume == Sound(), "pressed again, the sound is back");
+        Assert.All(o.Floaters, f => Assert.Equal(IconKind.Speaker2, f.Surface.Buttons.MuteGlyph.Kind));
 
         var middle = o.Floaters[0].Window;   // the middle window takes the sound, then the newest closes
         middle.MouseDown(new Point(5, 5), MouseButton.Left);
@@ -598,6 +602,22 @@ public sealed class MandatoryVideoFloatingHostTests
         Assert.False(decoders[1].AudioOff);
         newest.Surface.Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.False(decoders[1].AudioOff, "a closing window's hold leaves the holder's sound alone");
+    });
+
+    // The run's window muted, then closed while a joined one plays: the mute stays (one shared volume) and the
+    // remaining window's button shows it and lifts it (WPF VideoService.Controls.cs:72-81, :157).
+    [Fact]
+    public Task A_global_mute_outlives_the_first_window_and_the_remaining_button_lifts_it() => Run((o, _) =>
+    {
+        o.Scheduler.Trigger();
+        o.ToggleUserMute();
+        o.OnNaturalVideoEnd();   // the first window goes: the joined one carries the run
+        var left = Assert.Single(o.Floaters);
+        Assert.True(o.UserMuted && o.PlayerVolume == 0);
+        Assert.Equal(IconKind.SpeakerMute, left.Surface.Buttons.MuteGlyph.Kind);
+        left.Surface.Buttons.Mute.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(!o.UserMuted && o.PlayerVolume == Sound(), "the remaining window restores the sound");
+        Assert.Equal(IconKind.Speaker2, left.Surface.Buttons.MuteGlyph.Kind);
     });
 
     // WPF VideoService.cs:6444-6456: a Resume card on every screen holding a floating window, kept when its host closes.

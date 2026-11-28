@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed partial class MandatoryVideoOverlay
     {
         private volatile bool _userMuted;
-        private bool _revealAudioHeld;
+        private bool _revealAudioHeld, _volumeHeld;
         private bool _mutedAtClose;
         private object? _lockWatchOwner;
 
@@ -45,17 +45,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool CloseAllowed => MandatoryVideoControls.ShowClose(_strict, LockdownActive, LockedRun);
         private bool ControlsAllowed => MandatoryVideoControls.ShowMute(_strict, LockdownActive, LockedRun);
 
-        internal int EffectivePlayerVolume => (_userMuted || _revealAudioHeld) ? 0 :
+        internal int EffectivePlayerVolume => (_userMuted || (_revealAudioHeld && !Floating)) ? 0 :
             MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
 
         internal void HoldRevealAudio(bool held)
         {
             _revealAudioHeld = held;
+            if (Floating) ApplyAudioFocus();
             UpdateVolume();
         }
 
-        private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p) =>
-            p.Volume = PlayerVolume = EffectivePlayerVolume;
+        private readonly VlcVolumePump _sessionVolume = new();
+        private VlcVolumePump.Player? _volumePlayer;
+
+        private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p)
+        {
+            PlayerVolume = EffectivePlayerVolume;
+            if (_volumePlayer == null) _volumePlayer = _sessionVolume.Add(value => p.Volume = value, PlayerVolume);
+            else _sessionVolume.Push(PlayerVolume);
+        }
+
+        private void ReleaseVolumeHold()
+        {
+            if (!_volumeHeld) return;
+            _volumeHeld = false;
+            if (Floating) ApplyAudioFocus();
+            else
+            {
+                try { _playback?.SetAudioOff(false); }
+                catch (Exception ex) { Log.Debug("VideoService: audio release failed - {Error}", ex.Message); }
+            }
+        }
 
         /// <summary>WPF ShowVideoControls: after the picture fade completes, on every screen. UI thread.</summary>
         private void ShowVideoControls()
@@ -79,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _userMuted = !_userMuted;
             Log.Information("VideoService: mute button - video {State}", _userMuted ? "muted" : "unmuted");
             UpdateVolume();
-            foreach (var x in _surfaces) x.Buttons.SetMuted(_userMuted);
+            foreach (var x in AllSurfaces) x.Buttons.SetMuted(_userMuted);   // WPF :80: every window's button, joined ones too
         }
 
         /// <summary>WPF CloseVideoFromButton: the non-strict Esc dismiss, refused (and hidden) under a lock.</summary>
