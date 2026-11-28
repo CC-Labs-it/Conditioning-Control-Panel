@@ -306,7 +306,7 @@ public sealed class FriendNoticesTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task OverflowFilesTheOldestAndOnlyThreeTimersRun() => AvaloniaTestDispatcher.RunAsync(() => {
+    public Task OverflowFilesTheOldestAndOnlyTheVisibleTimersRun() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         int missed = 0;
         try {
@@ -315,7 +315,7 @@ public sealed class FriendNoticesTests
                 new NoticeLook { Missed = _ => missed++ });
             var w = FriendNotices.Current!;
             Assert.Equal(12, w.Stack.All.Count);
-            Assert.Equal(9, w.Stack.Hidden);
+            Assert.Equal(12 - ConditioningControlPanel.Services.Friends.FriendNoticeRules.MaxVisible, w.Stack.Hidden);   // corner notices draw 2 at most since 7.4
             Assert.Equal(1, missed);
             var hidden = w.Stack.All[3];
             w.Advance(1000);
