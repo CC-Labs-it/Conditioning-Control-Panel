@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>Keyboard slice of WPF KeywordTriggerService: audio, visual effect, haptic, XP, Chaster and avatar
 /// comment actions, plus the OCR consumer and scan lifecycle (restack b220, #4299). The OCR engine itself
-/// uses the Windows OCR helper; the Brain Drain visual remains a follow-up.</summary>
+/// uses the Windows OCR helper. The Brain Drain visual fires the shared melt payload (BubblePayloadHost).</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -662,6 +662,12 @@ internal sealed class KeywordAudioRuntime
                     break;
                 case KeywordVisualEffect.Bubbles:
                     BubbleEffect();
+                    break;
+                case KeywordVisualEffect.BrainDrain:
+                    // WPF KeywordTriggerService.cs:1872-1876: ten seconds of the Brain Drain melt (ccp-bugs #1214).
+                    // The payload stands down when a drain is already up or the blur dial is at 0
+                    // (BubblePayloadHost.BrainDrainMelt), so the keyword path needs no gate of its own.
+                    new ConditioningControlPanel.Services.Chaos.BrainDrainMeltPayload().Fire();
                     break;
             }
         }
