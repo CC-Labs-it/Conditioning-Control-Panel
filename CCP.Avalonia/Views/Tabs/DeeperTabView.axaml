@@ -429,7 +429,7 @@
 
                     <!-- WPF DeeperTabView.xaml:460: dismiss after Tour, Open Demo, or Got it. -->
                     <Border x:Name="DeeperWelcomeCard" x:FieldModifier="internal"
-                            IsVisible="{Binding ShowWelcomeCard}"
+                            IsVisible="False"
                             Theme="{StaticResource SettingCardStyle}">
                         <Grid>
                             <Border Background="{StaticResource DeeperHueWashBrush}" CornerRadius="11"/>

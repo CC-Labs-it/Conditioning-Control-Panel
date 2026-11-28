@@ -549,6 +549,27 @@ public sealed class DeeperHubTests
     });
 
     [Fact]
+    public Task DismissedWelcomeRemainsHiddenOnNewShell() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var old = settings.HasSeenDeeperWelcome;
+        MainShellWindow? shell = null;
+        try
+        {
+            settings.HasSeenDeeperWelcome = true;
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.ShowTab("deeper");
+            Dispatcher.UIThread.RunJobs();
+            var view = shell.Named<DeeperTabView>("DeeperTab")!;
+            Assert.False(view.FindControl<Border>("DeeperWelcomeCard")!.IsVisible);
+        }
+        finally { shell?.Close(); settings.HasSeenDeeperWelcome = old; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task SubmissionBadgeWelcomeCardAndRowLift() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
@@ -594,6 +615,8 @@ public sealed class DeeperHubTests
 
             // The welcome card's dismiss folds it and remembers it.
             var card = view.FindControl<Border>("DeeperWelcomeCard")!;
+            Assert.False(card.IsVisible);
+            w.StartDeeperTabTutorial();
             Assert.True(card.IsVisible);
             Click(view.FindControl<Button>("BtnDeeperWelcomeDismiss")!);
             Assert.False(card.IsVisible);

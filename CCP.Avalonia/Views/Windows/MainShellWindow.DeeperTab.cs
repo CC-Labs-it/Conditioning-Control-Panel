@@ -75,20 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The rescan rides ShowTab's "deeper" case (SwitchTabFx), as on WPF.
         }
 
-        /// <summary>
-        /// Shows the first-run welcome card until it has been dismissed once. Reached through
-        /// FindControl on the view, NOT through its x:FieldModifier="internal" field: DeeperTabView
-        /// loads with AvaloniaXamlLoader.Load(this), so that field is permanently null and a write
-        /// to it would compile, review clean and do nothing forever.
-        ///
-        /// The card's IsVisible ALSO carries {Binding ShowWelcomeCard} (DeeperTabView.axaml:444).
-        /// That binding is one-shot today - ShowWelcomeCard is a get-only `=> true` on a placeholder
-        /// view model with no change notification (DeeperTabView.axaml.cs:172), so it evaluates once
-        /// at load and never pushes again, and this local set wins and stays won. When that view
-        /// model becomes real and starts raising PropertyChanged, this write must move INTO it:
-        /// Avalonia keeps a binding alive under a local value, so the next push would silently undo
-        /// the line below (CLAUDE.md, "Porting a WPF view to Avalonia").
-        /// </summary>
+        /// <summary>Show the welcome card when the tutorial opens and it has not been dismissed.</summary>
         private void UpdateDeeperWelcomeCardVisibility()
         {
             try
