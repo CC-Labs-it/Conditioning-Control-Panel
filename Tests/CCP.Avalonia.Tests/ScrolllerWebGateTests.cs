@@ -39,8 +39,9 @@ public sealed class ScrolllerWebGateTests
         Assert.Equal(2, Regex.Matches(host, @"if \(_scrolllerGate is null\) return(?: true)?;").Count);
         Assert.Contains("if (_scrolllerGate is null) return true; // held until the gate reports", host);
         // A request the reported gate refuses is dropped before Source keeps it for a later gate report.
-        Assert.Matches(@"if \(_scrolllerGate is not null && !ScrolllerGateAllows\(_scrolllerGate, url\)\) return false;\s*var previous = Source;", host);
-        Assert.Contains("if (!ScrolllerGateAllows(_scrolllerGate, target))", host);
+        // The Home browser (GateScrolller=False) is never refused by it, as WPF never gates Home.
+        Assert.Matches(@"if \(GateScrolller && _scrolllerGate is not null && !ScrolllerGateAllows\(_scrolllerGate, url\)\) return false;\s*var previous = Source;", host);
+        Assert.Contains("if ((GateScrolller || _scrolllerGate is null) && !ScrolllerGateAllows(_scrolllerGate, target))", host);
         // A rebuilt engine already names its Source: its held page is loaded with Navigate.
         Assert.Contains("try { _web!.Navigate(src!); }", host);
         var gate = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "ScrolllerWebHostGate.cs"));

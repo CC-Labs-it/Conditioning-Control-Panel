@@ -178,6 +178,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             BrowserWebHost.AllFramesDocumentStartScript = FrameMediaScript;
             BrowserWebHost.RouteBrowserPopups = true; // WPF BrowserService.cs:538-562
+            // WPF BrowserService.cs:182-187 (#449/#439: black video, audio plays). Own folder: WebView2 refuses a
+            // profile reopened with other arguments (GameWindow.cs:248-255).
+            BrowserWebHost.WindowsBrowserArguments = "--autoplay-policy=no-user-gesture-required --disable-direct-composition-video-overlays";
+            BrowserWebHost.WindowsUserDataFolder = System.IO.Path.Combine(CorePaths.UserData, "browser_data_avalonia_home");
             _ = BrowserWebHost.SetMutedAsync(CoreSettings.Current.BrowserVideoMuted); // seed before adapter creation
             BrowserWebHost.BrowserProcessFailed += OnBrowserCrash;
             BrowserWebHost.BrowserStartupFailed += OnBrowserStartupFailed;
@@ -187,6 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BrowserWebHost.WebMessage += OnRemixMediaMessage;
             BrowserWebHost.AttachedToVisualTree += (_, _) =>
             {
+                if (BrowserWebHost.IsVisible) RepairBrowserRender();
                 if (BrowserWebHost.CurrentUrl is { } current) InstallRemixMediaWatch(current, true);
                 else if (BrowserWebHost.Source != null) BeginRemixMediaWatch();
             };
@@ -376,11 +381,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser").ProvideValue(null!));
             // A native web view draws over anything laid on it, so the prompt only shows with the host hidden.
             // The placeholder belongs to the card; the popped-out host stays visible in its window.
-            BrowserWebHost.IsVisible = !_browserCrashed && (popped || fullscreen || !prompt);
+            var show = !_browserCrashed && (popped || fullscreen || !prompt);
+            if (show && !BrowserWebHost.IsVisible) RepairBrowserRender();
+            BrowserWebHost.IsVisible = show;
             // Replace only a stuck Loading: Offline/Ready (UpdateOfflineModeUI, whose about:blank park and reload
             // land here too) own the line, as WPF writes them whether or not the engine is up.
             if (!BrowserWebHost.HasEngine && BrowserStatusLoading()) SetBrowserFailure(BrowserWebHost.FailureStatusKey);
         }
+
+        // A re-shown WebView2 controller can stay hidden (WPF ChaosWebViewHost.cs:1110-1117 KickRenderVisibility):
+        // repair it after Avalonia's own show, for the prompt click, a tab switch and a pop-out return.
+        private void RepairBrowserRender() =>
+            Dispatcher.UIThread.Post(BrowserWebHost.RepairWindowsRenderVisibility, DispatcherPriority.Background);
 
         private bool BrowserStatusLoading() => string.Equals(IconText.Bare(TxtBrowserStatus.Text).Trim(),
             IconText.BareLoc("label_loading").Trim(), StringComparison.OrdinalIgnoreCase);

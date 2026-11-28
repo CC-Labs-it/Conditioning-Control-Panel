@@ -21,6 +21,11 @@ internal static class ScrolllerWebHostGate
     internal static readonly TimeSpan CoreRetry = TimeSpan.FromMilliseconds(100);
     internal const int CoreRetries = 50;
 
+    /// <summary>An ad-blocking host (Home) holds its page until its filter is on, as WPF adds it at core init
+    /// (BrowserService.cs:523-539): a core later than 5 s is still attached, and no core at all leaves Home held, never
+    /// unfiltered. Its own 15 s startup watch (WebHost.ExpireStartup) reports a dead engine meanwhile.</summary>
+    internal static int CoreTries(bool blockAds) => blockAds ? 3000 : CoreRetries;
+
     /// <summary>How long a Linux view waits for the WebKit filter (store load / compile on the GLib thread) before it is
     /// reported "no gate" (remote pages refused, local ones load) rather than left blank.</summary>
     internal static readonly TimeSpan LinuxGateWait = TimeSpan.FromSeconds(5);
@@ -63,11 +68,13 @@ internal static class ScrolllerWebHostGate
             switch (handle)
             {
                 case IWindowsWebView2PlatformHandle when OperatingSystem.IsWindows():
-                    AttachWindows(handle, handleAgain, ready, CoreRetries, blockAds, shouldBlockAds);
+                    // Not &&: a failed Scrolller hook must not leave the Home browser without its ad filter.
+                    AttachWindows(handle, handleAgain, ready, CoreTries(blockAds), blockAds,
+                        core => AttachWebView2(core) & (!blockAds || AttachAdWebView2(core, shouldBlockAds!)),
+                        retry => DispatcherTimer.RunOnce(retry, CoreRetry));
                     return;
                 case IGtkWebViewPlatformHandle g:
-                    var deadline = new Deadline(ready);
-                    DispatcherTimer.RunOnce(deadline.Expire, LinuxGateWait);
+                    var deadline = LinuxDeadline(ready, blockAds, expire => DispatcherTimer.RunOnce(expire, LinuxGateWait));
                     AttachLinuxFilter(g.WebKitWebView, blockAds, ok => Dispatcher.UIThread.Post(() => deadline.Report(ok)), (view, ads, done) => ScrolllerWebKitFilter.Attach(view, ads, done));
                     return;
                 default:
@@ -82,6 +89,15 @@ internal static class ScrolllerWebHostGate
             Log.Warning("ScrolllerWebHostGate: attach failed: {E}", ex.Message);
             ready(false);
         }
+    }
+
+    /// <summary>Home (<paramref name="blockAds"/>) gets no deadline: it waits for the filter's own report (ScrolllerWebKitFilter
+    /// reports every failure), so a slow compile never releases it unfiltered.</summary>
+    internal static Deadline LinuxDeadline(Action<bool> ready, bool blockAds, Action<Action> expireLater)
+    {
+        var deadline = new Deadline(ready);
+        if (!blockAds) expireLater(deadline.Expire);
+        return deadline;
     }
 
     internal static void AttachLinuxFilter(IntPtr view, bool blockAds, Action<bool> ready,
@@ -102,18 +118,20 @@ internal static class ScrolllerWebHostGate
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static string? ReadWebView2Url(IntPtr core) => ScrolllerWebView2Gate.CurrentDocumentUrl(core);
-    private static void AttachWindows(IPlatformHandle? handle, Func<IPlatformHandle?> handleAgain, Action<bool> ready, int left, bool blockAds, Func<string?, string?, bool>? shouldBlockAds)
+    internal static void AttachWindows(IPlatformHandle? handle, Func<IPlatformHandle?> handleAgain, Action<bool> ready, int left, bool blockAds,
+        Func<IntPtr, bool> attach, Action<Action> retryLater)
     {
         var core = handle is IWindowsWebView2PlatformHandle w ? w.CoreWebView2 : IntPtr.Zero;
-        if (core != IntPtr.Zero) { ready(AttachWebView2(core) && (!blockAds || AttachAdWebView2(core, shouldBlockAds!))); return; }
-        if (left == CoreRetries) Log.Warning("ScrolllerWebHostGate: the adapter has no CoreWebView2 yet; waiting for it");
+        if (core != IntPtr.Zero) { ready(attach(core)); return; }
+        if (left == CoreTries(blockAds)) Log.Warning("ScrolllerWebHostGate: the adapter has no CoreWebView2 yet; waiting for it");
         if (left <= 0)
         {
-            Log.Warning("ScrolllerWebHostGate: no CoreWebView2 after {N} tries; only this head's own pages load in this web view", CoreRetries);
+            if (blockAds) { Log.Warning("ScrolllerWebHostGate: no CoreWebView2 after {N} tries; this browser stays held", CoreTries(blockAds)); return; }
+            Log.Warning("ScrolllerWebHostGate: no CoreWebView2 after {N} tries; only this head's own pages load in this web view", CoreTries(blockAds));
             ready(false);
             return;
         }
-        DispatcherTimer.RunOnce(() => AttachWindows(handleAgain(), handleAgain, ready, left - 1, blockAds, shouldBlockAds), CoreRetry);
+        retryLater(() => AttachWindows(handleAgain(), handleAgain, ready, left - 1, blockAds, attach, retryLater));
     }
 
     /// <summary>Its own method, so the WebView2 SDK is only ever loaded on Windows.</summary>

@@ -773,12 +773,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
             // No Scrolller gate on this engine (yet, or at all): nothing but this head's own pages loads.
-            if (!ScrolllerGateAllows(_scrolllerGate, target))
+            // WPF never gates the Home browser (BrowserService.cs:126-187 has no ScrolllerWebGate), so a failed gate cannot blank it;
+            // until the report its ad filter may not be on yet (WPF adds it at core init, BrowserService.cs:523-539).
+            if ((GateScrolller || _scrolllerGate is null) && !ScrolllerGateAllows(_scrolllerGate, target))
             {
                 e.Cancel = true;
                 Log.Warning("WebHost: navigation held, no Scrolller gate on this web view ({Host})", target?.Host);
+                // Only a blank engine needs the panel: a refused link must not hide a page that already runs.
+                if (_scrolllerGate == false && !_loadedOnThisEngine) ShowGateError(target);
                 return;
             }
+            if (_gateError) { _gateError = false; _fallback.IsVisible = _web is null; if (_web != null) _web.IsVisible = true; }
             if (target?.Scheme != "about") _loadedOnThisEngine = true;
             // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
             if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
@@ -795,6 +800,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         internal void RecordAllowedNavigation(Uri? target) => ActiveNavigation = target;
 
+        // A page refused for a failed gate leaves a blank engine: say so on this host's own panel instead.
+        private bool _gateError;
+        private void ShowGateError(Uri? target)
+        {
+            _gateError = true;
+            _txtReason.Text = ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("label_error_2");
+            _txtSource.Text = target is null ? "" : WithoutToken(target);
+            _txtSource.IsVisible = target is not null;
+            _fallback.IsVisible = true;
+            if (_web != null) _web.IsVisible = false; // the native view draws over the panel
+        }
+
         /// <summary>
         /// Loads <paramref name="url"/> even when it is already the <see cref="Source"/>: WPF #867, clicking
         /// the site you are on takes you home and Reload reloads. Assigning an equal Source raises no
@@ -806,7 +823,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             CancelPendingNavigation();
             NavigationRequests++;
             // Do not retain a request the reported gate refuses: a later gate report must not load it after fallback.
-            if (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url)) return false;
+            if (GateScrolller && _scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url)) return false;
             var previous = Source;
             PrepareProgrammaticNavigation();
             _explicitNavigate = true;
@@ -1061,6 +1078,8 @@ document.addEventListener('DOMContentLoaded',scan);})();";
                 return;
             }
             _scrolllerGate = gated;
+            // A failed ad filter is logged and the page loads, as WPF SetupAdBlocking (BrowserService.cs:613-616).
+            if (!gated && BlockAds) Log.Warning("WebHost: the ad filter could not be installed; this browser loads without it");
             _pendingNavigation?.TrySetResult(gated);
             var src = Source;
             if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))
