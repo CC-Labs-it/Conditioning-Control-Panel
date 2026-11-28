@@ -1013,6 +1013,10 @@ public sealed class PresetsSessionCatalogueTests
 
     private static void Click(TopLevel host, Control target)
     {
+        // The 7.4.1 lift made rows and zone headers taller: a row below the rack's fold is scrolled
+        // to first, as a user would, so the click lands on it and not on whatever covers it.
+        target.BringIntoView();
+        Dispatcher.UIThread.RunJobs();
         var point = target.TranslatePoint(
             new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), host);
         Assert.True(point.HasValue, "could not translate row into host");

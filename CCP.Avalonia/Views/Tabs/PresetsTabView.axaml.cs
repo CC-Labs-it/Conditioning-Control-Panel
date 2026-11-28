@@ -15,6 +15,8 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Rows;
+using ConditioningControlPanel.Emblems;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -46,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CmbRackSort.SelectionChanged += CmbRackSort_SelectionChanged;
             TxtRackSearch.TextChanged += TxtRackSearch_TextChanged;
             BtnExportPreset.Click += BtnExportPreset_Click;
+            BtnImportPreset.Click += BtnImportPreset_Click;
             // WPF BtnSharePreset_Click (MainWindow.PresetIO.cs:192).
             BtnSharePreset.Click += async (_, _) =>
             {
@@ -98,6 +101,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshLocalizedDetails();
             QueuePresetsModRefresh();
             AttachFocalFx();
+            PaintInks();
+        }
+
+        /// <summary>
+        /// The two label inks of the 7.4.1 lift (WPF 43c014f363), the RowLabel mix (70% TextLight +
+        /// 30% the zone hue): <c>SdPresetInk</c> for preset chip names (Studio pink) and
+        /// <c>SdSessionInk</c> for session row names (SectionHueNotifications blue). Code-built chips
+        /// and rows reach them through the tab's themes by DynamicResource; re-mixed each time the
+        /// tab is attached, so a mod retheme lands.
+        /// </summary>
+        internal void PaintInks()
+        {
+            uint light = this.TryFindResource("TextLightBrush", ActualThemeVariant, out var l) && l is ISolidColorBrush lb
+                ? RowHue.ToArgb(lb.Color) : EmblemPalette.TextLight;
+            uint Hue(string key) => this.TryFindResource(key, ActualThemeVariant, out var c) && c is Color col
+                ? RowHue.ToArgb(col) : EmblemPalette.Pink;
+            Resources["SdPresetInk"] = RowHue.Brush(EmblemPalette.LabelTint(light, Hue("SectionHueStudio")));
+            Resources["SdSessionInk"] = RowHue.Brush(EmblemPalette.LabelTint(light, Hue("SectionHueNotifications")));
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -681,6 +702,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (owner != null) _ = Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("title_export_failed"), Loc.GetF("msg_failed_to_export_preset_0", ex.Message));
                 Serilog.Log.Error(ex, "Failed to export preset");
             }
+        }
+
+        /// <summary>
+        /// The Import button (ccp-bugs #1743, WPF MainWindow.BtnImportPreset_Click): a picked file goes
+        /// through <see cref="HandlePresetDrop"/>, the same path as a file dropped on the window, so
+        /// the checks, the id de-dup, the copy to the custom folder and the toasts are one code path.
+        /// </summary>
+        private async void BtnImportPreset_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            if (TopLevel.GetTopLevel(this) is not { } top) return;
+            var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = Loc.Get("sd_import_tip"),
+                AllowMultiple = false,
+                FileTypeFilter = new[] { new FilePickerFileType("Preset files") { Patterns = new[] { "*.preset.json", "*.json" } } },
+            });
+            if (files.Count == 0 || files[0].TryGetLocalPath() is not { } path) return;
+            HandlePresetDrop(path);
         }
 
         /// <summary>WPF's HandlePresetDrop: validate, import, de-dup the id, add to UserPresets,
