@@ -31,7 +31,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
         {
             string[] kinds;
             lock (_overlayBands) { kinds = _overlayBands.Values.Distinct().ToArray(); _overlayBands.Clear(); }
-            foreach (var kind in kinds) if (Host is { } h) Sustain(h, kind, null);
+            foreach (var kind in kinds) if ((OverlayHost ?? Host) is { } h) Sustain(h, kind, null);
         });
     }
     public void StopOneShotFlashes() => Views.Overlays.FlashOverlay.StopOwned(FlashOwner);
@@ -138,11 +138,12 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
     }
 
     // WPF RealActionDispatcher.cs:222-273 -> OverlayService.cs:924 (timed), :1129 (show), :1189 (hide), :1247 (ramp).
-    private void Overlay(TriggerEffectAction effect, CancellationToken ct)
+    internal global::Avalonia.Visual? OverlayHost;
+    internal void Overlay(TriggerEffectAction effect, CancellationToken ct)
     {
         var kind = effect.OverlayKind ?? OverlayKinds.PinkFilter;
         var key = effect.EffectId ?? kind;
-        if (Host is not { } host) return;
+        if ((OverlayHost ?? Host) is not { } host) return;
         if (effect.Phase == EffectPhase.Stop)
         {
             lock (_overlayBands) { if (_overlayBands.Remove(key, out var remembered)) kind = remembered; }
@@ -157,6 +158,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 Sustain(host, kind, effect.Opacity);
                 break;
             case EffectPhase.Update:
+                // WPF OverlayService.cs:1247,1319-1362: a ramp repaints a live hold, never reopens a stopped one.
                 if (kind == OverlayKinds.PinkFilter ? Views.Overlays.PinkFilterOverlay.ApplySessionOpacity(effect.Opacity * 100)
                     : kind == OverlayKinds.Spiral && Views.Overlays.SpiralOverlay.ApplySessionOpacity(effect.Opacity * 100))
                     Sustain(host, kind, effect.Opacity);

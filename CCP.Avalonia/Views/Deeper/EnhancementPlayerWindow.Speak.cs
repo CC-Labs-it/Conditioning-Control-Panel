@@ -28,14 +28,14 @@ public partial class EnhancementPlayerWindow
             {
                 if (!_closing) IngestActionLine(line);
             });
-            // Preserve rule regions while excluding overlays and haptics until cleanup can isolate their layer.
-            static bool Unsupported(EnhancementAction? action) => action is TriggerHapticAction or TriggerEffectAction { EffectType: EffectTypes.Overlay or EffectTypes.Haptic };
+            // Preserve rule regions while excluding haptics until cleanup can isolate their layer.
+            static bool Unsupported(EnhancementAction? action) => action is TriggerHapticAction or TriggerEffectAction { EffectType: EffectTypes.Haptic };
             var supported = new Enhancement
             {
                 Metadata = _loadedEnhancement.Metadata, MediaType = _loadedEnhancement.MediaType,
                 MediaSource = _loadedEnhancement.MediaSource, Regions = _loadedEnhancement.Regions,
                 TimelineItems = _loadedEnhancement.TimelineItems.Where(item => item != null &&
-                    !(item.Kind == TimelineItemKind.Effect && item.EffectType is EffectTypes.Overlay or EffectTypes.Haptic))
+                    !(item.Kind == TimelineItemKind.Effect && item.EffectType is EffectTypes.Haptic))
                     .Select(item => item.Kind == TimelineItemKind.Rule && Unsupported(item.Action)
                         ? new TimelineItem { Id = item.Id, Kind = item.Kind, Start = item.Start, Duration = item.Duration, Enabled = false } : item).ToList(),
                 Rules = _loadedEnhancement.Rules.Where(rule => rule != null && !Unsupported(rule.Action)).ToList()

@@ -81,14 +81,60 @@ public class SpeakPlayerTests
                 new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 1 }, Action = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = OverlayKinds.PinkFilter } }
             } }, "test");
             Tick(player); media.Audio.PositionSeconds = 1.2; Tick(player);
-            Assert.Equal(1, actions.Calls);
-            Tick(player); Assert.Equal(1, actions.Calls);
+            Assert.Equal(2, actions.Calls);
+            Tick(player); Assert.Equal(2, actions.Calls);
             player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" }, "replacement");
             Assert.Equal(1, actions.Resets);
             media.Audio.PositionSeconds = 2; Tick(player);
-            Assert.Equal(1, actions.Calls);
+            Assert.Equal(2, actions.Calls);
         }
         finally { player.Close(); }
+    });
+
+    [Fact]
+    public Task PlayerDispatchesOverlayTimelineAndStopsItOnReplacement() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var media = new Media();
+        var actions = new Actions();
+        var player = new EnhancementPlayerWindow(null, null) { PlayerDispatcherFactory = () => actions };
+        try
+        {
+            player.Show(); player.OpenLocalMediaFile(media.Path);
+            for (int i = 0; i < 500 && !media.Audio.Playing; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+            Assert.True(media.Audio.Playing);
+            player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", TimelineItems = {
+                new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 4, EffectType = EffectTypes.Overlay,
+                    EffectOverlayKind = OverlayKinds.Spiral, EffectActivation = EffectActivation.Region }
+            } }, "test");
+            Tick(player); media.Audio.PositionSeconds = 1.2; Tick(player);
+            Assert.True(actions.Calls > 0);
+            player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" }, "replacement");
+            Assert.Equal(1, actions.Resets);
+        }
+        finally { player.Close(); }
+    });
+
+    // WPF OverlayService.cs:1247,1319-1362: a ramp Update only repaints a live hold, never re-opens a stopped overlay.
+    [Theory]
+    [InlineData(OverlayKinds.Spiral)]
+    [InlineData(OverlayKinds.PinkFilter)]
+    public void UpdateAfterUserStopDoesNotReopenBand(string kind) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var host = new global::Avalonia.Controls.Window();
+        var dispatcher = new BrowserEnhancementDispatcher { OverlayHost = host };
+        var effect = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = kind,
+            EffectId = "band", Phase = EffectPhase.Start, Opacity = 0.7 };
+        double? Held() => kind == OverlayKinds.Spiral ? SpiralOverlay.VoiceOpacity : PinkFilterOverlay.VoiceOpacity;
+        try
+        {
+            dispatcher.Overlay(effect, CancellationToken.None);
+            Assert.Equal(0.7, Held());
+            if (kind == OverlayKinds.Spiral) SpiralOverlay.Stop(); else PinkFilterOverlay.Stop();
+            effect.Phase = EffectPhase.Update; effect.Opacity = 0.5;
+            dispatcher.Overlay(effect, CancellationToken.None);
+            Assert.Null(Held());
+        }
+        finally { dispatcher.ResetOverlayBands(); SpiralOverlay.Stop(); PinkFilterOverlay.Stop(); host.Close(); }
     });
 
     private sealed class Camera : IEnhancementWebcam
