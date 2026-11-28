@@ -202,6 +202,75 @@ public sealed class GradedIntakeGateTests
         });
     }
 
+    [Fact]
+    public void GateUnlockUsesSharedReconnectAccountAndLockdownRoutes() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldProvider = TierGate.ReconnectIsTheAnswerProvider;
+        var oldLockdown = LockdownService.Current;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var unlock = shell.Named<GradedIntakeTabView>("GradedIntakeTab")!.FindControl<Button>("BtnGradedIntakeGateUnlock")!;
+            var reconnects = 0;
+            shell.ReconnectFromGateOverride = () => { reconnects++; return Task.CompletedTask; };
+            TierGate.ReconnectIsTheAnswerProvider = () => true;
+            var lockdown = LockdownService.Current = new LockdownService();
+            shell.ShowTab("achievements");
+            lockdown.Activate(TimeSpan.FromMinutes(30));
+            unlock.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(0, reconnects);
+            Assert.Equal("achievements", shell.CurrentTab);
+            lockdown.Deactivate();
+            unlock.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, reconnects);
+            TierGate.ReconnectIsTheAnswerProvider = () => false;
+            unlock.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("account", shell.AppSettingsPage!.CheckedSectionKey);
+            Assert.True(shell.AppSettingsPage.IsVisible);
+        }
+        finally
+        {
+            TierGate.ReconnectIsTheAnswerProvider = oldProvider;
+            LockdownService.Current = oldLockdown;
+            shell.Close();
+        }
+    });
+
+    [Fact]
+    public void OpeningGradedIntakeRechecksTheWeeklyPass() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var service = new SettingsService();
+        var previousSettings = CoreSettings.ServiceProvider;
+        var previousLogin = CoreAccount.IsLoggedInProvider;
+        var previousPaid = CoreAccount.HasPremiumAccessProvider;
+        CoreSettings.ServiceProvider = () => service;
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreAccount.HasPremiumAccessProvider = () => false;
+        service.Current.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("gradedintake");
+            var view = shell.Named<GradedIntakeTabView>("GradedIntakeTab")!;
+            var gate = view.FindControl<Border>("GradedIntakeGate")!;
+            Assert.True(gate.IsVisible);
+            // Simulate a new week without sending PassStateChanged.
+            service.Current.IntakePassSpentWeek = "old-week";
+            shell.ShowTab("gradedintake");
+            Assert.False(gate.IsVisible);
+            Assert.True(view.FindControl<Border>("GradedIntakePassBanner")!.IsVisible);
+        }
+        finally
+        {
+            shell.Close();
+            CoreSettings.ServiceProvider = previousSettings;
+            CoreAccount.IsLoggedInProvider = previousLogin;
+            CoreAccount.HasPremiumAccessProvider = previousPaid;
+        }
+    });
+
     private static void EnsureAvalonia()
     {
         if (Application.Current is not null) return;

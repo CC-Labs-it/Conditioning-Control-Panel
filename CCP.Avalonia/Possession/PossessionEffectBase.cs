@@ -27,6 +27,7 @@ internal abstract class PossessionEffectBase : IPossessionEffect
     protected PossessionTarget? Target { get; private set; }
     protected virtual bool ChargeOnApply => true;
     protected virtual string? NameOverride => null;
+    protected virtual string NameId => Id;
     private CancellationTokenSource? _cts;
     private readonly List<IDisposable> _overrides = new();
     private IDisposable? _outline;
@@ -71,7 +72,8 @@ internal abstract class PossessionEffectBase : IPossessionEffect
             await ApplyCoreAsync(ctx, Target, token).ConfigureAwait(true);
             token.ThrowIfCancellationRequested();
         }
-        catch (OperationCanceledException) { if (ReferenceEquals(_cts, source)) await UndoAsync(TimeSpan.Zero).ConfigureAwait(true); }
+        // An undo already in progress owns cleanup and may be animating.
+        catch (OperationCanceledException) { if (ReferenceEquals(_cts, source) && !_undoing) await UndoAsync(TimeSpan.Zero).ConfigureAwait(true); }
         catch (Exception ex)
         {
             Serilog.Log.Warning("Possession {Id} failed to apply: {Error}", Id, ex.Message);
@@ -96,7 +98,7 @@ internal abstract class PossessionEffectBase : IPossessionEffect
     {
         if (_named || !IsBig || Context == null) return;
         _named = true;
-        try { Context.Name(Id, string.IsNullOrWhiteSpace(name) ? Target?.DisplayName : name); }
+        try { Context.Name(NameId, string.IsNullOrWhiteSpace(name) ? Target?.DisplayName : name); }
         catch (Exception ex) { Serilog.Log.Warning("Possession {Id} name failed: {Error}", Id, ex.Message); }
     }
 

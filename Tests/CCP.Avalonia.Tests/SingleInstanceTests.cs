@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.IO.Pipes;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -315,6 +317,128 @@ namespace CCP.Avalonia.Tests
                 SingleInstance.KillStale = savedKill;
                 SingleInstance.ShowAckTimeoutMs = savedAck;
             }
+        }
+
+        /// <summary>A queued sender must not hand the send gate on while the primary still holds its connection:
+        /// the next sender's one connect second would then include the primary's way to Disconnect.</summary>
+        [Fact]
+        public async Task SenderKeepsTheQueueUntilThePrimaryDropsItsConnection()
+        {
+            var name = "ccp_drain_test_" + Guid.NewGuid().ToString("N");
+            await using var server = new NamedPipeServerStream(name, PipeDirection.InOut, 1,
+                PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+            bool dropped = false;
+            var primary = Task.Run(async () =>
+            {
+                await server.WaitForConnectionAsync();
+                var request = new byte[2];
+                await server.ReadExactlyAsync(request);            // length 1, then the payload byte
+                await server.WriteAsync(new byte[] { 1 });
+                await server.ReadExactlyAsync(new byte[1]);        // the client's receipt
+                await Task.Delay(1500);                             // a slow hop to Disconnect
+                Volatile.Write(ref dropped, true);
+                server.Disconnect();
+            });
+            Assert.True(SingleInstance.RequestShow(name, "x"));
+            Assert.True(Volatile.Read(ref dropped));
+            await primary.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        [Fact]
+        public async Task AcknowledgementIsKeptUntilClientConfirmsReceipt()
+        {
+            var name = "ccp_ack_test_" + Guid.NewGuid().ToString("N");
+            await using var server = new NamedPipeServerStream(name, PipeDirection.InOut, 1,
+                PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+            using var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
+            var connected = server.WaitForConnectionAsync();
+            await client.ConnectAsync(10000);
+            await connected;
+
+            var observed = new ReadObservedStream(server);
+            var acknowledgement = SingleInstance.AcknowledgeAsync(observed, CancellationToken.None);
+            var ack = new byte[1];
+            await client.ReadExactlyAsync(ack).AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(1, ack[0]);
+            var first = await Task.WhenAny(acknowledgement, observed.ReadStarted.Task).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Same(observed.ReadStarted.Task, first);
+            Assert.False(acknowledgement.IsCompleted); // Disconnect must wait for this client.
+            await client.WriteAsync(new byte[] { 1 });
+            await acknowledgement.WaitAsync(TimeSpan.FromSeconds(10));
+            server.Disconnect();
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void LegacyClientCanCloseAfterAckAndNextLaunchStillReachesPrimary(bool startup)
+        {
+            var suffix = "_test_" + Guid.NewGuid().ToString("N");
+            using var shown = new CountdownEvent(2);
+            using var primary = SingleInstance.Claim(suffix, _ => { shown.Signal(); return Task.CompletedTask; });
+            if (!startup) primary!.EndStartupPhase();
+            var name = "ConditioningControlPanel_ShowWindow_Signal_" + Environment.UserName + suffix;
+            using (var legacy = new NamedPipeClientStream(".", name, PipeDirection.InOut,
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly))
+            {
+                legacy.Connect(10000);
+                legacy.WriteByte(0);
+                Assert.Equal(1, legacy.ReadByte());
+                // Older versions close without sending a receipt.
+            }
+            SingleInstance? secondary = null;
+            var launch = new Thread(() =>
+            {
+                using var result = SingleInstance.Claim(suffix, _ => Task.CompletedTask);
+                secondary = result;
+            });
+            launch.Start();
+            Assert.True(launch.Join(TimeSpan.FromSeconds(20)));
+            Assert.Null(secondary);
+            Assert.True(shown.Wait(TimeSpan.FromSeconds(20)));
+        }
+
+        sealed class ReadObservedStream(Stream inner) : Stream
+        {
+            public TaskCompletionSource ReadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+            {
+                ReadStarted.TrySetResult();
+                return inner.ReadAsync(buffer, ct);
+            }
+            public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default) => inner.WriteAsync(buffer, ct);
+            public override Task FlushAsync(CancellationToken ct) => inner.FlushAsync(ct);
+            public override bool CanRead => inner.CanRead;
+            public override bool CanSeek => false;
+            public override bool CanWrite => inner.CanWrite;
+            public override long Length => throw new NotSupportedException();
+            public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+            public override void Flush() => inner.Flush();
+            public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+            public override void Write(byte[] buffer, int offset, int count) => inner.Write(buffer, offset, count);
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+        }
+
+        [Fact]
+        public void ImmediateShowsDoNotLoseSuccessiveHandoffs()
+        {
+            var suffix = "_test_" + Guid.NewGuid().ToString("N");
+            var received = new System.Collections.Concurrent.ConcurrentBag<string?>();
+            using var primary = SingleInstance.Claim(suffix, p => { received.Add(p); return Task.CompletedTask; });
+            primary!.EndStartupPhase();
+            var payloads = Enumerable.Range(0, 12).Select(i => "handoff-" + i).ToArray();
+            var results = new SingleInstance?[payloads.Length];
+            var threads = payloads.Select((p, i) => new Thread(() =>
+            {
+                using var result = SingleInstance.Claim(suffix, _ => Task.CompletedTask, p);
+                results[i] = result;
+            })).ToArray();
+            foreach (var t in threads) t.Start();
+            foreach (var t in threads) Assert.True(t.Join(TimeSpan.FromSeconds(60)));
+            Assert.All(results, Assert.Null);
+            Assert.Equal(payloads.OrderBy(p => p, StringComparer.Ordinal),
+                received.OrderBy(p => p, StringComparer.Ordinal));
         }
 
         /// <summary>During startup the listener acks first; each request still reaches the handoff queue before
