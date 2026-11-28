@@ -6,13 +6,16 @@
   <Border BorderBrush="#DC143C" BorderThickness="2">
     <Grid RowDefinitions="Auto,*">
       <Border Background="#DC143C" Padding="10,5"><TextBlock x:Name="Caption" Foreground="White" FontWeight="SemiBold"/></Border>
-      <StackPanel Grid.Row="1" Margin="24,12">
+      <Grid Grid.Row="1" Margin="14,12" ColumnDefinitions="Auto,*">
+        <ContentControl x:Name="Face" Width="82" Height="120" VerticalAlignment="Top" IsHitTestVisible="False"/>
+        <StackPanel Grid.Column="1" Margin="12,0,0,0">
         <TextBlock Text="{loc:Str possession_delete_heading}" Foreground="#FFE3DA" FontSize="14" FontWeight="SemiBold"/>
         <StackPanel x:Name="Names" Margin="0,6,0,8"/>
         <TextBlock x:Name="Status" TextWrapping="Wrap" Foreground="#C09A92" FontSize="12" Margin="0,2,0,8"/>
         <ProgressBar x:Name="Progress" Width="300" Height="10" HorizontalAlignment="Left" Minimum="0" Maximum="100" Foreground="#DC143C"/>
         <Button x:Name="Cancel" HorizontalAlignment="Right" Width="90" Margin="0,14,0,0"><TextBlock Text="{loc:Str possession_delete_cancel}"/></Button>
-      </StackPanel>
+        </StackPanel>
+      </Grid>
     </Grid>
   </Border>
 </Window>
