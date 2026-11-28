@@ -59,7 +59,17 @@ public sealed class DareDebtCard : Window
     {
         var w = Make(bet);
         if (w == null) return Task.CompletedTask;
-        if (owner is { IsVisible: true }) return w.ShowDialog(owner);
+        if (owner is { IsVisible: true })
+        {
+            try { return w.ShowDialog(owner); }
+            catch (InvalidOperationException ex)
+            {
+                // WPF DareDebtCard.cs:62: the owner is closing, so the ladder moves on.
+                Serilog.Log.Debug("[Dares] debt card: {E}", ex.Message);
+                w.Close();
+                return Task.CompletedTask;
+            }
+        }
         var done = new TaskCompletionSource();
         w.Closed += (_, _) => done.TrySetResult();
         w.Show();
