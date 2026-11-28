@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
@@ -69,4 +70,18 @@ public class DeeperPlayerZoomDurationTests
         duration = "99"; await (Task)Call(player, "PollVideoTimeAsync")!;
         Assert.Equal(2, remembered.Count); Assert.Equal((url, 99d), remembered[1]);
     });
+    [Fact]
+    public Task VideoPollCentersLargestVideoOncePerElement() => Run(async (player, host) =>
+    {
+        string? script = null;
+        host.ScriptInvoker = js => { script = js; return Task.FromResult<string?>("1|42|0"); };
+        Call(player, "LoadVideoUrl", "https://hypnotube.com/video/example");
+        await (Task)Call(player, "PollVideoTimeAsync")!;
+        Assert.NotNull(script);
+        Assert.Contains("scrollIntoView({block:'center'})", script);
+        Assert.Contains("if(!l._ccpScrolled)", script);
+        ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "deeper-player").Stop(null);
+        Assert.False(EnhancementPlayerWindow.IsAnyEnhancementRunning);
+    });
+
 }
