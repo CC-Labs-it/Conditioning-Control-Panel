@@ -95,6 +95,8 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             // PLAYBOOK P52: a passive card (FeatureIntroPopup, AnnouncementPopup) or any other app
             // window a test left open holds the next test's startup surfaces, so close it first.
             OpenWindows.CloseLeftovers();
+            // A paid streak bonus posts its popup at ApplicationIdle, after this hook; drop it (generation guard).
+            ConditioningControlPanel.Avalonia.App.StopPerfectWeekBonus();
             ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
             // Panic now arms EMI's panic silence on the shared line engine (WPF EmiDeskService.cs:677-689);
             // left running it holds HoldActive for the next tests and mutes e.g. the Friends drawer cues.
