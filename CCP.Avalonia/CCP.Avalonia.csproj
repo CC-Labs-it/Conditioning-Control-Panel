@@ -289,6 +289,8 @@
          Avalonia draws a variable font at its default (Light, 300) whatever the FontWeight; WPF/DirectWrite picks the
          named instance. Regenerate with fontTools instancer when WPF's file changes (2026-11-06). -->
     <AvaloniaResource Include="..\Assets\fonts\fredoka\*.ttf" Link="Resources\fonts\fredoka\%(Filename)%(Extension)" />
+    <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Nunito-*.ttf" Link="Resources\fonts\nunito\%(Filename)%(Extension)" />
+    <Content Include="..\ConditioningControlPanel\Fonts\OFL-Nunito.txt" Link="ThirdPartyNotices\OFL-Nunito.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- WPF unlock-card art convention, without staging artwork. -->
     <Content Include="..\ConditioningControlPanel\assets\Chaos\upgrades\*.png"
              Link="assets\Chaos\upgrades\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
