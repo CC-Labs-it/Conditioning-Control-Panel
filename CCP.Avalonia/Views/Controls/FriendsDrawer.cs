@@ -27,6 +27,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Controls.Friends;
@@ -94,7 +95,11 @@ public sealed partial class FriendsDrawer : Border
             catch { return false; }
         };
         if (asPage) (MaxWidth, CornerRadius) = (PageMaxWidth, new CornerRadius(16));
-        else (Width, MaxHeight, CornerRadius) = (DrawerWidth, DrawerMaxHeight, new CornerRadius(16));
+        else
+        {
+            (Width, MaxHeight, CornerRadius) = (DrawerWidth, DrawerMaxHeight, new CornerRadius(16));
+            EscapeClaim.Mark(this); // WPF FriendsDrawer.cs:163-175: only the popup folds on Escape.
+        }
         Background = new LinearGradientBrush
         {
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
@@ -372,11 +377,10 @@ public sealed partial class FriendsDrawer : Border
     }
     private void Section(string key, int count)
     {
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(8, 10, 8, 4) };
-        var t = Label(Loc.Get(key).ToUpperInvariant(), 10.5, Dim, Mono, FontWeight.SemiBold);
-        var n = Label(count.ToString(), 10.5, Dim, Mono);
-        n.Margin = new Thickness(6, 0, 0, 0);
-        Grid.SetColumn(n, 1);
+        var g = new Grid { Margin = new Thickness(8, 10, 8, 4) };
+        var t = Label(Loc.Get(key).ToUpperInvariant(), 10, Dim, Mono);
+        var n = Label(count.ToString(), 10, Dim, Mono);
+        n.HorizontalAlignment = HorizontalAlignment.Right;
         g.Children.Add(t);
         g.Children.Add(n);
         _list.Children.Add(g);
@@ -432,7 +436,12 @@ public sealed partial class FriendsDrawer : Border
         AttachHover(row, open);
         _rows[f.Id] = row;
         // A click on the row (not inside the open card) opens or folds its card.
-        top.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(f.Id); e.Handled = true; } };
+        row.PointerReleased += (_, e) =>
+        {
+            if (e.InitialPressMouseButton != MouseButton.Left) return;
+            if (e.Source is Visual source && source.GetSelfAndVisualAncestors().OfType<Control>().Any(c => Equals(c.Tag, "friends-card"))) return;
+            Toggle(f.Id); e.Handled = true;
+        };
         return row;
     }
     private TextBlock ActivityLine(Friend f)
@@ -471,7 +480,7 @@ public sealed partial class FriendsDrawer : Border
     /// <summary>The open card: the menu one press away, or the Remove / Block question.</summary>
     private Control Card(Friend f)
     {
-        var card = new StackPanel { Margin = new Thickness(0, 8, 0, 2), Tag = "friends-card" };
+        var card = new StackPanel { Margin = new Thickness(0, 8, 0, 2), Background = Brushes.Transparent, Tag = "friends-card" };
         // WPF FriendsDrawer.cs:668-695 keeps actions, the leash chip and More above the question.
         card.Children.Add(CardActions(f));
         if (FriendLeashOffer.Create(f, Render) is { } offer) card.Children.Add(offer);
@@ -1018,7 +1027,7 @@ public sealed partial class FriendsDrawer : Border
     }
 
     /// <summary>Initials on the roster's per-name gradient (WPF FriendsLook.Avatar), with a presence dot
-    /// (mint on, grey off, none for null).</summary>
+    /// (mint on, grey off, none for null). A proxy picture replaces the initials once it loads (Parity.cs).</summary>
     internal static Control Avatar(string name, double size, bool? dot, ConditioningControlPanel.Services.PlayerLook? look = null, string? url = null)
     {
         var g = new Grid { Width = size, Height = size };
@@ -1033,6 +1042,7 @@ public sealed partial class FriendsDrawer : Border
         });
         if (look is { IsEmpty: false })
         {
+            // WPF FriendsLook.cs:204: the preset only stands in when there is no picture.
             if (string.IsNullOrEmpty(url) && Helpers.ModArt.AvatarPreset(look.AvatarId) is { } art && g.Children[0] is Border disc)
             {
                 disc.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
@@ -1054,29 +1064,8 @@ public sealed partial class FriendsDrawer : Border
                 Tag = on ? "friends-dot-on" : "friends-dot-off",
                 Effect = on ? new DropShadowEffect { Color = ((ISolidColorBrush)Mint).Color, BlurRadius = 8, Opacity = 0.9, OffsetX = 0, OffsetY = 0 } : null,
             });
-        if (!string.IsNullOrEmpty(url) && g.Children[0] is Border photoDisc) PaintPhoto(photoDisc, url);
+        if (!string.IsNullOrEmpty(url) && g.Children[0] is Border face) _ = PaintPhotoAsync(face, url);
         return g;
-    }
-
-    private static readonly Dictionary<string, global::Avalonia.Media.Imaging.Bitmap> Photos = new();
-
-    /// <summary>WPF FriendsLook.PaintPhotoAsync (FriendsLook.cs:254-283): a proxy path or https picture, fetched
-    /// through KnockCard's seam and cached, replaces the initials. A failed fetch keeps them.</summary>
-    private static async void PaintPhoto(Border disc, string url)
-    {
-        var full = url.StartsWith('/') ? ConditioningControlPanel.Services.ProviderSubscription.ProxyBaseUrl + url : url;
-        if (!full.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return;
-        try
-        {
-            if (!Photos.TryGetValue(full, out var bmp))
-            {
-                using var ms = new System.IO.MemoryStream(await Overlays.KnockCard.FetchPicture(full));
-                Photos[full] = bmp = global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(ms, 96);
-            }
-            disc.Background = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
-            disc.Child = null;
-        }
-        catch (Exception ex) { Serilog.Log.Debug("[Friends] photo: {E}", ex.Message); }
     }
 
     /// <summary>WPF FriendsLook.SafeAvatarBrush: the leaderboard's deterministic gradient, lilac if it throws.</summary>

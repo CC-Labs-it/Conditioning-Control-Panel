@@ -41,6 +41,19 @@ public sealed class LeashPageTests
         page.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag as string == tag);
 
     [Fact]
+    public void PageContentUsesTheOuterGridWidth() =>
+        Run(false, (shell, _, _) =>
+        {
+            shell.ShowTab("leash");
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            var scroll = page.GetLogicalDescendants().OfType<ScrollViewer>().First();
+            var content = Assert.IsType<StackPanel>(scroll.Content);
+            Assert.Equal(double.PositiveInfinity, content.MaxWidth);
+            var grid = Assert.IsType<Grid>(page.Content);
+            Assert.Equal(660, grid.MaxWidth);
+        });
+
+    [Fact]
     public void LiveLeashShowsTheOwnCardAndCutReturnsToTheEmptyState() =>
         Run(true, (shell, _, svc) =>
         {

@@ -53,6 +53,25 @@ public sealed class MandatoryVideoOverlayTests
         });
 
     [Fact]
+    public Task BrowserSurfaceReportsOnlyTheFirstFailure() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var failures = new System.Collections.Generic.List<bool>();
+        var messages = 0;
+        var surface = new BrowserVideoSurface(_ => Task.FromResult<string?>("true"));
+        surface.Start("http://localhost/clip.mp4", true, 50);
+        surface.View.OnNavigationCompleted(new Uri("about:blank"));
+        surface.Failed += media => failures.Add(media);
+        surface.Message += _ => messages++;
+        var error = $"{{\"session\":\"{surface.SessionId}\",\"type\":\"error\",\"code\":4}}";
+        surface.Receive(error);
+        surface.Receive(error);
+        Assert.Equal(new[] { true }, failures);
+        Assert.Equal(1, messages);
+        surface.Dispose();
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public void NoVideosDialogBlamesTheLengthFilterWhenItEmptiedTheLibrary()
     {
         // WPF #1352 (854ac954a): files exist, the length filter kept none -> name the filter, not "add files".
@@ -312,6 +331,7 @@ public sealed class MandatoryVideoOverlayTests
                     w = await Open(strict: false);
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
                     o.GuardTick();
+                    await Until(() => o.Windows.Count == 1 && o.Windows[0] != w);
                     Assert.True(v.IsPlaying && o.Windows.Count == 1 && o.Windows[0] != w, "lost output replays the clip once");
                     await Framed();
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
@@ -327,6 +347,7 @@ public sealed class MandatoryVideoOverlayTests
                     o.PlayedSkew = 9;
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
                     o.GuardTick();
+                    await Until(() => o.Windows.Count == 1 && o.Windows[0] != w);
                     Assert.True(v.IsPlaying && o.Windows.Count == 1 && o.Windows[0] != w, "lost output at 9 s replays the clip");
                     await Framed();
                     o.GuardTick();
@@ -474,7 +495,7 @@ public sealed class MandatoryVideoOverlayTests
                     // The output heal replays the same clip: still muted.
                     o.FrameTs -= Stopwatch.Frequency * 6;
                     o.GuardTick();
-                    await Until(() => o.FirstFrameMs >= 0);
+                    await Until(() => o.Windows.Count == 1 && o.FirstFrameMs >= 0);
                     Assert.True(v.IsPlaying && o.UserMuted && o.PlayerVolume == 0, "the heal replay stays muted");
                     Assert.Equal(IconKind.SpeakerMute, o.Surfaces[0].Buttons.MuteGlyph.Kind);
 
