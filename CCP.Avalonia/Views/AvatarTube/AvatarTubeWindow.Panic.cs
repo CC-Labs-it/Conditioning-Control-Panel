@@ -16,6 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             try { Platform.LibVlcAudio.SetPaused(_stopSpoken, paused); } catch { }
         });
 
+
         /// <summary>WPF AvatarTube/AvatarTubeWindow.Speech.cs:1911 StopVoiceLineAudio: mute cuts the clip without hiding the text bubble.</summary>
         internal void StopVoiceLineAudio() => RunOnAvatar(() =>
         {

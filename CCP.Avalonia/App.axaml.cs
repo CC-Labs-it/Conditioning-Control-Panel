@@ -625,7 +625,8 @@ namespace ConditioningControlPanel.Avalonia
                 }
                 return;
             }
-            if (payload is Services.Chaos.SubliminalPayload)
+            // WPF EffectPayloadFiring.cs:163-168: the audio payload reuses the subliminal whisper.
+            if (payload is Services.Chaos.SubliminalPayload or Services.Chaos.AudioPayload)
             {
                 if (CoreSubliminal.PickPhrase() is { } phrase) CoreSubliminal.ShowProvider?.Invoke(phrase);
                 return;

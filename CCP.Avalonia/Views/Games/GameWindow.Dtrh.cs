@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 // Down the Rabbit Hole on the shared GameWindow: WPF Services/Chaos/DtrhHostService.cs, slice A - the
 // host half the first descent needs. Launch's Basic door (LauncherCatalogue.cs:241), boot (:271 init with
 // motionLevel + runSetup, then the manifest :83), request-run -> run-config (:523, rules in Core
@@ -10,8 +11,8 @@
 // Slice C: heartbeat recovery (one relaunch per app session).
 // ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
-// fire-payload, mute (native video), payload-state, vn-speaking, session stats,
-// achievements bubble credit, RevealService.Sync, tucking the panel to the tray. Browser failures and silent ready pages share recovery.
+// vn-speaking, session stats, RevealService.Sync, tucking the panel to the tray. Browser failures and silent ready pages share recovery.
+
 // Slice D: favorites + asset-stats (engagement history, #3727), the saved Loom spirals (loom-list and loom-*, #3949).
 using System;
 using System.IO;
@@ -67,7 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 .Set("runs_completed", (double)ChaosMeta.State.RunsCompleted).Set("rank", ChaosRanks.NameLower(ChaosMeta.RankIndex)));
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
-        private bool _dtrhRunActive, _dtrhExiting, _dtrhWorldFrozen;
+        private bool _dtrhRunActive, _dtrhExiting, _dtrhFrozen;
         private IDisposable? _dtrhExitWatchdog;
         private JObject? _dtrhLastProgress;
         private global::Avalonia.PixelPoint _dtrhWindowPosition;
@@ -123,7 +124,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     try { DtrhHapticState(o); } catch (Exception ex) { Log.Debug("DtrhHost haptic state: {E}", ex.Message); }
                     return true;
                 case "freeze-state":
-                    ApplyDtrhWorldFreeze((bool?)o["on"] ?? false);
+                    var frozen = (bool?)o["on"] ?? false;
+                    if (!frozen || (!_dtrhExiting && !_closing)) ApplyDtrhWorldFreeze(frozen);
                     return true;
                 case "boot-error":
                     // WPF DtrhHostService.cs:1014-1025: close the failed web host, then fall back on the
@@ -162,6 +164,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     // WPF DtrhHostService.cs:400-404: deltas are additive, best-effort telemetry.
                     try { DtrhMergeAssetStats(o); }
                     catch (Exception ex) { Log.Debug("DtrhHost: asset stats failed: {E}", ex.Message); }
+                    return true;
+                case "fire-payload":
+                    // Stricter than WPF DtrhHostService.cs:343-345: nothing new fires during the panic settle window.
+                    if (!_dtrhExiting && !_closing) FireDtrhPayload(o);
+                    return true;
+                case "mute-state":
+                    MandatoryVideoOverlay.Instance.SetExternalMute((bool?)o["on"] ?? false);
                     return true;
                 case "request-run":
                     OnDtrhRequestRun(o);
@@ -424,8 +433,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         // WPF ApplyWorldFreeze (:814-837): the in-world Freeze holds the toy, the primary video and the spoken line.
         private void ApplyDtrhWorldFreeze(bool on)
         {
-            if (on == _dtrhWorldFrozen) return;
-            _dtrhWorldFrozen = on;
+            if (on == _dtrhFrozen) return;
+            _dtrhFrozen = on;
             try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnWorldFreeze(on); }
             catch (Exception ex) { Log.Debug("DtrhHost haptic freeze: {E}", ex.Message); }
             try { DtrhFreezeMedia(on); }
@@ -523,8 +532,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         // WPF OnVideoStarted / OnVideoEnded (:868-870, :907-909): the haptics half; payload-state stays slice D.
-        private static void OnDtrhVideoStarted() => DtrhVideoCovering(true);
-        private static void OnDtrhVideoEnded() => DtrhVideoCovering(false);
+        private void OnDtrhVideoStarted() => DtrhVideoState(true);
+        private void OnDtrhVideoEnded() => DtrhVideoState(false);
         private static void DtrhVideoCovering(bool on)
         {
             try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnVideoCovering(on); }
@@ -570,6 +579,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void DisposeDtrh()
         {
             if (!IsDtrh) return;
+            ReleaseDtrhVideo();
             _dtrhExitWatchdog?.Dispose();
             _dtrhExitWatchdog = null;
             _dtrhHeartbeatWatch?.Stop();
@@ -589,9 +599,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnClosed(); }
             catch (Exception ex) { Log.Debug("DtrhHost haptics: {E}", ex.Message); }
             // WPF :1073: a freeze still held at close lets the video and the spoken line go again.
-            if (_dtrhWorldFrozen)
+            if (_dtrhFrozen)
             {
-                _dtrhWorldFrozen = false;
+                _dtrhFrozen = false;
                 try { DtrhFreezeMedia(false); } catch (Exception ex) { Log.Debug("DtrhHost.ApplyWorldFreeze: {E}", ex.Message); }
             }
             // WPF DtrhHostService.cs:1041-1046: dtrhClosed {minutes}, once per open.

@@ -22,18 +22,19 @@ namespace ConditioningControlPanel.Services
         // settings.json aside. See that method for why nothing may write after it.
         private volatile bool _sealed;
 
-        // Serializes the rotate+write half of SaveImmediate. Without it two overlapping saves
-        // (debounce timer thread + a direct UI-thread call) could File.Move each other's
-        // half-written temp over settings.json (#761). Never taken while _timerLock is held,
-        // and never held across the UI-thread serialize hop — both would deadlock the shutdown
-        // path, where SaveImmediate runs ON the UI thread.
-        private readonly object _saveLock = new();
+        // Services for the same file share a gate: a loader's temp-file recovery must not delete
+        // a live save before its atomic rename. Different profiles do not block each other.
+        // Never hold this gate across the UI-thread serialize hop or while _timerLock is held.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> FileGates =
+            new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        private readonly object _saveLock;
         // A second SettingsService can load while this instance is publishing. Recovery must not
         // delete that live write's temp file, even after its write stream has been closed.
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> ActiveTempFiles =
             new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         internal Action<string>? BeforeAtomicPublishForTests { get; set; }
         internal static FileStream OpenSettingsRead(string path) => new(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+
         private readonly object _timerLock = new();
         // Instances with an armed debounce. Product code only adds/removes; the test isolation hook
         // disarms them after each test so a dead test's private service cannot write settings.json
@@ -82,6 +83,7 @@ namespace ConditioningControlPanel.Services
 
         // Per-instance seam for deterministic lifecycle proofs; production keeps the 500ms default.
         internal int SaveDebounceDueTimeMilliseconds { get; set; } = 500;
+        internal Action<string>? BeforeAtomicPublishForTest { get; set; }
         internal Action<bool>? DebouncedSaveCompletedForTest { get; set; }
 
         public AppSettings Current { get; private set; }
@@ -156,14 +158,17 @@ namespace ConditioningControlPanel.Services
         private SettingsService(string settingsPath, bool migrate)
         {
             _settingsPath = settingsPath;
-            if (migrate) MigrateSettingsFromOldLocation();
+            _saveLock = FileGates.GetOrAdd(Path.GetFullPath(settingsPath), static _ => new object());
+            lock (_saveLock)
+            {
+                if (migrate) MigrateSettingsFromOldLocation();
+                Current = Load();
 
-            Current = Load();
-
-            // A restore from an earlier run that never reached the reconcile (app closed, or
-            // offline the whole session) still needs the sync guard — the flag lives in memory,
-            // the marker on disk.
-            if (!RestoredFromBackup) TryReadRestoreMarker();
+                // A restore from an earlier run that never reached the reconcile (app closed, or
+                // offline the whole session) still needs the sync guard — the flag lives in memory,
+                // the marker on disk.
+                if (!RestoredFromBackup) TryReadRestoreMarker();
+            }
         }
 
         /// <summary>
@@ -1006,6 +1011,7 @@ namespace ConditioningControlPanel.Services
                             writer.Flush();
                             stream.Flush(true);
                         }
+                        BeforeAtomicPublishForTest?.Invoke(tempPath);
                         BeforeAtomicPublishForTests?.Invoke(tempPath);
                         PublishAtomicFile(tempPath);
                     }

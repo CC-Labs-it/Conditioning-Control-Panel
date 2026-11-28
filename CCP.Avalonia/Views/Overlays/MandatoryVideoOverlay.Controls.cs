@@ -31,6 +31,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed partial class MandatoryVideoOverlay
     {
         private volatile bool _userMuted;
+        private bool _externalMuted;
+        internal bool ExternalMuted => _externalMuted;
+        internal void SetExternalMute(bool on) { _externalMuted = on; UpdateVolume(); }
         private bool _revealAudioHeld;
         private bool _mutedAtClose;
         private object? _lockWatchOwner;
@@ -45,7 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool CloseAllowed => MandatoryVideoControls.ShowClose(_strict, LockdownActive, LockedRun);
         private bool ControlsAllowed => MandatoryVideoControls.ShowMute(_strict, LockdownActive, LockedRun);
 
-        internal int EffectivePlayerVolume => (_userMuted || _revealAudioHeld) ? 0 :
+        internal int EffectivePlayerVolume => (_userMuted || _externalMuted || _revealAudioHeld) ? 0 :
             MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
 
         internal void HoldRevealAudio(bool held)
