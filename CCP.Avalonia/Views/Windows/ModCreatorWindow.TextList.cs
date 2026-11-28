@@ -25,10 +25,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var entries = ModTextCatalog.Build();
-                var browser = new StackPanel { Spacing = 5, Margin = new global::Avalonia.Thickness(0, 4, 0, 12) };
-                browser.Children.Add(new TextBlock { Text = Loc.Get("mod_text_originals") });
+                var browser = new StackPanel { Spacing = 5 };
+                var frame = new Border
+                {
+                    Background = Brush.Parse("#20203A"), BorderBrush = Brush.Parse("#353550"),
+                    BorderThickness = new global::Avalonia.Thickness(1), CornerRadius = new global::Avalonia.CornerRadius(8),
+                    Padding = new global::Avalonia.Thickness(10), Margin = new global::Avalonia.Thickness(0, 4, 0, 12), Child = browser
+                };
+                var title = new TextBlock { FontSize = 13, FontWeight = FontWeight.SemiBold };
+                browser.Children.Add(title);
+                browser.Children.Add(new TextBlock { Text = Loc.Get("mod_text_browser_help"), FontSize = 11,
+                    Foreground = Brush.Parse("#9A9AB8"), TextWrapping = TextWrapping.Wrap });
                 var search = new TextBox { PlaceholderText = Loc.Get("mod_text_search") };
-                var count = new TextBlock();
                 var rows = new ListBox { Height = 220 };
                 rows.AddHandler(KeyDownEvent, (_, e) =>
                 {
@@ -37,14 +45,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }, RoutingStrategies.Tunnel);
                 var export = new Button { Content = Loc.Get("mod_text_export"), HorizontalAlignment = HorizontalAlignment.Left };
                 export.Click += async (_, _) => await ExportOriginalTexts(entries);
-                browser.Children.Add(search);
-                browser.Children.Add(count);
-                browser.Children.Add(export);
+                var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+                export.Margin = new global::Avalonia.Thickness(8, 0, 0, 0);
+                Grid.SetColumn(export, 1);
+                bar.Children.Add(search);
+                bar.Children.Add(export);
+                browser.Children.Add(bar);
                 browser.Children.Add(rows);
                 void Refresh()
                 {
                     var matches = ModTextCatalog.Search(entries, search.Text, ShownLabels);
-                    count.Text = Loc.GetF("mod_text_count", matches.Count, entries.Count);
+                    title.Text = Loc.Get("mod_text_originals") + " (" + Loc.GetF("mod_text_count", matches.Count, entries.Count) + ")";
                     rows.Items.Clear();
                     string? group = null;
                     foreach (var entry in matches)
@@ -61,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 search.TextChanged += (_, _) => Refresh();
                 Refresh();
-                stack.Children.Add(browser);
+                stack.Children.Add(frame);
             }
             catch (Exception ex)
             {

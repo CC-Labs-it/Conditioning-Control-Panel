@@ -1,4 +1,5 @@
 {
+  "mod_text_browser_help": "点击文本将其用作原文，然后输入新内容。搜索技能时会同时显示其效果和背景描述。你仍可手动输入其他文本。",
   "mod_text_file_title": "Conditioning Control Panel - 模组文本替换的原始文本",
   "mod_text_file_version": "应用版本：{0}",
   "mod_text_file_count": "共 {0} 条文本。匹配区分大小写且必须完全一致，较长的文本优先替换。",

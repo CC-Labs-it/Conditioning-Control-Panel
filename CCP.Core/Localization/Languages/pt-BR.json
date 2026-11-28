@@ -1,4 +1,5 @@
 {
+  "mod_text_browser_help": "Clique em um texto para usá-lo como original e digite o novo texto. Ao buscar uma habilidade, seu efeito e contexto também aparecem. Você ainda pode digitar outros textos manualmente.",
   "mod_text_file_title": "Conditioning Control Panel - textos originais para substituições",
   "mod_text_file_version": "Versão do aplicativo: {0}",
   "mod_text_file_count": "{0} textos. A correspondência é exata e diferencia maiúsculas; textos mais longos são substituídos primeiro.",

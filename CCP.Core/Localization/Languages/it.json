@@ -1,4 +1,5 @@
 {
+  "mod_text_browser_help": "Fai clic su un testo per usarlo come originale, poi inserisci il nuovo testo. Cercando un’abilità vedrai anche il suo effetto e la sua atmosfera. Puoi comunque inserire altri testi a mano.",
   "mod_text_file_title": "Conditioning Control Panel - testi originali per le sostituzioni",
   "mod_text_file_version": "Versione app: {0}",
   "mod_text_file_count": "{0} testi. La corrispondenza è esatta e distingue maiuscole e minuscole; i testi più lunghi vengono sostituiti per primi.",

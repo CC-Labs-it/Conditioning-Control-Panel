@@ -119,6 +119,76 @@ public sealed class ModCreatorTextListTests
     }
 
     [Fact]
+    public void BrowserShowsLocalizedHelpAndFramedSearchExportRow() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current == null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var previous = LocalizationManager.Instance.CurrentLanguage;
+        try
+        {
+            foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
+            {
+                var json = JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.RepoRoot, "CCP.Core", "Localization", "Languages", code + ".json")));
+                LocalizationManager.Instance.SetLanguage(code);
+                Assert.False(string.IsNullOrWhiteSpace((string?)json["mod_text_browser_help"]));
+                Assert.Equal((string?)json["mod_text_browser_help"], Loc.Get("mod_text_browser_help"));
+            }
+            LocalizationManager.Instance.SetLanguage("en");
+            var english = Loc.Get("mod_text_browser_help");
+            Assert.Contains("Click a text", english);
+            Assert.Contains("effect and flavour", english);
+            Assert.Contains("by hand", english);
+            LocalizationManager.Instance.SetLanguage("fr");
+            var window = new ModCreatorWindow();
+            try
+            {
+                var search = window.GetLogicalDescendants().OfType<TextBox>().Single(t => t.PlaceholderText == Loc.Get("mod_text_search"));
+                var bar = window.GetLogicalDescendants().OfType<Grid>().Single(g => g.Children.Contains(search));
+                var export = bar.Children.OfType<Button>().Single();
+                Assert.Equal(Loc.Get("mod_text_export"), export.Content);
+                Assert.Equal(0, Grid.GetColumn(search));
+                Assert.Equal(1, Grid.GetColumn(export));
+                Assert.Equal(2, bar.ColumnDefinitions.Count);
+                var frame = window.GetLogicalDescendants().OfType<Border>().Single(b => b.Child is StackPanel p && p.Children.Contains(bar));
+                var browser = (StackPanel)frame.Child!;
+                var title = (TextBlock)browser.Children[0];
+                var total = ModTextCatalog.Build().Count;
+                Assert.Equal(Loc.Get("mod_text_originals") + " (" + Loc.GetF("mod_text_count", total, total) + ")", title.Text);
+                search.Text = "zzzz-not-a-text"; Dispatcher.UIThread.RunJobs();
+                Assert.Equal(Loc.Get("mod_text_originals") + " (" + Loc.GetF("mod_text_count", 0, total) + ")", title.Text);
+                var help = browser.Children.OfType<TextBlock>().Single(t => t.Text == Loc.Get("mod_text_browser_help"));
+                Assert.Equal(TextWrapping.Wrap, help.TextWrapping);
+                Assert.Contains("compétence", help.Text!);
+                Assert.Equal(new Thickness(1), frame.BorderThickness);
+                Assert.Single(browser.Children.OfType<ListBox>());
+            }
+            finally { window.Close(); Dispatcher.UIThread.RunJobs(); }
+        }
+        finally { LocalizationManager.Instance.SetLanguage(previous); }
+    });
+
+    [Fact]
+    public void BrowserFrameContainsSearchAndExportInOneRow() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current == null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var window = new ModCreatorWindow();
+        try
+        {
+            var search = window.GetLogicalDescendants().OfType<TextBox>().Single(t => t.PlaceholderText == Loc.Get("mod_text_search"));
+            var bar = window.GetLogicalDescendants().OfType<Grid>().Single(g => g.Children.Contains(search));
+            var export = bar.Children.OfType<Button>().Single();
+            var frame = window.GetLogicalDescendants().OfType<Border>().Single(b => b.Child is StackPanel p && p.Children.Contains(bar));
+            Assert.Equal(new Thickness(1), frame.BorderThickness);
+            Assert.Equal(0, Grid.GetColumn(search));
+            Assert.Equal(1, Grid.GetColumn(export));
+        }
+        finally { window.Close(); Dispatcher.UIThread.RunJobs(); }
+    });
+
+    [Fact]
     public void ArrowKeysNavigateWithoutPickingAndEnterPicks() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current == null)

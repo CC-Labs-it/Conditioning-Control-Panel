@@ -1,4 +1,5 @@
 {
+  "mod_text_browser_help": "Cliquez sur un texte pour l’utiliser comme original, puis saisissez le nouveau texte. La recherche d’une compétence affiche aussi son effet et son ambiance. Vous pouvez toujours saisir un autre texte à la main.",
   "mod_text_file_title": "Conditioning Control Panel - textes originaux pour les remplacements",
   "mod_text_file_version": "Version de l’application : {0}",
   "mod_text_file_count": "{0} textes. La correspondance est exacte et sensible à la casse ; les textes les plus longs sont remplacés en premier.",

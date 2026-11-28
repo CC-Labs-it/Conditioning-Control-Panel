@@ -1,4 +1,5 @@
 {
+  "mod_text_browser_help": "Click a text to use it as the original, then type the new wording. Searching a skill shows its effect and flavour with it. You can still type any other text by hand.",
   "mod_text_file_title": "Conditioning Control Panel - original texts for mod text replacements",
   "mod_text_file_version": "App version: {0}",
   "mod_text_file_count": "{0} texts. Matching is exact and case-sensitive; longer texts are replaced first.",

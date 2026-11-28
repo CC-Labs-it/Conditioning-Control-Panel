@@ -1,4 +1,5 @@
 {
+  "mod_text_browser_help": "Klicke auf einen Text, um ihn als Original zu verwenden, und gib dann den neuen Text ein. Die Suche nach einer Fähigkeit zeigt auch ihren Effekt und Hintergrund. Andere Texte kannst du weiterhin von Hand eingeben.",
   "mod_text_file_title": "Conditioning Control Panel - Originaltexte für Textersetzungen",
   "mod_text_file_version": "App-Version: {0}",
   "mod_text_file_count": "{0} Texte. Die Suche ist exakt und unterscheidet Groß- und Kleinschreibung; längere Texte werden zuerst ersetzt.",

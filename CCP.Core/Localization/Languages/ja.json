@@ -1,4 +1,5 @@
 {
+  "mod_text_browser_help": "テキストをクリックして元のテキストに設定し、新しい文言を入力します。スキルを検索すると、その効果とフレーバーも表示されます。他のテキストも手入力できます。",
   "mod_text_file_title": "Conditioning Control Panel - modのテキスト置換用の元のテキスト",
   "mod_text_file_version": "アプリのバージョン: {0}",
   "mod_text_file_count": "{0} 件のテキスト。完全一致で大文字と小文字を区別し、長いテキストから先に置換します。",
