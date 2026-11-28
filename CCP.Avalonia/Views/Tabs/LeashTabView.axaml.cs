@@ -123,7 +123,7 @@ public partial class LeashTabView : UserControl
     private Control OfferRow(LeashOffer o)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        var av = F.Avatar(o.From.Name, 34, null);
+        var av = F.Avatar(o.From.Name, 34, null, string.IsNullOrEmpty(o.From.AvatarUrl) ? o.From.Look : o.From.Look with { AvatarId = null });
         av.Margin = new Thickness(0, 0, 8, 0);
         g.Children.Add(av);
         var t = new TextBlock { FontSize = 12.5, Foreground = F.Text, FontFamily = F.Display, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
@@ -134,13 +134,26 @@ public partial class LeashTabView : UserControl
         };
         Grid.SetColumn(t, 1);
         g.Children.Add(t);
-        var look = F.Pill(Loc.Get("leash_offer_look"), F.Gold, LeashAskCard.Ink, "leash-offer-look", F.Gold);
-        look.Margin = new Thickness(6, 0, 0, 0);
-        look.Padding = new Thickness(12, 5);
-        look.CornerRadius = new CornerRadius(10);
+        // WPF LeashLook.Chunky gold: lit top, pale rim and soft gold glow.
+        var gold = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops = { new GradientStop(Color.Parse("#FFE3A0"), 0), new GradientStop(Color.Parse("#FFCF6B"), 1) },
+        };
+        var look = F.Pill(Loc.Get("leash_offer_look"), gold, LeashAskCard.Ink, "leash-offer-look", new SolidColorBrush(Color.Parse("#33FFFFFF")));
+        look.Padding = new Thickness(8, 7);
+        look.CornerRadius = new CornerRadius(11);
+        if (look.Content is TextBlock label) label.FontWeight = FontWeight.SemiBold;
         look.Click += (_, _) => LeashAskWindow.Open(o, () => _service, TopLevel.GetTopLevel(this) as Window);
-        Grid.SetColumn(look, 2);
-        g.Children.Add(look);
+        // A sibling shadow keeps the glow without re-blurring the button on every frame (P82).
+        var glow = new Border
+        {
+            Tag = "leash-offer-look-glow", IsHitTestVisible = false, Background = gold, CornerRadius = new CornerRadius(11),
+            BoxShadow = new BoxShadows(new BoxShadow { Blur = 12, Color = Color.FromArgb(89, 0xFF, 0xCF, 0x6B) }),
+        };
+        var lookHost = new Grid { Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Children = { glow, look } };
+        Grid.SetColumn(lookHost, 2);
+        g.Children.Add(lookHost);
         return new Border
         {
             Background = LeashAskCard.Card, BorderBrush = LeashAskCard.GoldDeep, BorderThickness = new Thickness(1),
