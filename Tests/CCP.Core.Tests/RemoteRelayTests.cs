@@ -765,6 +765,8 @@ public sealed class RemoteRelayTests
     [InlineData("disable_panic", "ignored", "Not allowed: the panic key stays on")]
     [InlineData("resume_session", "panic", "Not allowed: panic")]
     [InlineData("trigger_haptic", "no_device", "Can't open that: no_device")]
+    [InlineData("haptic_pattern", "no pattern", "Not played: no pattern")]
+    [InlineData("haptic_level", "bad level", "Not played: bad level")]
     [InlineData("play_hypnotube", "browser unavailable", "Can't open that: browser unavailable")]
     public async Task Refused_commands_send_an_emote(string action, string reason, string expected)
     {
@@ -793,8 +795,11 @@ public sealed class RemoteRelayTests
         Assert.Equal(("Can't open that: " + new string('x', 100)).Substring(0, 60), (string?)emote["text"]);
     }
 
-    [Fact]
-    public async Task Panic_during_dispatch_drops_the_refusal_emote()
+    [Theory]
+    [InlineData("resume_session")]
+    [InlineData("haptic_pattern")]
+    [InlineData("haptic_level")]
+    public async Task Panic_during_dispatch_drops_the_refusal_emote(string action)
     {
         var previous = CoreDispatch.InvokeProvider;
         try
@@ -803,7 +808,7 @@ public sealed class RemoteRelayTests
             using var r = Relay(f);
             await r.StartAsync("full");
             CoreDispatch.InvokeProvider = (fn, _) => { RemoteCommands.StopHaptics(); return (true, "panic"); };
-            Poll(f, Cmd("1", "resume_session"));
+            Poll(f, Cmd("1", action));
             await r.PollOnceAsync();
             Assert.DoesNotContain(f.Seen, x => x.Path == "/v2/remote/emote");
         }
