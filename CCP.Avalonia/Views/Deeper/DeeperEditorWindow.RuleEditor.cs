@@ -1133,7 +1133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     if (newType == EffectTypes.Speak && string.IsNullOrWhiteSpace(te.SpeakTarget))
                     {
                         te.SpeakTarget = "YES";
-                        te.SpeakCorrectMessage = "good girl";
+                        te.SpeakCorrectMessage = $"that's it, {(global::ConditioningControlPanel.Localization.VocabTokens.PetName)}";
                         te.SpeakIncorrectMessage = "try again";
                     }
                     RebuildTypeFields();

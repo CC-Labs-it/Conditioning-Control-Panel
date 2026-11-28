@@ -266,7 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     item.EffectSpeakRequiredReps = 1;
                     item.EffectSpeakCompletion = SpeakCompletion.UntilSatisfied;
                     item.EffectSpeakHoldMode = SpeakHoldMode.LoopRegion;
-                    item.EffectSpeakCorrectMessage = "good girl";
+                    item.EffectSpeakCorrectMessage = $"that's it, {(global::ConditioningControlPanel.Localization.VocabTokens.PetName)}";
                     item.EffectSpeakIncorrectMessage = "try again";
                 }
                 _enhancement.TimelineItems.Add(item);
