@@ -95,8 +95,8 @@ public sealed class LauncherDoorsTests
         Click(w.DoorButtons[0]);
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(LauncherDoor.Games, w.OpenDoor);
-        // One Breakout card (the demo on this head), then what this head can launch.
-        Assert.Equal(new[] { "breakout", "piecebypiece", "race", "raceclassic", "dtrh", "intake" }, Tiles(w));
+        // Terms & Conditioning (s20-tc-host), one Breakout card (the demo on this head), then what this head can launch.
+        Assert.Equal(new[] { "tc", "breakout", "piecebypiece", "race", "raceclassic", "dtrh", "intake" }, Tiles(w));
         Assert.True(w.FindControl<StackPanel>("DoorPageHeader")!.IsVisible);
         Assert.Equal(Loc.Get("launcher_section_games"), w.FindControl<TextBlock>("GamesEyebrow")!.Text);
         Assert.Empty(w.DoorButtons);
@@ -140,7 +140,7 @@ public sealed class LauncherDoorsTests
     {
         var w = OpenLauncher(shell);
         var games = w.DoorButtons[0];
-        Assert.Equal(Loc.Get("launcher_section_games") + ", " + string.Format(Loc.Get("launcher_door_count_games"), 6),
+        Assert.Equal(Loc.Get("launcher_section_games") + ", " + string.Format(Loc.Get("launcher_door_count_games"), 7),
             AutomationProperties.GetName(games));
         Assert.Equal("LauncherDoor_games", AutomationProperties.GetAutomationId(games));
         Assert.Equal("LauncherDoor_tools", AutomationProperties.GetAutomationId(w.DoorButtons[1]));

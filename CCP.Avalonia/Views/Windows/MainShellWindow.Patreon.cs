@@ -148,7 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.QuestsTab.cs:96 OpenPricedCard: a priced CTA sends a patron whose grant died
         /// to Reconnect instead of the price card.</summary>
-        internal void OpenPricedCard(string featureKey, int tier)
+        internal void OpenPricedCard(string? featureKey, int tier)
         {
             if (LockdownActive) return;
             if (TierGate.ReconnectIsTheAnswer()) { _ = ReconnectFromGate(); return; }

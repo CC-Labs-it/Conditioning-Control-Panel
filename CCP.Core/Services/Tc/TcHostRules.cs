@@ -56,14 +56,21 @@ internal static class TcHostRules
         _ => "full",
     };
 
+    /// <summary>The one origin the app's own library rows come from (the <c>ccp.assets</c> mapping, CONTRACT.md 3.3).</summary>
+    public const string OwnMediaOrigin = "https://ccp.assets";
+
+    /// <summary><c>caps.ownMedia</c>: the library, no folder of its own (the folder row and its window stay the browser's).</summary>
+    public static JObject OwnMediaCap() => new() { ["library"] = true, ["mediaOrigin"] = OwnMediaOrigin };
+
     /// <summary>
     /// The boot frame. <paramref name="v2Caps"/> comes from <see cref="TcRules.Caps"/>. Pictures go out as
     /// the device-origin Scrolller cap (<see cref="TcMediaRules.ScrolllerCap"/>, consent = the gate's answer);
     /// <paramref name="sparkles"/> is true when a claim can be made (signed in); <paramref name="toysConnected"/>
     /// is the toy read at run start (CONTRACT.md 3.1). Words are the Circe recorded bank for every mod (never synthetic speech).
+    /// <paramref name="ownMedia"/> false leaves <c>caps.ownMedia</c> out, for a host that cannot answer <c>own-media-list</c> yet.
     /// </summary>
     public static JObject InitFrame(string? lang, MotionLevel motion, bool gentle, string? activeModId, JObject v2Caps,
-        bool picturesOn = false, bool sparkles = false, bool toys = false, bool toysConnected = false)
+        bool picturesOn = false, bool sparkles = false, bool toys = false, bool toysConnected = false, bool ownMedia = true)
     {
         var caps = (JObject)v2Caps.DeepClone();
         caps["scrolller"] = TcMediaRules.ScrolllerCap(picturesOn);
@@ -71,7 +78,7 @@ internal static class TcHostRules
         caps["words"] = new JObject { ["bank"] = "circe" };
         caps["toys"] = toys;
         caps["toysConnected"] = toys && toysConnected;
-        caps["ownMedia"] = TcOwnMediaRules.Cap();   // "Use local files" = the app's own ticked pictures (CONTRACT.md 3.3)
+        if (ownMedia) caps["ownMedia"] = OwnMediaCap();   // "Use local files" = the app's own ticked pictures (CONTRACT.md 3.3)
         return new JObject
         {
             ["type"] = "init",

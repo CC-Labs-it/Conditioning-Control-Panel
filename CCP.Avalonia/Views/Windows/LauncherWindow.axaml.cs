@@ -46,6 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ["raceclassic"] = (() => !ConditioningControlPanel.Services.Race.RacingAccess.CanLaunch, _ => Games.GameWindow.Launch("raceclassic")),
                 // WPF LauncherCatalogue :241: Basic (or the daily-free drop); GameWindow.Launch runs DemandPremium.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
+                // WPF LauncherCatalogue :250: never locked (the edition picks the game); the Games gate needs the tree.
+                [Games.GameWindow.TcId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.TcId)),
                 // The Tools door (WPF LauncherCatalogue.BuildTools): two panel tabs, the Mod Manager, two windows.
                 ["deepereditor"] = (() => false, panel => panel.ShowTab("deeper")),
                 ["sessioneditor"] = (() => false, panel => panel.ShowTab("presets")),

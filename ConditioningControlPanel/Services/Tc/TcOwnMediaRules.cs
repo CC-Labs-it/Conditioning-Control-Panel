@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Services.Tc;
 internal static class TcOwnMediaRules
 {
     /// <summary>The one origin the rows come from (the <c>ccp.assets</c> mapping, Allow, so the game can read it).</summary>
-    public const string MediaOrigin = "https://ccp.assets";
+    public const string MediaOrigin = TcHostRules.OwnMediaOrigin;
 
     /// <summary>The page keeps at most this many own files from one answer (ui/pictures.js OWN_MAX).</summary>
     public const int MaxRows = 3000;
@@ -50,7 +50,7 @@ internal static class TcOwnMediaRules
     };
 
     /// <summary><c>caps.ownMedia</c>: the library, no folder of its own (the folder row and its window stay the browser's).</summary>
-    public static JObject Cap() => new() { ["library"] = true, ["mediaOrigin"] = MediaOrigin };
+    public static JObject Cap() => TcHostRules.OwnMediaCap();   // one shape, kept in Core (TcHostRules.InitFrame sends it)
 
     /// <summary>Whether the page can show this file at all, from its name (no header read).</summary>
     public static bool Showable(string path, bool video)
