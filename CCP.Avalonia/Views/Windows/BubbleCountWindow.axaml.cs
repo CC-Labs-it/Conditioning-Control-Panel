@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly bool _strictMode;
         private readonly Action<bool> _onComplete;
         private readonly Action _onSkipped;
+        private readonly Action<double>? _onDuration;
         private readonly Screen? _screen;
         private readonly bool _isPrimary;
 
@@ -168,7 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         public BubbleCountWindow(string videoPath, Difficulty difficulty,
             bool strictMode, Action<bool> onComplete,
-            Screen? screen = null, bool isPrimary = true, Action? onSkipped = null)
+            Screen? screen = null, bool isPrimary = true, Action? onSkipped = null, Action<double>? onDuration = null)
         {
             AvaloniaXamlLoader.Load(this);
 
@@ -182,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _strictMode = strictMode;
             _onComplete = onComplete;
             _onSkipped = onSkipped ?? (() => onComplete(false));
+            _onDuration = onDuration;
             // Screens can be empty under a headless platform, so this stays nullable and every
             // read of it is guarded. WPF's Screen.PrimaryScreen! could not be null.
             _screen = screen ?? Screens?.Primary ?? Screens?.All.FirstOrDefault();
@@ -255,7 +257,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// count and, in strict mode, start the WRONG! WATCH AGAIN retry loop for a game the user
         /// never saw. When null, a skip falls back to the completion callback (old behaviour).</param>
         public static void ShowOnAllMonitors(string videoPath, Difficulty difficulty,
-            bool strictMode, Action<bool> onComplete, Action? onSkipped = null)
+            bool strictMode, Action<bool> onComplete, Action? onSkipped = null, Action<double>? onDuration = null)
         {
             // The completion callback must reach the caller EXACTLY once. Every window shares this
             // delegate and CloseAllWindows invokes it, which can happen INSIDE the Show() below
@@ -312,7 +314,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BubbleCountWedgeWatchdog.Game.Arm();
             try
             {
-                var primaryWindow = new BubbleCountWindow(videoPath, difficulty, strictMode, complete, null, true, skip);
+                var primaryWindow = new BubbleCountWindow(videoPath, difficulty, strictMode, complete, null, true, skip, onDuration);
                 primaryWindow._useBrowser = BrowserVideoSurface.TryAcquire(primaryWindow, videoPath);
                 if (primaryWindow._useBrowser) { _browserOwner = primaryWindow; BubbleCountWedgeWatchdog.Game.Disarm(); }
                 primaryWindow.Show();
@@ -474,6 +476,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _bubbleSpawnTimer.Interval = TimeSpan.FromMilliseconds(
                     (_videoDurationSeconds * 1000) / Math.Max(1, _targetBubbleCount) * 0.7);
             StartSafetyTimer(_videoDurationSeconds);
+            _onDuration?.Invoke(seconds);
         }
 
         // WPF BubbleCountWindow.xaml.cs:705-718: shared cache, asynchronous warm on miss,
@@ -628,6 +631,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static readonly List<object> _quarantinedNative = new();
         internal static volatile bool NativeUnavailable;
         internal static Func<long> NativeClock = () => Environment.TickCount64;
+        private static long? _mandatoryPoisonedAt;
+        internal static void RecordMandatoryNativePoisoning()
+        {
+            lock (_quarantinedNative) _mandatoryPoisonedAt = NativeClock();
+        }
+        internal static void ClearMandatoryNativePoisoningForTests()
+        {
+            lock (_quarantinedNative) _mandatoryPoisonedAt = null;
+        }
         private sealed class NativeHold { public long From; }
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, NativeHold> _nativeHolds = new();
         // WPF VideoService.cs:170,1320-1344 and VideoCooldownRules.cs:16: four seconds
@@ -638,9 +650,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 lock (_quarantinedNative)
                 {
+                    var now = NativeClock();
+                    if (_mandatoryPoisonedAt is long poisoned && now >= poisoned &&
+                        VideoCooldownRules.PoisonCooldownRemainingMs(1, 1 + (now - poisoned) * TimeSpan.TicksPerMillisecond) > 0)
+                        return true;
                     if (!NativeUnavailable) return false;
                     if (_quarantinedNative.Count == 0) return true;
-                    var now = NativeClock();
                     return _quarantinedNative.Any(r => !_nativeHolds.TryGetValue(r, out var hold) ||
                         (now >= hold.From && now - hold.From < 60000));
                 }

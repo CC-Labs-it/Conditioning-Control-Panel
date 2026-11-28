@@ -30,13 +30,14 @@ public sealed class PortalEffectQueueTests
         }
         finally
         {
-            bound.TrySetResult("F8");
+            bound.TrySetResult(MainShellWindow.PortalKeyForTest);   // the desktop bound the asked key (#1752)
             for (int i = 0; i < 200 && !ran; i++) await Task.Delay(10);
             PortalPanicShortcut.BindForTests = null;
             settings.PanicKeyEnabled = previous;
             MainShellWindow.ReleasePortalWhenUnused();
             await PortalPanicShortcut.UnbindAsync();
             Dispatcher.UIThread.RunJobs();
+            MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
         }
     });
 
@@ -60,19 +61,20 @@ public sealed class PortalEffectQueueTests
             Assert.Empty(events);
             MainShellWindow.ReleasePortalWhenUnused();
             Assert.True(PortalPanicShortcut.IsBound);
-            bound.TrySetResult("F8");
+            bound.TrySetResult(MainShellWindow.PortalKeyForTest);   // the desktop bound the asked key (#1752)
             for (int i = 0; i < 200 && events.Count < 2; i++) await Task.Delay(10);
             Assert.Equal(new[] { onFirst, !onFirst }, events);
         }
         finally
         {
-            bound.TrySetResult("F8");
+            bound.TrySetResult(MainShellWindow.PortalKeyForTest);   // the desktop bound the asked key (#1752)
             for (int i = 0; i < 200 && events.Count < 2; i++) await Task.Delay(10);
             PortalPanicShortcut.BindForTests = null;
             settings.PanicKeyEnabled = previous;
             MainShellWindow.ReleasePortalWhenUnused();
             await PortalPanicShortcut.UnbindAsync();
             Dispatcher.UIThread.RunJobs();
+            MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
         }
     });
 }

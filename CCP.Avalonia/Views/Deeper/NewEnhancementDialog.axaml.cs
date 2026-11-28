@@ -16,6 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     {
         public string SelectedMediaType { get; private set; } = MediaTypes.Video;
         public string SelectedSource { get; private set; } = "";
+        internal bool ClosingWithSuccess { get; private set; }
 
         private string? _pendingPart2Tutorial;
         private TutorialOverlay? _activeTutorialOverlay;
@@ -145,7 +146,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             SelectedMediaType = _rbVideo.IsChecked == true ? MediaTypes.Video : MediaTypes.Audio;
             SelectedSource = source;
             if (_pendingPart2Tutorial != null) CoreTutorialEvents.PendingPart2Tutorial = _pendingPart2Tutorial;
-            Close(true);
+            ClosingWithSuccess = true;
+            try { Close(true); }
+            finally { ClosingWithSuccess = false; }
         }
     }
 }

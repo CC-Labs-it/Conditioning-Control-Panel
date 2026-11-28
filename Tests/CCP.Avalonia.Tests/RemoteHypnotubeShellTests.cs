@@ -40,6 +40,7 @@ public sealed class RemoteHypnotubeShellTests
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
         var offline = s.OfflineMode;
+        var protect = s.ProtectBrowserVideoPlayback;
         var (oldPlay, oldStop) = (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo);
         const string video = "https://hypnotube.com/video/example-123.html";
         // The test profile is a network sandbox (SandboxNet): only a loopback page really loads, so the paths
@@ -51,6 +52,7 @@ public sealed class RemoteHypnotubeShellTests
         try
         {
             s.OfflineMode = false;
+            s.ProtectBrowserVideoPlayback = false;
             shell = new MainShellWindow();
             shell.Show();
             Dispatcher.UIThread.RunJobs();
@@ -72,15 +74,23 @@ public sealed class RemoteHypnotubeShellTests
             // A page engine from here on.
             var scripts = new List<string>();
             web.ScriptInvoker = js => { scripts.Add(js); return Task.FromResult<string?>(null); };
+            web.NewScrolllerEngine()(true); web.NavigationInvoker = _ => false;
+            Assert.Equal(Loc.Get("remote_browser_unavailable"), shell.PlayHypnotubeFromRemote(page));
+            Assert.False(LockCardWindow.WebVideoClaimed);
             web.NavigationInvoker = _ => true;
 
             Assert.Null(shell.PlayHypnotubeFromRemote(page));
+            Assert.True(LockCardWindow.WebVideoClaimed);
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo);
+            web.OnNavigationCompleted(new Uri(page)); LockCardWindow.NoteWebVideo(true);
+            s.OfflineMode = true; Assert.False(shell.NavigateToUrlInBrowser(page, true)); Assert.True(LockCardWindow.WebVideoClaimed); s.OfflineMode = false;
             Assert.True(browser.IsVisible);
             Assert.False(shell.BrowserCovered);   // the overlay stops covering while the controller's video plays
             Assert.Equal(new Uri(page), web.Source);
 
             // stop_video: back to the site home and under the overlay again (WPF :1410, :995).
             Assert.Null(RemoteCommands.Execute("stop_video", null));
+            Assert.False(LockCardWindow.WebVideoClaimed);
             Assert.False(browser.IsVisible);
             Assert.True(shell.BrowserCovered);
             Assert.Equal(home, web.Source);
@@ -137,6 +147,8 @@ public sealed class RemoteHypnotubeShellTests
             hookAfterClose = RemoteCommands.PlayHypnotube;
             (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (oldPlay, oldStop);
             s.OfflineMode = offline;
+            s.ProtectBrowserVideoPlayback = protect;
+            LockCardWindow.EndWebVideo();
         }
         Assert.Null(hookAfterClose);   // the shell lets go of the hook on close
         return Task.CompletedTask;

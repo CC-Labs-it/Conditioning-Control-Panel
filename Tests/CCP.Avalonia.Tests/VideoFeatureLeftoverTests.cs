@@ -139,6 +139,7 @@ public sealed class VideoFeatureLeftoverTests
 
     private sealed class Host : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
