@@ -7,14 +7,17 @@ using ConditioningControlPanel.Services.Friends;
 namespace ConditioningControlPanel.Services.Dares;
 
 /// <summary>
-/// THE DARES PREVIEW'S FRIENDS (DEBUG <c>CCP_DARES_PREVIEW=1</c> only, wired in App.xaml.cs). Stands in
+/// THE DARES PREVIEW'S FRIENDS (DEBUG <c>CCP_DARES_PREVIEW=1</c> only, wired in App.xaml.cs and App.axaml.cs). Stands in
 /// for <c>App.Friends</c> so the drawer has people to dare in a clean sandbox: while the real list is
 /// empty or nobody is signed in, the snapshot holds the three fake friends of
 /// <see cref="PreviewDaresService.Fakes"/>; once the real list has anyone, it is the real one, untouched.
 /// A press on a fake friend answers locally and sends nothing; everything else goes to the real service.
 /// </summary>
-public sealed class PreviewFriendsService : IFriendsService
+public sealed class PreviewFriendsService : IFriendsService, IDisposable
 {
+    /// <summary>App exit stops the real poll underneath.</summary>
+    public void Dispose() => (_inner as IDisposable)?.Dispose();
+
     private readonly IFriendsService _inner;
 
     public PreviewFriendsService(IFriendsService inner)
@@ -65,7 +68,7 @@ public sealed class PreviewFriendsService : IFriendsService
     private void Raise()
     {
         try { SnapshotChanged?.Invoke(Snapshot); }
-        catch (Exception ex) { App.Logger?.Debug("Preview friends handler failed: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("Preview friends handler failed: {E}", ex.Message); }
     }
 
     public async Task RefreshAsync()

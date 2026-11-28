@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("emergency-exit", _ => EmergencyExitWindow.Current?.Close(), () => EmergencyExitWindow.Current != null),
             // WPF HandlePanicKeyPress / TriggerPanicFromRemote (main 7e14c2870): Circe's Tab opens its ten-minute
             // safety hold on EVERY panic (key, tray, voice, leash gate); the way out is never priced.
-            new("dares", _ => Platform.DareHead.StopForSafety()),
+            new("dares", _ => Platform.DareHead.StopForSafety()),   // the live service or the DEBUG preview and its real Lockdown host
             new("chaster-hold", _ => ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("panic")),
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.

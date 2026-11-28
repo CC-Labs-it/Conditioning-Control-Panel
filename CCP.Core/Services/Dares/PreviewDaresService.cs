@@ -4,8 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Threading;
+using ConditioningControlPanel.Services.Friends;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Dares;
 
@@ -104,7 +105,8 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
     private readonly Func<string, (string Name, int Tier)?> _friend;
     private readonly double? _pace;
     private Data _data;
-    private DispatcherTimer? _timer;
+    private IUiTimer? _timer;
+    private volatile bool _held;
 
     public PreviewDaresService(string? path, DareMeter meter, DareLockdownKeeper keeper,
         Func<DateTimeOffset>? now = null, Random? rng = null, Func<bool>? mySub = null,
@@ -117,7 +119,7 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
         _now = now ?? (() => DateTimeOffset.UtcNow);
         _rng = rng ?? new Random();
         _mySub = mySub ?? (() => TierGate.HasPremium);
-        _friend = friend ?? AppFriend;
+        _friend = friend ?? (id => FakeOr(null, id));
         _data = Load();
         _data.FirstSeen ??= _now();
         _meter.SetAccount("preview");
@@ -125,22 +127,23 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
         Step();
     }
 
-    /// <summary>The app's preview: its own files beside the live ones, the app's Lockdown.</summary>
-    public static PreviewDaresService CreateForApp(out DareMeter meter)
+    /// <summary>The app's preview: its own files beside the live ones, the app's Lockdown host.</summary>
+    public static PreviewDaresService Create(string userData, IDareHost host, Func<IFriendsService?> friends, out DareMeter meter)
     {
-        meter = new DareMeter(new DareMeter.FileStore(Path.Combine(App.UserDataPath, "dares-preview-meter.json")));
-        var keeper = new DareLockdownKeeper(new AppDareHost(),
-            new DareLockdownKeeper.FileStore(Path.Combine(App.UserDataPath, "dares-preview-serve.json")));
-        return new PreviewDaresService(Path.Combine(App.UserDataPath, FileName), meter, keeper);
+        meter = new DareMeter(new DareMeter.FileStore(Path.Combine(userData, "dares-preview-meter.json")));
+        var keeper = new DareLockdownKeeper(host,
+            new DareLockdownKeeper.FileStore(Path.Combine(userData, "dares-preview-serve.json")));
+        return new PreviewDaresService(Path.Combine(userData, FileName), meter, keeper, friend: id => FakeOr(friends(), id));
     }
 
-    private static (string Name, int Tier)? AppFriend(string id)
+    /// <summary>A fake friend first, else the app's friends list.</summary>
+    public static (string Name, int Tier)? FakeOr(IFriendsService? friends, string id)
     {
         var fake = Fakes.FirstOrDefault(f => f.Id == id);
         if (fake != null) return (fake.Name, fake.Tier);
         try
         {
-            var f = App.Friends?.Snapshot.Friends.FirstOrDefault(x => x.Id == id);
+            var f = friends?.Snapshot.Friends.FirstOrDefault(x => x.Id == id);
             return f == null ? null : (f.Name, f.Tier);
         }
         catch { return null; }
@@ -164,22 +167,42 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
 
     public DaresSnapshot Snapshot { get; private set; } = DaresSnapshot.Dark;
 
-    public void Start()
+    public void Start(IUiTimer timer)
     {
         if (_timer != null) return;
-        _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
-        _timer.Tick += (_, _) =>
-        {
-            try { Step(); }
-            catch (Exception ex) { App.Logger?.Debug("Dares preview step failed: {E}", ex.Message); }
-        };
-        _timer.Start();
+        _timer = timer;
+        timer.Interval = TimeSpan.FromSeconds(1);
+        timer.Tick += OnTick;
+        if (!_held) timer.Start();
     }
 
-    public Task RefreshAsync(CancellationToken ct = default) { Step(); return Task.CompletedTask; }
+    private void OnTick(object? sender, EventArgs e)
+    {
+        try { if (!_held) Step(); }
+        catch (Exception ex) { Log.Debug("Dares preview step failed: {E}", ex.Message); }
+    }
+
+    /// <summary>A stop or panic: the clock halts and every press is refused until <see cref="Resume"/>
+    /// (the live service's CancelPending hold).</summary>
+    public void CancelPending()
+    {
+        _held = true;
+        var timer = _timer;
+        timer?.OnUiThread(() => { if (_held) timer.Stop(); });
+    }
+
+    public void Resume()
+    {
+        _held = false;
+        var timer = _timer;
+        timer?.OnUiThread(() => { if (!_held) timer.Start(); });
+    }
+
+    public Task RefreshAsync(CancellationToken ct = default) { if (!_held) Step(); return Task.CompletedTask; }
 
     public Task<DareCreateOutcome> CreateAsync(string friendId, DareSlip slip, CancellationToken ct = default)
     {
+        if (_held) return Done(new DareCreateOutcome(DareCreateStatus.TryLater));
         var now = _now();
         if (_friend(friendId) is not { } who) return Done(new DareCreateOutcome(DareCreateStatus.NotFriends));
         var s = DareSlipCheck.Numbered(slip);
@@ -202,6 +225,7 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
 
     public Task<DareActResult> ActAsync(string betId, DareOp op, CancellationToken ct = default)
     {
+        if (_held) return Done(DareActResult.Refused);
         var now = _now();
         var row = _data.Rows.FirstOrDefault(r => r.Bet.Id == betId);
         if (row == null) return Done(DareActResult.Gone);
@@ -260,7 +284,7 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
     public Task SettleNowAsync(string betId, CancellationToken ct = default)
     {
         var row = _data.Rows.FirstOrDefault(r => r.Bet.Id == betId);
-        if (row?.Bet.State == DareState.Running)
+        if (!_held && row?.Bet.State == DareState.Running)
         {
             var now = _now();
             row.Bet = Settle(Climb(row, row.Bet, row.Bet.EndsAt), now, early: false);
@@ -516,7 +540,7 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
         if (DaresSnapshotEquality.Same(Snapshot, next)) return;
         Snapshot = next;
         try { Changed?.Invoke(); }
-        catch (Exception ex) { App.Logger?.Debug("Dares preview handler failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("Dares preview handler failed: {E}", ex.Message); }
     }
 
     private static Task<T> Done<T>(T v) => Task.FromResult(v);
@@ -528,7 +552,7 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
             if (_path != null && File.Exists(_path))
                 return JsonConvert.DeserializeObject<Data>(File.ReadAllText(_path)) ?? new Data();
         }
-        catch (Exception ex) { App.Logger?.Debug("Dares preview file unreadable: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("Dares preview file unreadable: {E}", ex.Message); }
         return new Data();
     }
 
@@ -543,13 +567,15 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
             File.WriteAllText(tmp, JsonConvert.SerializeObject(_data, Formatting.Indented));
             File.Move(tmp, _path, overwrite: true);
         }
-        catch (Exception ex) { App.Logger?.Debug("Dares preview save failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("Dares preview save failed: {E}", ex.Message); }
     }
 
     public void Dispose()
     {
-        _timer?.Stop();
+        _held = true;
+        if (_timer != null) { _timer.Stop(); _timer.Tick -= OnTick; }
         _timer = null;
+        _keeper.Ended -= OnServeEnded;
         _meter.Save();
     }
 }

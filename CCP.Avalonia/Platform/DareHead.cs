@@ -15,27 +15,42 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class DareHead
 {
     internal static DaresService? Service { get; set; }
+    /// <summary>WPF App._daresPreview: the DEBUG local preview, in place of <see cref="Service"/>.</summary>
+    internal static PreviewDaresService? Preview { get; set; }
     private static MeterHooks? _hooks;
     private static Host? _host;
 
-    internal static void Start()
+    /// <summary>WPF App.xaml.cs:3640-3663: the service (or the preview), then the meter hooks.</summary>
+    internal static void Start(bool preview = false)
     {
         var url = FriendsHead.BaseUrl(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
             Environment.GetEnvironmentVariable(FriendsHead.EnvVar));
-        if (url == null || Service != null) return;
+        if ((url == null && !preview) || Service != null || Preview != null) return;
         var host = new Host();
-        var meter = new DareMeter(new DareMeter.FileStore(Path.Combine(CorePaths.UserData, "dares_meter.json")));
-        var keeper = new DareLockdownKeeper(host, new DareLockdownKeeper.FileStore(Path.Combine(CorePaths.UserData, "dares_lockdown_serve.json")));
-        var service = new DaresService(new DaresApi(identity: FriendsHead.Identity, baseUrl: url), host, meter, keeper);
-        var hooks = new MeterHooks(meter);
         _host = host;
-        _hooks = hooks;
-        Service = service;
-        service.BetsRead += hooks.Wake;
-        service.CameraProbe = () => hooks.Camera;
-        hooks.Attach();
-        AccountSeed.ProfileLoaded += Kick;
-        service.Start(new FriendsHead.Timer());
+        if (preview)
+        {
+            var p = PreviewDaresService.Create(CorePaths.UserData, host, () => FriendsHead.Service, out var previewMeter);
+            var hooks = _hooks = new MeterHooks(previewMeter);
+            Preview = p;
+            p.Changed += hooks.Wake;
+            p.CameraProbe = () => hooks.Camera;
+            p.Start(new FriendsHead.Timer());
+        }
+        else
+        {
+            var meter = new DareMeter(new DareMeter.FileStore(Path.Combine(CorePaths.UserData, "dares_meter.json")));
+            var keeper = new DareLockdownKeeper(host, new DareLockdownKeeper.FileStore(Path.Combine(CorePaths.UserData, "dares_lockdown_serve.json")));
+            var service = new DaresService(new DaresApi(identity: FriendsHead.Identity, baseUrl: url!), host, meter, keeper);
+            var hooks = _hooks = new MeterHooks(meter);
+            Service = service;
+            service.BetsRead += hooks.Wake;
+            service.CameraProbe = () => hooks.Camera;
+            AccountSeed.ProfileLoaded += Kick;
+            service.Start(new FriendsHead.Timer());
+        }
+        _hooks.Attach();
+        _hooks.Wake();
     }
 
     private static void Kick() => Service?.Kick();
@@ -45,7 +60,7 @@ internal static class DareHead
     /// <summary>Panic and shutdown: cancel what is on the wire and hold the service until the user starts again.</summary>
     internal static void StopForSafety()
     {
-        if (Service != null) _held = true;   // no service, nothing to hold (and no static left latched)
+        if (Service != null || Preview != null) _held = true;   // no service, nothing to hold (and no static left latched)
         Cancel();
     }
 
@@ -66,7 +81,7 @@ internal static class DareHead
 
     private static void Cancel()
     {
-        try { Service?.CancelPending(); }
+        try { Service?.CancelPending(); Preview?.CancelPending(); }
         finally { try { _host?.Invalidate(); } finally { _hooks?.Suspend(); } }
     }
 
@@ -74,6 +89,7 @@ internal static class DareHead
     {
         _hooks?.Resume();
         Service?.Resume();
+        Preview?.Resume();
     }
 
     internal static void Shutdown()
@@ -83,12 +99,13 @@ internal static class DareHead
         try { _hooks?.Dispose(); }
         finally
         {
-            try { Service?.Dispose(); }
+            try { Service?.Dispose(); Preview?.Dispose(); }
             finally
             {
                 _host?.Dispose();
                 _hooks = null;
                 Service = null;
+                Preview = null;
                 _host = null;
                 _held = false;
             }

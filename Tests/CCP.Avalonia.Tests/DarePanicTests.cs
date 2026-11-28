@@ -169,6 +169,38 @@ public sealed class DarePanicTests
     }
 
     [Fact]
+    public async Task Panic_registry_holds_the_dares_preview_lockdown_until_a_user_start()
+    {
+        Assert.Null(DareHead.Preview);
+        var dir = Directory.CreateTempSubdirectory("dares-preview-panic-");
+        var now = new DateTimeOffset(2026, 11, 18, 10, 0, 0, TimeSpan.Zero);
+        var host = new Host();
+        var keeper = new DareLockdownKeeper(host, new DareLockdownKeeper.MemoryStore());
+        using var preview = new PreviewDaresService(Path.Combine(dir.FullName, PreviewDaresService.FileName), new DareMeter(), keeper,
+            () => now, new Random(1), () => true, pace: 1.2);
+        DareHead.Preview = preview;
+        try
+        {
+            await preview.CreateAsync(PreviewDaresService.Fakes[0].Id, new DareSlip(DareType.Cant, new DareWhat(DareKind.Session, "easy"),
+                DareDeadline.ThreeHours, new DareStake(DareStakeKind.Lockdown, 10), new DareStake(DareStakeKind.Sp, 50), false));
+            now += TimeSpan.FromSeconds(5);
+            preview.Step();
+            now += TimeSpan.FromMinutes(10);
+            preview.Step();
+            var id = preview.Snapshot.Bets.Single(b => b.IOwe).Id;
+            PanicSurfaces.All.Single(x => x.Id == "dares").Stop(null);
+            Assert.Equal(DareActResult.Refused, await preview.ActAsync(id, DareOp.StartLockdown));
+            DareHead.Interrupt();   // the panic's own engine stop must not lift the hold
+            Assert.Equal(DareActResult.Refused, await preview.ActAsync(id, DareOp.Pay));
+            Assert.False(host.Active);
+            DareHead.Resume();   // a user start
+            Assert.Equal(DareActResult.Done, await preview.ActAsync(id, DareOp.StartLockdown));
+            Assert.True(host.Active);
+        }
+        finally { DareHead.Preview = null; DareHead.Resume(); dir.Delete(true); }
+    }
+
+    [Fact]
     public async Task An_ordinary_engine_stop_keeps_dares_running_and_a_panic_holds_them_until_a_user_start()
     {
         Assert.Null(DareHead.Service);
