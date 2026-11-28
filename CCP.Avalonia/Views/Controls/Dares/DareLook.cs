@@ -13,21 +13,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Dares;
 // WPF c2cf10de4d Controls/Dares/DareLook.cs:31-73, 307-318.
 internal static class DareLook
 {
+    // WPF 6247691138 Controls/Dares/DareLook.cs:165-201.
     public static Color ToneColor(DareTone tone) => tone switch
     {
-        DareTone.Cant => Color.FromRgb(0xFF, 0x5F, 0x7A),
-        DareTone.Duel or DareTone.CameraOn => Color.FromRgb(0x5F, 0xFF, 0xD0),
-        DareTone.Pics => Color.FromRgb(0xFF, 0x9A, 0x5C),
-        DareTone.Minutes => Color.FromRgb(0x4F, 0xD8, 0xD0),
-        DareTone.Video => Color.FromRgb(0xFF, 0x5F, 0xB4),
-        DareTone.Session or DareTone.Who => Color.FromRgb(0xB9, 0x9C, 0xFF),
-        DareTone.Bubbles => Color.FromRgb(0x6B, 0xB8, 0xFF),
-        DareTone.Dare => Color.FromRgb(0xFF, 0x6F, 0x8E),
-        DareTone.Sp => Color.FromRgb(0xFF, 0xCF, 0x6B),
-        DareTone.Lock => Color.FromRgb(0x86, 0xA8, 0xFF),
-        DareTone.Lockdown => Color.FromRgb(0x9C, 0x7B, 0xFF),
-        DareTone.CameraOff => Color.FromRgb(0x6F, 0x62, 0x9A),
-        _ => Color.FromRgb(0xA3, 0x95, 0xC4),
+        DareTone.Cant or DareTone.Dare => Color.FromRgb(0xC2, 0x2B, 0x2B),
+        DareTone.Duel or DareTone.CameraOn => Color.FromRgb(0x2C, 0x8A, 0x57),
+        DareTone.Pics => Color.FromRgb(0xE0, 0x66, 0x3A),
+        DareTone.Minutes => Color.FromRgb(0x1F, 0x8A, 0x8A),
+        DareTone.Video => Color.FromRgb(0xCC, 0x3D, 0x7A),
+        DareTone.Session => Color.FromRgb(0x8A, 0x3F, 0x8F),
+        DareTone.Bubbles => Color.FromRgb(0x2F, 0x86, 0xC9),
+        DareTone.Sp => Color.FromRgb(0xB0, 0x7A, 0x00),
+        DareTone.Lock => Color.FromRgb(0x33, 0x61, 0x8F),
+        DareTone.CameraOff => Color.FromRgb(0x7A, 0x6A, 0x8F),
+        _ => Color.FromRgb(0x3A, 0x1D, 0x78),
+    };
+
+    public static string ToneIconName(DareTone tone) => tone switch
+    {
+        DareTone.Pics => "picture",
+        DareTone.Minutes or DareTone.When => "clock",
+        DareTone.Video => "video",
+        DareTone.Session => "play",
+        DareTone.Bubbles => "bubble",
+        DareTone.Sp => "star",
+        DareTone.Lock => "lock",
+        DareTone.Lockdown => "ldn",
+        DareTone.CameraOn => "eye",
+        DareTone.CameraOff => "eyeoff",
+        DareTone.Cant => "cross",
+        DareTone.Duel => "versus",
+        _ => "envelope",
+    };
+
+    public static string ToneGlyph(DareTone tone) => tone switch
+    {
+        DareTone.Pics => "\uE8B9", DareTone.Minutes => "\uE823", DareTone.Video => "\uE714",
+        DareTone.Session => "\uE768", DareTone.Bubbles => "\uEA3A", DareTone.Dare => "\uE715",
+        DareTone.Sp => "\uE734", DareTone.Lock => "\uE72E", DareTone.Lockdown => "\uEA18",
+        DareTone.When => "\uE787", DareTone.CameraOn => "\uE7B3", DareTone.CameraOff => "\uED1A",
+        DareTone.Cant => "\uE711", DareTone.Duel => "\uE8AB", _ => "\uE77B",
     };
 
     // WPF c2cf10de4d DareLook.cs:52-69 MDL2 glyphs, as Fluent kinds (IconMap D5 where it has the codepoint).
