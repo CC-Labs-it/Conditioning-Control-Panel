@@ -78,8 +78,9 @@ public sealed class FriendsDrawerFinishTests
             await d.RunMenuAsync(svc.Snapshot.Friends.Single(f => f.Id == "u_on"), "block");
             var card = Find<StackPanel>(d, "friends-card")!;
             Assert.IsType<global::Avalonia.Controls.Primitives.UniformGrid>(card.Children[0]);
-            Assert.Same(Find<Button>(d, "friends-action:more"), card.Children[1]);
-            Assert.Same(Find<Border>(d, "friends-confirm:block"), card.Children[2]);
+            // WPF 67fadbf70f: More is the grid's fourth tile.
+            Assert.Same(card.Children[0], Find<Button>(d, "friends-action:more")!.Parent);
+            Assert.Same(Find<Border>(d, "friends-confirm:block"), card.Children[1]);
             Click(d, "friends-action:poke");
             Assert.NotNull(Find<Border>(d, "friends-confirm:block"));
             Assert.Null(Find<WrapPanel>(d, "friends-picker:poke"));

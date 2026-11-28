@@ -67,9 +67,13 @@ internal static class DareLook
         DareTone.Cant => "\uE711", DareTone.Duel => "\uE8AB", _ => "\uE77B",
     };
 
+    /// <summary>WPF e0065f6b76 DareLook.cs:783: a compact choice's word size before any shrink to fit.</summary>
+    public const double CompactWord = 15;
+
     // WPF 8d480c7d3f Controls/Dares/DareLook.cs:774-790: choices have a flat base edge.
-    public static Button Choice(string label, Color color, string? tip, Action onClick, string tag)
+    public static Button Choice(string label, Color color, string? tip, Action onClick, string tag, bool compact = false, bool on = false)
     {
+        if (compact) return WordStamp(label, color, tip, onClick, tag, on);
         var button = new Button
         {
             Content = new TextBlock { Text = label, FontSize = 14, FontWeight = FontWeight.SemiBold,
@@ -85,6 +89,100 @@ internal static class DareLook
         ToolTip.SetTip(button, tip);
         button.Click += (_, _) => onClick();
         return button;
+    }
+
+    // ---- the friend card (WPF 67fadbf70f DareLook.cs:784-905): one family of light tiles, no ovals ----
+
+    /// <summary>WPF Choice(compact): a word stamp, 15 px bold print on a light face with an <paramref name="edge"/>
+    /// base, pressing onto it; <paramref name="on"/> sits pressed in, white, outlined in ink. The word shrinks to fit.</summary>
+    private static Button WordStamp(string label, Color edge, string? tip, Action onClick, string tag, bool on)
+    {
+        var t = new TextBlock { Text = label, FontFamily = PrintFont, FontSize = CompactWord, FontWeight = FontWeight.Bold, Foreground = CardInkBrush };
+        var face = new Border
+        {
+            Background = on ? Brushes.White : new SolidColorBrush(TileFace), BorderBrush = on ? InkBrush : new SolidColorBrush(edge),
+            BorderThickness = on ? new Thickness(1.5) : new Thickness(1.5, 1.5, 1.5, 4), CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(9, 3, 9, 3), Margin = on ? new Thickness(0, 0, 0, 2.5) : default,
+            Child = new Viewbox { Child = t, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly },
+        };
+        var b = Pressable(face, face, tag, label, on ? 2.5 : 0, 2.5);
+        b.Margin = new Thickness(0, 0, 8, 8);
+        ToolTip.SetTip(b, tip);
+        b.Click += (_, _) => onClick();
+        return b;
+    }
+
+    /// <summary>WPF :826: a rounded square in a hue with a white icon, the friend card's lead mark.</summary>
+    public static Control Block(IconKind icon, Color hue, double size = 26)
+    {
+        var g = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center };
+        g.Children.Add(new Border { Background = new SolidColorBrush(hue), CornerRadius = new CornerRadius(5) });
+        g.Children.Add(Icon(icon, size * 0.68, Brushes.White));
+        return g;
+    }
+
+    /// <summary>WPF :843: a block, then bold print that wraps: a tile's content.</summary>
+    public static Control Labelled(Control block, string text, double size = 16)
+    {
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        g.Children.Add(block);
+        var w = new TextBlock { Text = text, FontFamily = PrintFont, FontSize = size, FontWeight = FontWeight.Bold, Foreground = CardInkBrush,
+            TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 1) };
+        Grid.SetColumn(w, 1);
+        g.Children.Add(w);
+        return g;
+    }
+
+    private const double Ledge = 4;
+
+    /// <summary>WPF :862: a light face on a ledge of <paramref name="edge"/>, pressing down onto it;
+    /// <paramref name="on"/> sits pressed in, white, outlined in ink. Hover whitens the face.</summary>
+    public static Button PressTile(Control content, Color edge, bool on, string tag, string name, Thickness? padding = null)
+    {
+        var face = new Border
+        {
+            Background = on ? Brushes.White : new SolidColorBrush(TileFace), BorderBrush = on ? InkBrush : new SolidColorBrush(Color.FromRgb(0xC9, 0xAF, 0xCC)),
+            BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(7), Padding = padding ?? new Thickness(6, 5, 7, 5),
+            Margin = new Thickness(0, 0, 0, Ledge), Child = content,
+        };
+        var g = new Grid();
+        g.Children.Add(new Border { Background = new SolidColorBrush(edge), CornerRadius = new CornerRadius(7), Margin = new Thickness(0, Ledge, 0, 0) });
+        g.Children.Add(face);
+        return Pressable(g, face, tag, name, on ? Ledge - 1 : 0, Ledge - 1);
+    }
+
+    // WPF PressTo (:896): the face rests at <rest>, goes down to <down> while pressed, whitens on hover.
+    private static Button Pressable(Control content, Border face, string tag, string name, double rest, double down)
+    {
+        var restBrush = face.Background;
+        var b = Bare(content, tag);
+        var press = new TransformOperationsTransition { Property = Visual.RenderTransformProperty, Easing = new QuadraticEaseOut() };
+        face.Transitions = new Transitions { press };
+        face.RenderTransform = TransformOperations.Parse($"translateY({rest}px)");
+        b.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != Button.IsPressedProperty && e.Property != InputElement.IsPointerOverProperty) return;
+            press.Duration = TimeSpan.FromMilliseconds(Amount > 0 ? GentleVisuals.RiseMs(70) : 0);
+            face.RenderTransform = TransformOperations.Parse($"translateY({(b.IsPressed && b.IsPointerOver ? down : rest)}px)");
+            face.Background = b.IsPointerOver && b.IsEffectivelyEnabled ? Brushes.White : restBrush;
+        };
+        b.HorizontalAlignment = HorizontalAlignment.Stretch;
+        b.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        AutomationProperties.SetName(b, name);
+        return b;
+    }
+
+    /// <summary>WPF :905: the darker inset under the tiles with a small spaced-capitals label.</summary>
+    public static Border Tray(string label, Control body, string tag)
+    {
+        var head = Caps(label, 13, MutedBrush, FontWeight.Medium, 0.16);
+        head.Margin = new Thickness(0, 0, 0, 8);
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x30, 0, 0, 0)), BorderBrush = new SolidColorBrush(Color.FromArgb(0x30, 0xA9, 0x93, 0xCF)),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 9, 10, 10), Tag = tag,
+            Child = new StackPanel { Children = { head, body } },
+        };
     }
 
     // ---- the cards (WPF Controls/Dares/DareLook.cs:40-89, 504-631, 919-1229) ----

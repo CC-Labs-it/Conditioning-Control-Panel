@@ -15,7 +15,11 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using System.Linq;
+using Avalonia.LogicalTree;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Dares;
+using ConditioningControlPanel.Controls.Dares;
 using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
@@ -24,9 +28,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls;
 
 public sealed partial class FriendsDrawer
 {
-    private static readonly IBrush ButtonBg = new SolidColorBrush(Color.FromRgb(0x1C, 0x12, 0x33)),
-        ButtonHover = new SolidColorBrush(Color.FromRgb(0x3A, 0x1F, 0x66)), Ground = new SolidColorBrush(Color.FromRgb(0x10, 0x0A, 0x1E)),
-        PokeInk = new SolidColorBrush(Color.FromRgb(0x2A, 0x0A, 0x1C));
+    private static readonly IBrush Ground = new SolidColorBrush(Color.FromRgb(0x10, 0x0A, 0x1E));
+    // WPF 67fadbf70f DareLook.Gold: the watch stamps' edge.
+    private static readonly Color StampGold = DareLook.ToneColor(DareTone.Sp);
 
     /// <summary>The picker open inside the open card: "poke", "invite", "watch" or null.</summary>
     private string? _picker;
@@ -36,19 +40,26 @@ public sealed partial class FriendsDrawer
     /// <summary>Opens a picker in a friend's card (the suite's way to press an action).</summary>
     internal void OpenPickerFor(string friendId, string picker) { (_openId, _confirm, _picker) = (friendId, null, picker); Render(); }
 
-    /// <summary>WPF BuildCard: Invite, Poke, Send a watch in two columns (FriendsDrawerRules.CardActions).</summary>
+    /// <summary>WPF 67fadbf70f BuildCard: Invite, Poke, Send a watch and More as pressable tiles two by two
+    /// (FriendsDrawerRules.CardActions), each a hued block and bold print; the open one sits pressed in.</summary>
     private Control CardActions(Friend f)
     {
         var grid = new UniformGrid { Columns = 2 };
         foreach (var act in FriendsDrawerRules.CardActions)
         {
-            if (act == "more") continue;
-            bool lit = _picker == act;
-            var kind = act switch { "invite" => IconKind.Open, "poke" => IconKind.HandPoint, _ => IconKind.Video };   // WPF ActionButton
-            var b = Pill(GlyphContent(kind, Loc.Get("friends_action_" + act), glyphFg: Lilac), lit ? ButtonHover : ButtonBg, Text, "friends-action:" + act, lit ? Lilac : Line2);
-            (b.CornerRadius, b.Padding, b.HorizontalAlignment) = (new CornerRadius(10), new Thickness(10, 8, 10, 8), HorizontalAlignment.Stretch);
+            // WPF FriendsDrawer.cs ActionMark: the Dares kind colours.
+            var (kind, hue) = act switch
+            {
+                "invite" => (IconKind.Mail, DareLook.ToneColor(DareTone.Minutes)),
+                "poke" => (IconKind.HandPoint, DareLook.ToneColor(DareTone.Video)),
+                "watch" => (IconKind.Video, DareLook.ToneColor(DareTone.Bubbles)),
+                _ => (IconKind.MoreHorizontal, DareLook.ToneColor(DareTone.CameraOff)),
+            };
+            var text = Loc.Get("friends_action_" + act);
+            var b = DareLook.PressTile(DareLook.Labelled(DareLook.Block(kind, hue), text), hue, act != "more" && _picker == act, "friends-action:" + act, text);
             b.Margin = grid.Children.Count % 2 == 0 ? new Thickness(0, 0, 3, 6) : new Thickness(3, 0, 0, 6);
-            b.Click += (_, _) => { Platform.FriendsSfx.Click(); _picker = _picker == act ? null : act; Render(); };
+            if (act == "more") b.Click += (_, _) => { Platform.FriendsSfx.Click(); Menu(f).Open(b); };   // WPF FriendsDrawer.cs:686
+            else b.Click += (_, _) => { Platform.FriendsSfx.Click(); _picker = _picker == act ? null : act; Render(); };
             grid.Children.Add(b);
         }
         return grid;
@@ -63,14 +74,14 @@ public sealed partial class FriendsDrawer
 
     private Control PokePicker(Friend f)
     {
-        var wrap = new WrapPanel { Tag = "friends-picker:poke" };
+        // WPF 67fadbf70f: word stamps on the poke-pink edge.
+        var wrap = new WrapPanel { Tag = "friends-picker:poke", Margin = new Thickness(0, 0, -8, -8) };
         foreach (var id in PokeSet.Shipped)
         {
-            var chip = Chip(Loc.Get("friends_poke_" + id), "friends-poke:" + id);
-            // WPF hover: pink pill, dark ink (Fluent reads these per button on :pointerover / :pressed).
-            foreach (var state in new[] { "PointerOver", "Pressed" })
-                (chip.Resources["ButtonBackground" + state], chip.Resources["ButtonForeground" + state], chip.Resources["ButtonBorderBrush" + state]) = (Pink, PokeInk, Pink);
-            chip.Click += async (_, _) => { PlayLinkFx(chip, false, Pink); await PokeAsync(f.Id, id); };
+            Button chip = null!;
+            chip = DareLook.Choice(Loc.Get("friends_poke_" + id), DareLook.ToneColor(DareTone.Video), null,
+                () => { PlayLinkFx(chip, false, Pink); _ = PokeAsync(f.Id, id); }, "friends-poke:" + id, compact: true);
+            chip.HorizontalAlignment = HorizontalAlignment.Left;
             wrap.Children.Add(chip);
         }
         return wrap;
@@ -94,10 +105,10 @@ public sealed partial class FriendsDrawer
 
     private Control InvitePicker(Friend f)
     {
-        var grid = new UniformGrid { Columns = 2, Tag = "friends-picker:invite" };
+        var grid = new UniformGrid { Columns = 2, Tag = "friends-picker:invite", Margin = new Thickness(0, 0, 0, -6) };
         foreach (var (id, art) in InviteTiles)
         {
-            var tile = InviteTile(id, art);
+            var tile = InviteTile(id, art, FriendsInviteCodes.BlockedKey(id) != null);
             tile.Margin = grid.Children.Count % 2 == 0 ? new Thickness(0, 0, 3, 6) : new Thickness(3, 0, 0, 6);
             if (FriendsInviteCodes.BlockedKey(id) is { } blocked)
             {
@@ -117,21 +128,28 @@ public sealed partial class FriendsDrawer
         return grid;
     }
 
-    private static Button InviteTile(string id, string art)
+    /// <summary>WPF 67fadbf70f InviteTile: the picture inset on a light tile, the name in print; a locked tile
+    /// wears a padlock block and stays visible.</summary>
+    private static Button InviteTile(string id, string art, bool locked)
     {
         var sp = new StackPanel();
         if (Art(art) is { } pic)
-            sp.Children.Add(new Border { Height = 64, CornerRadius = new CornerRadius(9, 9, 0, 0), ClipToBounds = true,
-                Child = new Image { Source = pic, Stretch = Stretch.UniformToFill, Height = 64 } });
-        var t = Label(Loc.Get("friends_invite_" + id), 12.5, Text, Display);
-        t.Margin = new Thickness(8, 5, 8, 6);
-        sp.Children.Add(t);
-        var b = Pill(sp, ButtonBg, Text, "friends-invite:" + id, Line2);
-        (b.CornerRadius, b.Padding, b.HorizontalAlignment, b.HorizontalContentAlignment) =
-            (new CornerRadius(10), new Thickness(0), HorizontalAlignment.Stretch, HorizontalAlignment.Stretch);
-        b.PointerEntered += (_, _) => { if (b.IsEnabled) b.BorderBrush = Lilac; };
-        b.PointerExited += (_, _) => b.BorderBrush = Line2;
-        return b;
+        {
+            var holder = new Border { Height = 58, CornerRadius = new CornerRadius(4), ClipToBounds = true,
+                Child = new Grid { Children = { new Image { Source = pic, Stretch = Stretch.UniformToFill, Height = 58 } } } };
+            if (locked)
+            {
+                var badge = DareLook.Block(IconKind.LockClosed, DareLook.Ink, 24);
+                (badge.HorizontalAlignment, badge.VerticalAlignment, badge.Margin, badge.Tag) =
+                    (HorizontalAlignment.Right, VerticalAlignment.Top, new Thickness(0, 4, 4, 0), "friends-invite-lock");
+                ((Grid)holder.Child).Children.Add(badge);
+            }
+            sp.Children.Add(holder);
+        }
+        var name = Loc.Get("friends_invite_" + id);
+        sp.Children.Add(new TextBlock { Text = name, FontFamily = DareLook.PrintFont, FontSize = 15, FontWeight = FontWeight.Bold,
+            Foreground = DareLook.CardInkBrush, Margin = new Thickness(3, 4, 3, 1) });
+        return DareLook.PressTile(sp, DareLook.ToneColor(DareTone.Minutes), false, "friends-invite:" + id, name, new Thickness(4));
     }
 
     private static readonly Dictionary<string, Bitmap?> ArtCache = new();
@@ -184,27 +202,30 @@ public sealed partial class FriendsDrawer
     private Control WatchPicker(Friend f)
     {
         var sp = new StackPanel { Tag = "friends-picker:watch" };
-        var tabs = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        // WPF 67fadbf70f: the three sources as a switch of word stamps on the watch blue; the one showing is pressed in.
+        var tabs = new UniformGrid { Rows = 1, Margin = new Thickness(0, 0, 0, 4), Tag = "friends-watch-switch" };
         foreach (var tab in WatchTabs)
         {
-            bool on = _watchTab == tab;
-            var b = Pill(Loc.Get("friends_watch_tab_" + tab), on ? Lilac : Brushes.Transparent, on ? Ground : Muted,
-                "friends-watch-tab:" + tab, on ? Lilac : Line2);
-            (b.CornerRadius, b.Padding, b.Margin) = (new CornerRadius(999), new Thickness(10, 3, 10, 3), new Thickness(0, 0, 4, 0));
-            b.Click += (_, _) => { _watchTab = tab; Render(); };
+            var b = DareLook.Choice(Loc.Get("friends_watch_tab_" + tab), DareLook.ToneColor(DareTone.Bubbles), null,
+                () => { _watchTab = tab; Render(); }, "friends-watch-tab:" + tab, compact: true, on: _watchTab == tab);
+            b.Margin = new Thickness(tabs.Children.Count == 0 ? 0 : 3, 0, tabs.Children.Count == WatchTabs.Length - 1 ? 0 : 3, 6);
             tabs.Children.Add(b);
         }
+        // WPF e0065f6b76: one size for all three, so a long word shrinking alone never reads as another button.
+        tabs.SizeChanged += (_, _) => EvenOutWords(tabs);
         sp.Children.Add(tabs);
         if (_watchTab == "catalogue") sp.Children.Add(CatalogueList(f));
         else if (_watchTab == "ht") sp.Children.Add(HtBox(f));
         else
         {
-            var wrap = new WrapPanel();
+            var wrap = new WrapPanel { Margin = new Thickness(0, 0, -8, -8) };
             foreach (var fl in WatchRef.Flavours)
             {
                 var title = Loc.Get("friends_flavour_" + fl);
-                var chip = Chip(title, "friends-flavour:" + fl);
-                chip.Click += async (_, _) => { PlayLinkFx(chip, false, Gold); await SendWatchAsync(f.Id, new WatchRef(WatchKind.Flavour, fl, title)); };
+                Button chip = null!;
+                chip = DareLook.Choice(title, StampGold, null,
+                    () => { PlayLinkFx(chip, false, Gold); _ = SendWatchAsync(f.Id, new WatchRef(WatchKind.Flavour, fl, title)); }, "friends-flavour:" + fl, compact: true);
+                chip.HorizontalAlignment = HorizontalAlignment.Left;
                 wrap.Children.Add(chip);
             }
             sp.Children.Add(wrap);
@@ -219,9 +240,10 @@ public sealed partial class FriendsDrawer
         var sp = new StackPanel();
         foreach (var (id, title) in items)
         {
-            var b = Pill(title, ButtonBg, Text, "friends-catalogue:" + id, Line2);
-            (b.Margin, b.HorizontalAlignment, b.HorizontalContentAlignment) = (new Thickness(0, 0, 0, 4), HorizontalAlignment.Stretch, HorizontalAlignment.Left);
-            b.Click += async (_, _) => { PlayLinkFx(b, false, Gold); await SendWatchAsync(f.Id, new WatchRef(WatchKind.Catalogue, id, title)); };
+            Button b = null!;
+            b = DareLook.Choice(title, StampGold, null,
+                () => { PlayLinkFx(b, false, Gold); _ = SendWatchAsync(f.Id, new WatchRef(WatchKind.Catalogue, id, title)); }, "friends-catalogue:" + id, compact: true);
+            b.Margin = new Thickness(0, 0, 0, 6);
             sp.Children.Add(b);
         }
         return sp;
@@ -236,7 +258,14 @@ public sealed partial class FriendsDrawer
             CaretBrush = Lilac, Padding = new Thickness(6, 3, 6, 3), Tag = "friends-ht-box",
         };
         ToolTip.SetTip(box, Loc.Get("friends_watch_ht_hint"));
-        var send = Pill(Loc.Get("friends_watch_send"), Gold, new SolidColorBrush(Color.FromRgb(0x2A, 0x1C, 0x04)), "friends-ht-send", Gold);
+        Button send = null!;
+        send = DareLook.Choice(Loc.Get("friends_watch_send"), StampGold, null, () =>
+        {
+            var id = FriendsDrawerRules.NormaliseHtId(box.Text);
+            if (id.Length == 0) return;
+            PlayLinkFx(send, false, Gold);
+            _ = SendWatchAsync(f.Id, new WatchRef(WatchKind.Ht, id, null));
+        }, "friends-ht-send", compact: true);
         (send.Margin, send.IsEnabled) = (new Thickness(6, 0, 0, 0), false);
         // Text property, not TextChanged: Avalonia raises that one later, so the Send state lagged a frame.
         box.PropertyChanged += (_, e) =>
@@ -245,13 +274,6 @@ public sealed partial class FriendsDrawer
             var n = FriendsDrawerRules.NormaliseHtId(box.Text);
             if (n != box.Text) { box.Text = n; box.CaretIndex = n.Length; }
             send.IsEnabled = n.Length > 0;
-        };
-        send.Click += async (_, _) =>
-        {
-            var id = FriendsDrawerRules.NormaliseHtId(box.Text);
-            if (id.Length == 0) return;
-            PlayLinkFx(send, false, Gold);
-            await SendWatchAsync(f.Id, new WatchRef(WatchKind.Ht, id, null));
         };
         Grid.SetColumn(send, 1);
         g.Children.Add(box);
@@ -268,11 +290,26 @@ public sealed partial class FriendsDrawer
         return r;
     }
 
-    private static Button Chip(string text, string tag)
+    /// <summary>WPF e0065f6b76 EvenOutWords: the switch's words share the size at which the longest fits its cell,
+    /// with slimmer sides (a compact choice shrinks each word on its own, which made one cell read smaller).</summary>
+    private static void EvenOutWords(Panel cells)
     {
-        var chip = Pill(text, ButtonBg, Text, tag, Line2);
-        (chip.CornerRadius, chip.Padding, chip.Margin) = (new CornerRadius(999), new Thickness(11, 5, 11, 5), new Thickness(0, 0, 6, 6));
-        return chip;
+        var words = new List<(TextBlock Text, Border Face)>();
+        foreach (var b in cells.Children.OfType<Button>())
+            if (b.GetLogicalDescendants().OfType<Viewbox>().FirstOrDefault() is { Child: TextBlock t, Parent: Border face }) words.Add((t, face));
+        double scale = 1;
+        foreach (var (text, face) in words)
+        {
+            face.Padding = new Thickness(4, face.Padding.Top, 4, face.Padding.Bottom);
+            // One px under the box: layout rounding can take a pixel off the Viewbox.
+            var room = face.Bounds.Width - 8 - face.BorderThickness.Left - face.BorderThickness.Right - 1;
+            if (room <= 0) return;   // not laid out yet
+            text.FontSize = DareLook.CompactWord;
+            text.Measure(Size.Infinity);
+            if (text.DesiredSize.Width > room) scale = Math.Min(scale, room / text.DesiredSize.Width);
+        }
+        var size = Math.Floor(DareLook.CompactWord * scale * 2) / 2;   // half-point steps, never above the stock size
+        foreach (var (text, _) in words) text.FontSize = size;
     }
 
     /// <summary>WPF ShowResult: worded in the row; a drawer that folded while the send was out says it outside.</summary>
