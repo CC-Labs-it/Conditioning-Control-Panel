@@ -84,13 +84,19 @@ public sealed class SyncSixTipAndWindowTests
             try
             {
                 host.Show();
+                // Declutter wave 2 took Just Drop's pill off Studio's strip (ShowTab("justdrop") still opens
+                // the window); Play's Games pill is the window pill left, and asks the same way.
                 isolated.Show(NavSections.Studio, "presets");
+                host.UpdateLayout();
+                Assert.NotNull(isolated.PillFor("presets"));
+                Assert.Null(isolated.PillFor("justdrop"));
+                isolated.Show(NavSections.Play, "playeyes");
                 host.UpdateLayout();
                 int requests = 0;
                 isolated.TabRequested += _ => requests++;
-                void Click() => isolated.PillFor("justdrop")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                void Click() => isolated.PillFor("play")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Click();
-                Assert.Equal("justdrop", isolated.ConfirmingKey);
+                Assert.Equal("play", isolated.ConfirmingKey);
                 Assert.Equal(0, requests);
                 isolated.AnswerConfirmForTests(false);
                 Assert.Null(isolated.ConfirmingKey);
@@ -98,7 +104,7 @@ public sealed class SyncSixTipAndWindowTests
                 Click();
                 isolated.AnswerConfirmForTests(true);
                 Assert.Equal(1, requests);
-                Assert.Equal("presets", isolated.ActivePillKey);
+                Assert.Equal("playeyes", isolated.ActivePillKey);
                 Click();
                 isolated.Rebuild();
                 Assert.Null(isolated.ConfirmingKey);
