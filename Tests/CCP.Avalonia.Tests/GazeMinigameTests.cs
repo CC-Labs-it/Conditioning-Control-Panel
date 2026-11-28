@@ -918,6 +918,61 @@ public sealed class GazeMinigameTests
     }
 
     [Fact]
+    public Task GifFrames_OverBudget_DecodeEveryFrameAndStopOnDispose() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        var dir = Directory.CreateTempSubdirectory("gaze-gif-stream-");
+        var clock = new SteppedClock();
+        var oldClock = GazeMinigameWindow.Clock;
+        GazeMinigameWindow.Clock = clock;
+        var expected = new List<global::Avalonia.Media.Imaging.Bitmap>();
+        try
+        {
+            var path = Path.Combine(dir.FullName, "long.gif");
+            File.WriteAllBytes(path, RepeatGif(Convert.FromBase64String(Gif), 41));
+            var durations = new List<TimeSpan>();
+            (expected, _) = SpiralOverlay.Decode(path, frameDurations: durations, allFramesBudgetBytes: 123 * 64);
+            Assert.Equal(123, expected.Count);
+            using var image = new GazeRoundImage(path, cacheBudget: 123 * 64 - 1);
+            await image.Decoding;
+            Assert.Equal(0, image.CachedFrameCount);
+            static SkiaSharp.SKColor[] Pixels(global::Avalonia.Media.Imaging.Bitmap bitmap)
+            {
+                using var data = new MemoryStream();
+                bitmap.Save(data);
+                using var decoded = SkiaSharp.SKBitmap.Decode(data.ToArray());
+                return decoded.Pixels;
+            }
+            for (int i = 1; i <= 123; i++)
+            {
+                clock.Now += TimeSpan.FromMilliseconds(30);
+                image.AdvanceFrame(clock.Now);
+                await image.FrameDecoding;
+                Assert.Equal(Pixels(expected[i % 123]), Pixels(Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(image.Source)));
+            }
+            var published = 0;
+            image.PropertyChanged += (_, e) => { if (e.Property == Image.SourceProperty) published++; };
+            clock.Now += TimeSpan.FromMilliseconds(127 * 30); // a delayed worker must also catch up across loops
+            image.AdvanceFrame(clock.Now);
+            await image.FrameDecoding;
+            Assert.Equal(127, published);
+            Assert.Equal(Pixels(expected[4]), Pixels(Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(image.Source)));
+            clock.Now += TimeSpan.FromMilliseconds(30);
+            image.AdvanceFrame(clock.Now);
+            var pending = image.FrameDecoding;
+            image.Dispose();
+            await pending;
+            Assert.Null(image.Source);
+        }
+        finally
+        {
+            foreach (var bitmap in expected) bitmap.Dispose();
+            GazeMinigameWindow.Clock = oldClock;
+            dir.Delete(true);
+        }
+    });
+
+    [Fact]
     public Task GifFrames_OverTheMemoryBudget_FallBackToStride_KeepingLoopTime() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();
