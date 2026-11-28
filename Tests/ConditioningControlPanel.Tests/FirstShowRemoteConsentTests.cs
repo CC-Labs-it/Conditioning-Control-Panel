@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.FirstShow;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;
@@ -118,25 +119,10 @@ public class FirstShowRemoteConsentTests
             foreach (var key in new[] { "title_remote_media_consent", "msg_remote_media_consent" })
                 Assert.False(string.IsNullOrWhiteSpace((string?)file[key]), $"{lang}.json lacks {key}");
             if (lang != "en") continue;
-            // Read from source, not through Loc: other suites switch the live language.
-            foreach (var head in new[] { "ConditioningControlPanel/MainWindow/MainWindow.Assets.cs", "CCP.Avalonia/Views/Tabs/AssetsTabView.MediaPicker.cs" })
-            {
-                var source = System.IO.File.ReadAllText(System.IO.Path.Combine(SourceRoots.RepoRoot, head));
-                Assert.Equal((string?)file["title_remote_media_consent"], Fallback(source, "title_remote_media_consent"));
-                Assert.Equal((string?)file["msg_remote_media_consent"], Fallback(source, "msg_remote_media_consent"));
-            }
+            // Both heads fall back to the shared RemoteMediaConsentCopy; read the file, not Loc: other suites switch the live language.
+            Assert.Equal(RemoteMediaConsentCopy.Title, (string?)file["title_remote_media_consent"]);
+            Assert.Equal(RemoteMediaConsentCopy.Message, (string?)file["msg_remote_media_consent"]);
         }
-    }
-
-    /// <summary>The English a <c>LocOr("key", "..." + "...")</c> call falls back to, unescaped.</summary>
-    private static string Fallback(string source, string key)
-    {
-        int start = source.IndexOf("LocOr(\"" + key + "\",", StringComparison.Ordinal);
-        Assert.True(start >= 0, "no LocOr for " + key);
-        start += key.Length + 9;
-        int end = source.IndexOf(')', start);
-        var parts = System.Text.RegularExpressions.Regex.Matches(source[start..end], "\"((?:[^\"\\\\]|\\\\.)*)\"");
-        return string.Concat(System.Linq.Enumerable.Select(parts, m => System.Text.RegularExpressions.Regex.Unescape(m.Groups[1].Value)));
     }
 
     /// <summary>Not consent, so not asked: the licence switch off, a spent share or Offline mode load as before
