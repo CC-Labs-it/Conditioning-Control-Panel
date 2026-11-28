@@ -22,14 +22,16 @@ public sealed class HostedPageSinkTests
     {
         ChatThresholdLinksTests.Setup();
         var previous = CoreSettings.ServiceProvider;
+        var previousOs = WebHost.IsWindowsHost;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
+        WebHost.IsWindowsHost = () => false;                     // Linux: no WebKit permission handler
         try
         {
             service.Current.AudioOutputDeviceId = "{headphones}";
             service.Current.AudioOutputDeviceName = "Headphones \"USB\"";
             var host = new WebHost { HostedPageSink = true };
-            var calls = new List<string>();
+            var calls = new List<string?>();
             var pending = new TaskCompletionSource<bool>();
             host.SinkScriptInstaller = script => { calls.Add(script); return pending.Task; };
             host.NewScrolllerEngine()(true);
@@ -52,7 +54,35 @@ public sealed class HostedPageSinkTests
             Assert.True(remote.ScrolllerGate);
             Assert.True(plain.ScrolllerGate);
         }
-        finally { CoreSettings.ServiceProvider = previous; }
+        finally { CoreSettings.ServiceProvider = previous; WebHost.IsWindowsHost = previousOs; }
+    });
+
+    /// <summary>WPF GoonHostService.cs:577-660: on Windows a hosted local page (Goon voice) gets the
+    /// microphone handler on the default output device too, before its first navigation; a remote host does not.</summary>
+    [Fact]
+    public Task WindowsLocalPageGetsTheMicrophoneOnTheDefaultDevice() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var previous = CoreSettings.ServiceProvider;
+        var previousOs = WebHost.IsWindowsHost;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        WebHost.IsWindowsHost = () => true;
+        try
+        {
+            service.Current.AudioOutputDeviceId = "";            // System default: no routing script
+            var calls = new List<string?>();
+            var local = new WebHost { HostedPageSink = true };
+            local.SinkScriptInstaller = script => { calls.Add(script); return Task.FromResult(true); };
+            var remote = new WebHost();
+            remote.SinkScriptInstaller = script => { calls.Add(script); return Task.FromResult(true); };
+            local.NewScrolllerEngine()(true);
+            remote.NewScrolllerEngine()(true);
+            await Task.Yield();
+            Assert.Null(Assert.Single(calls));                   // the handler only, for the local page
+            Assert.True(local.ScrolllerGate);
+        }
+        finally { CoreSettings.ServiceProvider = previous; WebHost.IsWindowsHost = previousOs; }
     });
 
     [Fact]

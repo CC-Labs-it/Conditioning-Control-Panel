@@ -80,6 +80,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static bool MicrophonePresent(bool pactlInstalled, Func<string> listShortSources) =>
             !pactlInstalled || ParseSources(listShortSources()).Count > 1;
 
+        /// <summary>The quest probe for this OS. Windows counts waveIn devices (WPF App.xaml.cs:527); a throw
+        /// still reaches the gate's CachedProbe and fails open there.</summary>
+        internal static Func<bool> QuestMicrophoneProbe(bool windows, Func<int> waveInCount) => windows
+            ? () => waveInCount() > 0
+            : () => MicrophonePresent(LibVlcAudio.PactlInstalled, () => LibVlcAudio.Pactl("list short sources"));
+
         internal static IReadOnlyList<SpeechInputDevice> ParseSources(string pactlShortSources)
         {
             var list = new List<SpeechInputDevice> { new(-1, "System default") };

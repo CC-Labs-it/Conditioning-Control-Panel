@@ -454,8 +454,8 @@ namespace ConditioningControlPanel.Avalonia
             CoreQuests.CameraProbe = () => Platform.WindowsCameras.CameraPresent(OperatingSystem.IsWindows(),
                 Platform.WindowsCameras.EnumerateStrict, Platform.WindowsCameras.EnumerateMediaFoundationStrict,
                 () => System.IO.Directory.EnumerateFiles("/dev", "video*").Any());
-            CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.MicrophonePresent(
-                Platform.LibVlcAudio.PactlInstalled, () => Platform.LibVlcAudio.Pactl("list short sources"));
+            CoreQuests.MicrophoneProbe = Platform.PulseMicSource.QuestMicrophoneProbe(
+                OperatingSystem.IsWindows(), Platform.WinMmMicSource.StrictDeviceCount);
 
             var definitions = QuestDefinitions = new QuestDefinitionService();
             _ = definitions.InitializeAsync(); // cache first, then the server, as WPF
