@@ -128,6 +128,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
             // A Stop button click is never a game's Escape (WPF MainWindow.xaml.cs:1548,1597-1607).
+            // WPF MainWindow.xaml.cs:1646: the topmost promo card goes on every rung, a game's pause included.
+            try { PromoCardWindow.CloseForPanic(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Panic: promo card close failed"); }
             if (TryGamePauseOnEscape(now, fromPanicKey: !fromStopButton)) return;
             // Every press, before the lock-card stop or the capture abort reads as silence.
             try { IntakeHostWindow.StopMicsForPanic(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Panic: stopping the mics failed"); }

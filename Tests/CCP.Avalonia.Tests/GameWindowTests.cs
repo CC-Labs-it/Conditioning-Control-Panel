@@ -627,6 +627,28 @@ public sealed partial class GameWindowTests
         Assert.Single(sent, x => (string?)x["type"] == "pbp:escape");
     });
 
+    /// <summary>WPF MainWindow.xaml.cs:1646: a press a game keeps as its pause still closes the topmost promo card.</summary>
+    [Fact]
+    public void AGamePausePressStillClosesThePromoCard() => Run((shell, launcher) =>
+    {
+        CoreSettings.Current.PanicKey = "Escape";
+        launcher.Hide();
+        PromoCardWindow.ShowFor("a1", "For you", "Message", PromoCardWindowTests.Promo(false));
+        var board = GameWindow.Launch("piecebypiece")!;
+        board.Activate();
+        Dispatcher.UIThread.RunJobs();
+        board.Web.OnNavigationCompleted(board.PageUrl!);
+        board.Web.OnWebMessage("{\"type\":\"ready\"}");
+        var sent = new List<string>();
+        board.Posted += sent.Add;
+        Assert.Single(PromoCardWindow.OpenForTests);
+        shell.HandlePanicKeyPress(DateTime.Now);
+        Assert.True(board.IsVisible);
+        Assert.Single(sent, x => x.Contains("pbp:escape"));   // the press was the board's pause, no stop pass
+        Assert.Empty(PromoCardWindow.OpenForTests);
+        Assert.True(string.IsNullOrEmpty(CoreSettings.Current.DismissedAnnouncementId));
+    });
+
     [Fact]
     public void PieceByPiece_EscapeDuringBoot_DoesNotQueueAPause() => Run((shell, launcher) =>
     {

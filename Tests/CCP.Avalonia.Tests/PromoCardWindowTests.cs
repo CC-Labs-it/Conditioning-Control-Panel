@@ -21,7 +21,7 @@ public sealed class PromoCardWindowTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 28, 12, 0, 0, TimeSpan.Zero);
 
-    private static PromoCard Promo(bool full) => new(PromoCardRules.Layout, full ? "BLACK FRIDAY" : null, full ? "Half off everything" : null,
+    internal static PromoCard Promo(bool full) => new(PromoCardRules.Layout, full ? "BLACK FRIDAY" : null, full ? "Half off everything" : null,
         full ? "BF50" : null, new[] { new PromoRow("Super", "50% off"), new PromoRow("Plus", null) }, Array.Empty<Uri>(),
         full ? Now.AddHours(26) : null, full ? new PromoCta("Get it", new Uri("https://www.patreon.com/cclabs")) : null);
 
