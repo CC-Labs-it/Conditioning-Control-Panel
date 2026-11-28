@@ -1,4 +1,5 @@
 {
+  "mod_art_frame_auto": "自動 (中央でトリミング) · mod.json には書き込まれません", "mod_art_frame_values": "中央 {0}, {1}  ·  ズーム {2}x",
   "chaos_no_focus_announce": "解除する集中力が足りない",
   "chaos_unleashed_announce": "解き放たれた",
   "mod_art_frame_surface_railChip": "レールチップ", "mod_art_frame_surface_railCard": "レールランチャー", "mod_art_frame_surface_playCard": "プレイカードのヘッダー", "mod_art_frame_surface_playCardTall": "プレイカードのヘッダー（高）", "mod_art_frame_surface_loomStrip": "Loomストリップ", "mod_art_frame_surface_playHero": "プレイのメインバナー", "mod_art_frame_surface_pageHeader": "ページヘッダー", "mod_art_frame_surface_intakeStrip": "受付ストリップ",

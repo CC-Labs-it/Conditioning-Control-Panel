@@ -1,4 +1,5 @@
 {
+  "mod_art_frame_auto": "авто (обрезка по центру) · в mod.json ничего не записано", "mod_art_frame_values": "центр {0}, {1}  ·  масштаб {2}x",
   "chaos_no_focus_announce": "НЕДОСТАТОЧНО КОНЦЕНТРАЦИИ ДЛЯ ОБЕЗВРЕЖИВАНИЯ",
   "chaos_unleashed_announce": "НА СВОБОДЕ",
   "mod_art_frame_surface_railChip": "Плитка панели", "mod_art_frame_surface_railCard": "Кнопка панели", "mod_art_frame_surface_playCard": "Заголовок карточки", "mod_art_frame_surface_playCardTall": "Заголовок карточки (высокий)", "mod_art_frame_surface_loomStrip": "Полоса Loom", "mod_art_frame_surface_playHero": "Главный игровой баннер", "mod_art_frame_surface_pageHeader": "Заголовок страницы", "mod_art_frame_surface_intakeStrip": "Полоса приёма",

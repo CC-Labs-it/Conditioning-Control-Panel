@@ -1,4 +1,5 @@
 {
+  "mod_art_frame_auto": "auto (recadrage centré) · rien écrit dans mod.json", "mod_art_frame_values": "centre {0}, {1}  ·  zoom {2}x",
   "chaos_no_focus_announce": "PAS ASSEZ DE FOCUS POUR DÉSAMORCER",
   "chaos_unleashed_announce": "DÉCHAÎNÉE",
   "mod_art_frame_surface_railChip": "Vignette latérale", "mod_art_frame_surface_railCard": "Lanceur latéral", "mod_art_frame_surface_playCard": "En-tête de carte", "mod_art_frame_surface_playCardTall": "En-tête de carte (haut)", "mod_art_frame_surface_loomStrip": "Bande Loom", "mod_art_frame_surface_playHero": "Bannière principale de jeu", "mod_art_frame_surface_pageHeader": "En-tête de page", "mod_art_frame_surface_intakeStrip": "Bande d’admission",
