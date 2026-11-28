@@ -224,15 +224,25 @@ internal static class X11PanicKey
     private static void Listen(IntPtr display, int opcode, Func<string?> currentKey, Action onPress)
     {
         var ev = Marshal.AllocHGlobal(XEventSize);
-        string? boundName = null;
-        bool escapeDown = false;
+        string? boundName = null, pauseName = null;
+        int pauseCode = 0;
+        bool escapeDown = false, pauseDown = false;
         var escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
         void Resolve()
         {
             var name = currentKey();
-            if (name == boundName) return;
-            boundName = name;
-            _boundCode = ResolveKeycode(name, n => KeycodeOf(display, n));
+            if (name != boundName)
+            {
+                boundName = name;
+                _boundCode = ResolveKeycode(name, n => KeycodeOf(display, n));
+            }
+            var pause = CoreSettings.Current.PauseKey;
+            if (pause != pauseName)
+            {
+                pauseName = pause;
+                pauseCode = KeycodeOf(display, pause);
+                pauseDown = false;
+            }
         }
         Resolve();
         while (true)
@@ -246,6 +256,7 @@ internal static class X11PanicKey
                     XRefreshKeyboardMapping(ev);
                     escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
                     boundName = null;
+                    pauseName = null;
                     Resolve();
                     continue;
                 }
@@ -266,8 +277,8 @@ internal static class X11PanicKey
                 if (evType == XI_RawButtonPress) { RouteCountdownPress(evType, keycode); continue; }
 
                 Resolve();
-                RouteRawKey(evType == XI_RawKeyPress, keycode, escapeCode, ref escapeDown,
-                    () => QueueVideoEscape(eventTime), onPress);
+                RouteRawKeys(evType == XI_RawKeyPress, keycode, escapeCode, ref escapeDown,
+                    () => QueueVideoEscape(eventTime), onPress, pauseCode, _boundCode, ref pauseDown, Win32Input.QueuePause);
                 if (evType == XI_RawKeyRelease) continue;
                 var keyword = KeywordPress;
                 RouteKeyword(keycode, keyword == null ? null : code => keyword(display, code));
@@ -285,6 +296,27 @@ internal static class X11PanicKey
                 Log.Warning(ex, "Panic key: listener event failed");
             }
         }
+    }
+
+    internal static void RouteRawKeys(bool press, int code, int escapeCode, ref bool escapeDown,
+        Func<bool> video, Action panic, int pauseCode, int panicCode, ref bool pauseDown, Action pause)
+    {
+        RouteRawKey(press, code, escapeCode, ref escapeDown, video, panic);
+        RoutePauseKey(press, code, pauseCode, panicCode, ref pauseDown, pause);
+    }
+
+    internal static void RoutePauseKey(bool press, int code, int pauseCode, int panicCode, ref bool down, Action queue)
+    {
+        if (pauseCode == 0 || code != pauseCode) return;
+        if (!press) { down = false; return; }
+        if (down) return;
+        down = true;
+        var s = CoreSettings.Current;
+        if (Services.Safety.PanicPolicy.PauseKeyIsShadowedByPanicKey(s.PanicKey, s.PanicKeyEnabled, s.PauseKey)
+            || (pauseCode == panicCode && (s.PanicKeyEnabled || Leashed()))
+            || Views.Windows.MainShellWindow.CapturingPanicKey || Views.Windows.MainShellWindow.LockdownActive
+            || Views.Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey) return;
+        queue();
     }
 
     internal static void RouteRawKey(bool press, int code, int escapeCode, ref bool down, Func<bool> queue, Action onPress)

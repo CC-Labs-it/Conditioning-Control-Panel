@@ -10,6 +10,9 @@
 // A rebind applies while a portal session is open, as WPF's hook reads the key per press: the 2 s portal
 // watch closes the session and binds the new key (RebindPortalIfKeyChanged). A key X cannot hear warns the
 // user once (X11PanicKey.Unhearable) instead of going silently dead.
+// ccp-bugs #1752: each key binds its own portal shortcut id (PortalPanicShortcut.IdFor), a report for a key that
+// is no longer the setting is dropped (PortalReportIsCurrent), and a desktop that binds another key than the
+// chosen one has its grab released with a notice (panic_portal_wrong_key); XInput2 keeps the chosen key.
 
 using System;
 using System.ComponentModel;
@@ -40,11 +43,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _portalAllowed = true;
             SeedPanicAftermath();
             // WPF EscapeClaim surfaces (TAB-8 / DESK-3): the focus snapshot the hook thread reads.
-            EscapeClaim.MarkType(typeof(Views.Controls.FriendsDrawer));
             EscapeClaim.StartTracking();
             if (OperatingSystem.IsWindows()) return Win32Input.Start(() => HandlePanicKeyPress(DateTime.Now));   // WH_KEYBOARD_LL twin
             X11PanicKey.Unhearable = WarnUnhearable;
-            return X11PanicKey.Start(() => CoreSettings.Current.PanicKey, OnX11PanicPress);
+            var started = X11PanicKey.Start(() => CoreSettings.Current.PanicKey, OnX11PanicPress);
+            if (started) KeywordTriggerHead.AttachKeyboard(); // constructor sync precedes the X11 listener
+            return started;
         }
 
         /// <summary>One X11 raw press of the panic key (listener thread): the panic, then the leash hold,
@@ -416,6 +420,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     try { PortalStartQueue.Dequeue()(); }
                     catch (Exception ex) { Serilog.Log.Error(ex, "Deferred effect start failed"); }
                 }
+                // A key chosen while the desktop was asked binds now, with the queue empty (#1752 review).
+                RebindPortalIfKeyChanged();
             }), System.Threading.CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
 
@@ -429,35 +435,142 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static bool _portalRebinding;
         internal static string? PortalKeyForTest => _portalKey;
 
+        // #1752: the desktop bound another key than the chosen one, so this session's reports are not the panic key.
+        private static volatile bool _portalWrongKey;
+
+        /// <summary>A portal report counts only for the key the session was opened for while that key is still
+        /// the setting, and never for a session the desktop bound to another key (#1752). WPF's hook reads the
+        /// key per press, so a key the user replaced stops at once; the 2 s watch re-binds the new one.</summary>
+        internal static bool PortalReportIsCurrent(string? sessionKey) =>
+            !_portalWrongKey && string.Equals(sessionKey, CoreSettings.Current.PanicKey, StringComparison.Ordinal);
+
+        // #1752 review: a report can arrive between BindShortcuts returning and the trigger check posted to the UI
+        // thread. Until that check ran (false only while a bind is being answered), a report is HELD, not handled:
+        // a wrong key never panics before its grab is released, and the chosen key's press is replayed by the check
+        // a few milliseconds later instead of being lost. XInput2 hears the chosen key in CCP's windows throughout,
+        // and the effect queued behind this bind starts only after the check, so the chosen key still panics.
+        private static volatile bool _portalChecked = true;
+        private static int _portalEarlyPress;
+        private static MainShellWindow? _portalEarlyShell;
+        // Each bind's posted check carries its number; a check from a bind that was reset (tests) does nothing.
+        private static int _portalGeneration;
+
+        /// <summary>One portal Activated for the session opened for <paramref name="sessionKey"/> (D-Bus thread).</summary>
+        internal static void PortalActivated(string? sessionKey, MainShellWindow? shell)
+        {
+            if (!PortalReportIsCurrent(sessionKey))
+            {
+                Serilog.Log.Information("Panic: portal report for '{Key}' dropped, it is no longer the panic key", sessionKey);
+                return;
+            }
+            if (!_portalChecked)
+            {
+                _portalEarlyShell = shell;
+                System.Threading.Interlocked.Exchange(ref _portalEarlyPress, 1);
+                // The check may have run between the two reads: then exactly one side takes the press.
+                if (!_portalChecked || System.Threading.Interlocked.Exchange(ref _portalEarlyPress, 0) == 0)
+                {
+                    Serilog.Log.Information("Panic: portal report held until the desktop's trigger is checked");
+                    return;
+                }
+            }
+            Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
+            shell?.OnPortalPanicActivated();
+        }
+
+        // The trigger check is done: a held press is replayed (the chosen key) or dropped (anything else).
+        private static void PortalChecked(bool replay)
+        {
+            _portalChecked = true;
+            var shell = _portalEarlyShell ?? Current;
+            _portalEarlyShell = null;
+            if (System.Threading.Interlocked.Exchange(ref _portalEarlyPress, 0) == 0 || !replay) return;
+            Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated (held until the trigger check)");
+            shell?.OnPortalPanicActivated();
+            if (!PortalPanicShortcut.IsHeld) shell?.OnPortalPanicReleased();   // released before the replay: no stuck hold
+        }
+
+        /// <summary>Test seam: every static of the portal bookkeeping back to a fresh process, including a check a
+        /// bind posted that has not run yet (it becomes a no-op).</summary>
+        internal static void ResetPortalForTests()
+        {
+            System.Threading.Interlocked.Increment(ref _portalGeneration);
+            _portalWatch?.Stop();
+            _portalWatch = null;
+            _portalBind = null;
+            (_portalFailed, _portalKey, _portalRebinding, _portalWrongKey, _portalChecked) = (false, null, false, false, true);
+            (_portalEarlyPress, _portalEarlyShell) = (0, null);
+            PortalStartQueue.Clear();
+            PortalPanicShortcut.SetSessionForTests(null, null);
+        }
+
         private static async Task BindPortalAsync()
         {
             var key = _portalKey = CoreSettings.Current.PanicKey;
-            var trigger = await PortalPanicShortcut.BindAsync(key, Loc.Get("panic_portal_description"),
-                () =>
-                {
-                    Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
-                    Current?.OnPortalPanicActivated();
-                },
-                () => Dispatcher.UIThread.Post(() => Current?.OnPortalPanicReleased()));
+            var generation = System.Threading.Interlocked.Increment(ref _portalGeneration);
+            _portalWrongKey = false;
+            _portalEarlyPress = 0;
+            _portalChecked = false;
+            string? trigger;
+            try
+            {
+                trigger = await PortalPanicShortcut.BindAsync(key, Loc.Get("panic_portal_description"),
+                    () => PortalActivated(key, Current),
+                    () => Dispatcher.UIThread.Post(() => Current?.OnPortalPanicReleased()));
+            }
+            catch { _portalChecked = true; throw; }
             Dispatcher.UIThread.Post(() =>
             {
+                if (generation != System.Threading.Volatile.Read(ref _portalGeneration)) return;
                 if (trigger == null)
                 {
+                    PortalChecked(replay: false);   // no session: nothing was bound that could report
                     _portalFailed = true;
                     App.Notifications.Show(Loc.Get("panic_portal_unavailable"), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
                     return;
                 }
+                // #1752 review: the user picked another key while the desktop's dialog was open. Whatever the desktop
+                // bound for the old key is neither a refusal nor a wrong key: bind the key that is the setting now.
+                // The old session's reports are already dropped (PortalReportIsCurrent).
+                if (!string.Equals(key, CoreSettings.Current.PanicKey, StringComparison.Ordinal))
+                {
+                    PortalChecked(replay: false);
+                    Serilog.Log.Information("Panic key: changed to '{Now}' while the desktop bound '{Key}'; re-binding", CoreSettings.Current.PanicKey, key);
+                    StartPortalWatch();   // the drain below re-binds once the starts queued behind this bind ran
+                    return;
+                }
+                // #1752: the desktop kept or chose another key for the shortcut. Let the grab go so that key is
+                // neither consumed nor a panic, stay on XInput2 for this run (no second ask), and say so.
+                if (PortalPanicShortcut.MatchTrigger(key, trigger) == PortalPanicShortcut.TriggerMatch.Other)
+                {
+                    _portalWrongKey = true;
+                    PortalChecked(replay: false);
+                    _portalFailed = true;
+                    Serilog.Log.Warning("Panic key: the desktop bound '{Trigger}' for '{Key}'; portal grab released, XInput2 only", trigger, key);
+                    _portalWatch?.Stop();
+                    _portalWatch = null;
+                    _ = PortalPanicShortcut.UnbindAsync();
+                    Current?.PanicRoutes.Forget();
+                    App.Notifications.Show(Loc.GetF("panic_portal_wrong_key", trigger, key), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(12));
+                    return;
+                }
+                PortalChecked(replay: true);   // the chosen key (or a label we cannot read): a held press counts now
                 // trigger_description: what the compositor really bound, which the user may have changed.
                 // Empty = the compositor assigned no key, so never claim the configured one.
                 if (trigger.Length > 0)
                     App.Notifications.Show(Loc.GetF("panic_portal_bound", trigger), Helpers.NotificationType.Info, TimeSpan.FromSeconds(6));
                 else
                     App.Notifications.Show(Loc.Get("panic_portal_unavailable"), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
-                // 2 s poll for the last effect/hold ending rather than a hook in every stop path.
-                _portalWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background,
-                    (_, _) => ReleasePortalWhenUnused());
-                _portalWatch.Start();
+                StartPortalWatch();
             });
+        }
+
+        // 2 s poll for the last effect/hold ending rather than a hook in every stop path.
+        private static void StartPortalWatch()
+        {
+            _portalWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background,
+                (_, _) => ReleasePortalWhenUnused());
+            _portalWatch.Start();
         }
 
         // Shared with the headless tests so they exercise the real idle-release poll.

@@ -256,6 +256,33 @@ public sealed class HelpPopoverTests
         });
     }
 
+    [Fact]
+    public Task BlinkStopClosesOpenHelp() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var button = new Button { Content = "?", Width = 44, Height = 44 };
+        var host = new Window { Width = 200, Height = 200, Content = button };
+        var previous = ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All;
+        try
+        {
+            HelpPopover.Attach(button, HelpContentService.GetContent("Scheduler"));
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            Click(host, button);
+            Assert.True(HelpPopover.IsOpen(button));
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All = Array.Empty<ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.Surface>();
+            ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.StopAllForRecalibration(null);
+            Assert.False(HelpPopover.IsOpen(button));
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All = previous;
+            HelpPopover.Clear(button);
+            host.Close();
+        }
+        return Task.CompletedTask;
+    });
+
     private static void EnsureAvalonia()
     {
         Assert.True(AvaloniaTestDispatcher.IsDispatcherThread);

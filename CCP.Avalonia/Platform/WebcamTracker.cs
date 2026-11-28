@@ -218,6 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Eyes held shut past BlinkDetector.EyesClosedLongMs (WPF OnEyesClosedLong).</summary>
         public event Action? OnEyesClosedLong;
         public event Action? StateChanged;
+        public event Action<WebcamTrackingState>? OnTrackingStateChanged;
         private volatile WebcamTrackingState _state = WebcamTrackingState.Stopped;
         public WebcamTrackingState State => _state;
 
@@ -231,7 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (_state == state) return;
                 _state = state;
             }
-            Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+            Dispatcher.UIThread.Post(() => { OnTrackingStateChanged?.Invoke(state); StateChanged?.Invoke(); });
         }
         public event Action? OnFaceLost;
         public event Action? OnFaceFound;
@@ -242,6 +243,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Tests: what a classified frame publishes, without a face in front of a camera.</summary>
         internal void RaiseGazeSideForTest(GazeSide side) => OnGazeSide?.Invoke(side);
         internal void RaiseMouthForTest() => OnMouthOpen?.Invoke();
+        internal void RaiseTongueForTest() => OnTongueOut?.Invoke();
+        internal void RaiseLongStareForTest() => OnLongStare?.Invoke(default);
+        internal void RaiseFaceLostForTest() => OnFaceLost?.Invoke();
+        internal void RaiseFaceFoundForTest() => OnFaceFound?.Invoke();
+        internal void RaiseStateForTest() => OnTrackingStateChanged?.Invoke(State);
         internal void RaiseBlinkForTest() => OnBlink?.Invoke();
         internal void RaiseGazeForTest(double x, double y) => OnGazeMove?.Invoke(new ScreenPoint(x, y));
         /// <summary>Gaze in DIPs of the calibrated monitor; fires only with a calibration.</summary>
@@ -511,6 +517,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (!run.Thread!.Join(TimeSpan.FromSeconds(5)))
             {
                 _wedged = run.Thread;
+                SetTrackingState(WebcamTrackingState.Error);
                 Log.Warning("[Webcam] capture thread did not exit in 5s; abandoned, it closes the camera when it exits");
             }
             Log.Information("[Webcam] tracking stopped");

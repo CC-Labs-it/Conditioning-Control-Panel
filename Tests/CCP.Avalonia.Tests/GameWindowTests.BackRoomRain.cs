@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Collections.Generic;
 using ConditioningControlPanel.Services.BackRoom;
 using Avalonia.Threading;
@@ -29,9 +30,10 @@ public sealed partial class GameWindowTests
         w.Web.OnNavigationCompleted(w.PageUrl!);
         w.Web.OnWebMessage("{\"type\":\"fx\",\"token\":\"rain\",\"fxId\":\"fx.gif_storm\",\"station\":\"breakout\"}");
         Assert.Equal("rain", (string?)ack!["token"]);
-        Assert.Equal("gif-rain", (string?)ack["fired"]!.Single());
+        Assert.Contains(ack["fired"]!, x => (string?)x == "gif-rain");
+        Assert.Contains(ack["fired"]!, x => (string?)x == "glitch-bubbles");
         Assert.Contains(ack["skipped"]!, x => (string?)x["prim"] == "flash-burst" && (string?)x["why"] == "unknown");
-        Assert.Contains(ack["skipped"]!, x => (string?)x["prim"] == "glitch-bubbles" && (string?)x["why"] == "unknown");
+
         scheduler.RunAll();
         Assert.NotNull(shown);
         Assert.Equal(14.0 / 3, shown![0], 6);
@@ -107,6 +109,207 @@ public sealed partial class GameWindowTests
         Assert.Equal(0, shown);
         w.Close();
     });
+
+    [Fact]
+    public void StormDispatchesGlitchWash() => Run((_, _) =>
+    {
+        var w = GameWindow.Launch("breakoutdemo")!;
+        var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+        int duration = 0; double opacity = 0;
+        w.FlashBridgeFactory = () => new BackRoomFlashBridge((ms, alpha) => { duration = ms; opacity = alpha; },
+            (_, _, _, _, _) => { }, () => { }, () => { }, () => false, () => 100, "/tmp", "/tmp");
+        JObject? ack = null; w.Posted += json => ack = JObject.Parse(json);
+        w.Web.OnNavigationCompleted(w.PageUrl!);
+        w.Web.OnWebMessage("{\"type\":\"fx\",\"fxId\":\"fx.gif_storm\",\"station\":\"breakout\"}");
+        Assert.Contains(ack!["fired"]!, x => (string?)x == "glitch-bubbles");
+        clock.RunAll();
+        Assert.Equal(BackRoomFxPlan.GlitchPulseMs, duration);
+        Assert.Equal(BackRoomFxPlan.GlitchOpacity, opacity);
+        w.Close();
+    });
+
+    [Theory]
+    [InlineData("local", true)]
+    [InlineData("remote", false)]
+    [InlineData("escape", false)]
+    public void DealtGifFullReachesOnlyLocalHero(string kind, bool expected) => Run((_, _) =>
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            var w = GameWindow.Launch("breakoutdemo")!;
+            var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+            int heroes = 0;
+            w.FlashBridgeFactory = () => new BackRoomFlashBridge((_, _) => { },
+                (_, _, _, _, _) => heroes++, () => { }, () => { }, () => false, () => 100,
+                Path.GetDirectoryName(file)!, Path.GetDirectoryName(file)!);
+            var url = kind == "local" ? "https://ccp.assets/" + Path.GetFileName(file) :
+                kind == "remote" ? "https://example.com/" + Path.GetFileName(file) : "https://ccp.assets/%2e%2e%2f" + Path.GetFileName(file);
+            w.RoomFxDeals["breakout"] = new BackRoomMediaDeal(0, [new BackRoomGif("g0", url, 0, 0, "pool")], Array.Empty<BackRoomWord>());
+            JObject? ack = null; w.Posted += json => ack = JObject.Parse(json);
+            w.Web.OnNavigationCompleted(w.PageUrl!);
+            w.Web.OnWebMessage("{\"type\":\"fx\",\"fxId\":\"fx.sub_cascade\",\"station\":\"breakout\"}");
+            Assert.Contains(ack!["fired"]!, x => (string?)x == "gif-full");
+            clock.RunAll(); Assert.Equal(expected ? 1 : 0, heroes); w.Close();
+        }
+        finally { File.Delete(file); }
+    });
+
+    [Theory]
+    [InlineData("close", false, 100L, 1)]
+    [InlineData("minimize", false, 100L, 1)]
+    [InlineData("exit", false, 100L, 1)]
+    [InlineData("close", true, 100L, 0)]
+    [InlineData("close", false, 12100L, 0)]
+    public void TeardownStopsFlashAndRespectsWashOwnership(string route, bool chaos, long end, int closes) => Run((_, _) =>
+    {
+        var w = GameWindow.Launch("breakoutdemo")!;
+        var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+        int stopped = 0, closed = 0; long now = 100;
+        w.FlashBridgeFactory = () => new BackRoomFlashBridge((_, _) => { }, (_, _, _, _, _) => { },
+            () => stopped++, () => closed++, () => chaos, () => now, "/tmp", "/tmp");
+        w.Web.OnNavigationCompleted(w.PageUrl!);
+        w.Web.OnWebMessage("{\"type\":\"fx\",\"fxId\":\"fx.gif_storm\",\"station\":\"breakout\"}");
+        clock.RunAll(); now = end;
+        if (route == "close") w.Close();
+        else if (route == "minimize") w.RoomMinimizedChanged(true);
+        else w.Web.OnWebMessage("{\"type\":\"exit\"}");
+        Assert.Equal(1, stopped); Assert.Equal(closes, closed);
+        w.Close();
+    });
+
+    [Fact]
+    public void WordEffectUsesAuthoredEnvelopeAndStopsOnMinimize() => Run((_, _) =>
+    {
+        var w = GameWindow.Launch("breakoutdemo")!;
+        var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+        w.RoomFxDeals["breakout"] = new BackRoomMediaDeal(0, Array.Empty<BackRoomGif>(), [new BackRoomWord("k", "WORD", "pool")]);
+        var words = new List<(string, int, int, bool, int, int)>();
+        int stops = 0;
+        w.RoomSubliminal = (text, opacity, hold, suppress, fadeIn, fadeOut) => words.Add((text, opacity, hold, suppress, fadeIn, fadeOut));
+        w.StopRoomSubliminal = () => stops++;
+        JObject? ack = null; w.Posted += json => ack = JObject.Parse(json);
+        w.Web.OnNavigationCompleted(w.PageUrl!);
+        w.Web.OnWebMessage("{\"type\":\"fx\",\"fxId\":\"fx.sub_cascade\",\"station\":\"breakout\"}");
+        Assert.Contains(ack!["fired"]!, x => (string?)x == "sub-burst9");
+        clock.RunAll();
+        Assert.NotEmpty(words);
+        Assert.All(words, word => { Assert.Equal("WORD", word.Item1); Assert.Equal(100, word.Item2); Assert.Equal(400, word.Item3); Assert.True(word.Item4); Assert.Equal(80, word.Item5); Assert.Equal(350, word.Item6); });
+        w.RoomMinimizedChanged(true);
+        Assert.Equal(1, stops);
+        w.Close();
+        Assert.Equal(1, stops);
+    });
+
+    [Fact]
+    public void BreakoutMediaDealFeedsStationWordEffects() => Run((_, _) =>
+    {
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var oldPool = settings.SubliminalPool;
+        var oldTriggers = settings.KeywordTriggers;
+        try
+        {
+            settings.SubliminalPool = new() { ["  FIRST WORD  "] = true, ["IGNORED"] = false };
+            settings.KeywordTriggers = new();
+            var w = GameWindow.Launch("breakoutdemo")!;
+            var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+            var shown = new List<string>();
+            w.RoomSubliminal = (text, _, _, _, _, _) => shown.Add(text);
+            w.StopRoomSubliminal = () => { };
+            var frames = new List<JObject>(); w.Posted += json => frames.Add(JObject.Parse(json));
+            w.Web.OnNavigationCompleted(w.PageUrl!);
+            w.Web.OnWebMessage("{\"type\":\"media-request\",\"reqId\":\"word-deal\",\"station\":\"breakout\",\"source\":\"bundled\"}");
+            var until = DateTime.UtcNow.AddSeconds(10);
+            while (!frames.Any(f => (string?)f["type"] == "media") && DateTime.UtcNow < until) Dispatcher.UIThread.RunJobs();
+            var media = frames.Single(f => (string?)f["type"] == "media");
+            Assert.Equal("FIRST WORD", (string?)media["words"]![0]!["text"]);
+            Assert.Equal("pool", (string?)media["words"]![0]!["src"]);
+            Assert.Equal(4, media["words"]!.Count());
+            w.Web.OnWebMessage("{\"type\":\"fx\",\"fxId\":\"fx.sub_cascade\",\"station\":\"other\",\"symbols\":[\"s0\"]}");
+            Assert.DoesNotContain(frames.Last()["fired"]!, x => (string?)x == "sub-burst9");
+            w.Web.OnWebMessage("{\"type\":\"fx\",\"fxId\":\"fx.sub_cascade\",\"station\":\"breakout\",\"symbols\":[\"s0\"]}");
+            Assert.Contains(frames.Last()["fired"]!, x => (string?)x == "sub-burst9");
+            clock.RunAll();
+            Assert.Contains("FIRST WORD", shown);
+            w.Close();
+        }
+        finally { settings.SubliminalPool = oldPool; settings.KeywordTriggers = oldTriggers; }
+    });
+
+    [Theory]
+    [InlineData("bundled")]
+    [InlineData("local")]
+    public void BreakoutEmptyPictureDealIncludesFallbacksAndActiveWords(string source) => Run((_, _) =>
+    {
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var oldPool = settings.SubliminalPool;
+        var oldTriggers = settings.KeywordTriggers;
+        var oldAssets = ConditioningControlPanel.CorePaths.EffectiveAssetsProvider;
+        var root = Directory.CreateTempSubdirectory("room-empty-").FullName;
+        try
+        {
+            settings.SubliminalPool = new() { ["ACTIVE WORD"] = true };
+            settings.KeywordTriggers = new();
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = () => root;
+            var w = GameWindow.Launch("breakoutdemo")!;
+            JObject? media = null;
+            w.Posted += json => { var frame = JObject.Parse(json); if ((string?)frame["type"] == "media") media = frame; };
+            w.Web.OnNavigationCompleted(w.PageUrl!);
+            w.Web.OnWebMessage($"{{\"type\":\"media-request\",\"reqId\":\"empty\",\"station\":\"breakout\",\"source\":\"{source}\"}}");
+            var until = DateTime.UtcNow.AddSeconds(10);
+            while (media == null && DateTime.UtcNow < until) Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(media);
+            Assert.Equal("ACTIVE WORD", (string?)media!["words"]![0]!["text"]);
+            Assert.Equal(4, media["gifs"]!.Count());
+            for (int i = 0; i < 4; i++)
+            {
+                Assert.Equal("g" + i, (string?)media["gifs"]![i]!["key"]);
+                Assert.Equal("fallback", (string?)media["gifs"]![i]!["src"]);
+                Assert.Contains($"/backroom/stations/slot/fallback/gif{i}.webp", (string?)media["gifs"]![i]!["url"]);
+            }
+            w.Close();
+        }
+        finally
+        {
+            settings.SubliminalPool = oldPool; settings.KeywordTriggers = oldTriggers;
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = oldAssets;
+            Directory.Delete(root, true);
+        }
+    });
+
+    [Fact]
+    public void RoomBridgeStationWordEffectReachesOverlayAndPanicStopsIt() => Run((_, _) =>
+    {
+        var w = GameWindow.Launch("breakoutdemo")!;
+        var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+        var shown = new List<string>();
+        int stops = 0;
+        w.RoomSubliminal = (text, _, _, _, _, _) => shown.Add(text);
+        w.StopRoomSubliminal = () => stops++;
+        var posted = new List<JObject>();
+        // The bridge the room host builds (WPF BackRoomHostService.cs:419-426), with this window's effects as Fx.
+        var bridge = new BackRoomBridge(new BackRoomBridge.Deps
+        {
+            Post = m => posted.Add(JObject.FromObject(m)), Relay = new NoRelay(), Fx = w.RoomEffects,
+            BuildInit = () => new { type = "init" }, CloseWindow = () => { }, Schedule = (_, _) => () => { },
+            NextSeed = () => 3,
+        });
+        bridge.Handle(JObject.Parse("{\"type\":\"media-request\",\"reqId\":\"room-word-deal-0001\",\"station\":\"slot\"}"));
+        var word = (string?)posted.Single(p => (string?)p["type"] == "media")["words"]![0]!["text"];
+        bridge.Handle(JObject.Parse("{\"type\":\"fx\",\"token\":\"t1\",\"fxId\":\"fx.sub_cascade\",\"station\":\"slot\",\"symbols\":[\"s0\"]}"));
+        Assert.Contains(posted.Last()["fired"]!, x => (string?)x == "sub-burst9");
+        clock.RunAll();
+        Assert.Contains(word, shown);
+        bridge.Suspend(true, "panic");
+        Assert.Equal(1, stops);
+        w.Close();
+    });
+
+    private sealed class NoRelay : IBackRoomRelay
+    {
+        public System.Threading.Tasks.Task<BackRoomStationResult> RelayAsync(string station, string op, string? idem, JObject? body,
+            System.Threading.CancellationToken ct = default) => throw new NotSupportedException();
+    }
 
     private sealed class FxClock : IFxScheduler
     {

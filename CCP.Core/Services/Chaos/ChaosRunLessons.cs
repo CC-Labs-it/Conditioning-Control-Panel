@@ -13,13 +13,39 @@ public static class ChaosRunLessons
 {
     private static bool _loopDirty;   // silk_touch: a detonation landed this loop
     private static int _loopDefuses;  // snap_field: snaps this loop
+    private static DateTime? _channelStartUtc;
+    private static double _channelFraction;
 
     /// <summary>last_breath: the channel must have STARTED with at most this much fuse left
     /// (the same brink signal "playing with fire" judges - DefuseJudgeFuseSec).</summary>
     public const double LAST_BREATH_BRINK_SEC = 0.8;
 
     /// <summary>Fresh descent: nothing leaks across runs.</summary>
-    public static void OnRunStarted() { _loopDirty = false; _loopDefuses = 0; }
+    public static void OnRunStarted() { _loopDirty = false; _loopDefuses = 0; _channelStartUtc = null; _channelFraction = 0; }
+
+    /// <summary>Start a focus-approved hold (WPF ChaosLessonHooks.cs:143).</summary>
+    public static void OnChannelStarted(DateTime now) => _channelStartUtc = now;
+
+    /// <summary>Bank a completed or broken hold, retaining fractions for slow_fuses.</summary>
+    public static void OnChannelEnded(DateTime now)
+    {
+        try
+        {
+            if (_channelStartUtc == null) return;
+            double seconds = Math.Clamp((now - _channelStartUtc.Value).TotalSeconds, 0, ChaosTuning.DEFUSE_HOLD_MS / 1000.0 + 0.25);
+            _channelStartUtc = null;
+            ChaosMeta.State.TotalChannelSeconds += seconds;
+            if (ChaosLessons.IsComplete("slow_fuses")) return;
+            _channelFraction += seconds;
+            long whole = (long)Math.Floor(_channelFraction);
+            if (whole > 0)
+            {
+                _channelFraction -= whole;
+                ChaosLessons.Tick("slow_fuses", whole);
+            }
+        }
+        catch (Exception ex) { Log.Debug("ChaosRunLessons.OnChannelEnded: {E}", ex.Message); }
+    }
 
     /// <summary>A defuse completed (WPF ChaosLessonHooks.OnDefuseCompleted): a channel started on
     /// the brink teaches last_breath; every snap raises this loop's snap_field count.</summary>

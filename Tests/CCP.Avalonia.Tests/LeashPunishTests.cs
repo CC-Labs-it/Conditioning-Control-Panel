@@ -2,7 +2,14 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Models.Deeper;
+using ConditioningControlPanel.Services.Deeper;
 using Avalonia.Threading;
+using Avalonia.Controls;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
@@ -19,6 +26,58 @@ namespace CCP.Avalonia.Tests;
 /// the caged video window. The real Core LeashService on a no-network wire; the features behind the runner are faked.</summary>
 public sealed class LeashPunishTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LockedHint_ExplainsHowToCut(bool wayland) => Run((shell, launcher, svc, host, runner) =>
+    {
+        var (display, session, key) = (Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"), Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), CoreSettings.Current.PanicKey);
+        try
+        {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", wayland ? "wayland-test" : null);
+            Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", wayland ? "wayland" : "x11");
+            CoreSettings.Current.PanicKey = "F10";
+            Assert.True(LeashPunishWindow.OpenUrl("https://example.com", "holder", true));
+            var hint = LeashPunishWindow.Current!.GetLogicalDescendants().OfType<TextBlock>().Single(t => (string?)t.Tag == "leash-punish-hint");
+            Assert.Equal(LeashHead.WaylandSession ? Loc.Get("leash_self_cut_wayland") : Loc.GetF("leash_punish_hold", LeashHoldToCut.KeyLabel("F10")), hint.Text);
+        }
+        finally
+        {
+            LeashPunishWindow.CloseNow();
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", display);
+            Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", session);
+            CoreSettings.Current.PanicKey = key;
+        }
+    });
+
+    [Fact]
+    public void RefusedClose_PlaysDenied() => Run((shell, launcher, svc, host, runner) =>
+    {
+        var (play, stoppable, art, muted, rules, volume) = (CoreAudio.PlayOneShotProvider, CoreAudio.PlayStoppableProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules, CoreSettings.Current.MasterVolume);
+        var file = Path.GetTempFileName();
+        string? cue = null; var oneShots = 0;
+        try
+        {
+            CoreSettings.Current.MasterVolume = 50;
+            // Restack r2-b016: one cue per refusal, the stoppable one, so close and panic can cut it.
+            CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => oneShots++;
+            CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) => { cue = tag; return () => { }; };
+            CoreModArt.AudioOverridePathProvider = _ => file;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            LeashSound.Rules = new LeashSfxRules();
+            Assert.True(LeashPunishWindow.OpenUrl("https://example.com", "holder", true));
+            LeashPunishWindow.Current!.Refuse();
+            Assert.Equal("leash-denied", cue);
+            Assert.Equal(0, oneShots);
+        }
+        finally
+        {
+            LeashPunishWindow.CloseNow();
+            (CoreAudio.PlayOneShotProvider, CoreAudio.PlayStoppableProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules, CoreSettings.Current.MasterVolume) = (play, stoppable, art, muted, rules, volume);
+            File.Delete(file);
+        }
+    });
+
     private sealed class FakeHost : ILeashTaskHost
     {
         public int Cards, Shows;
@@ -53,6 +112,49 @@ public sealed class LeashPunishTests
                 (LeashTaskHost.Runner, LeashTaskRunner.TimerFactory, LeashPunishWindow.CreateWeb) = (oldRunner, oldTimer, oldWeb);
             }
         });
+
+    [Fact]
+    public void RefusedClosePlaysDeniedAndPanicStopsIt() => LeashGateCardTests.Run(punished: false, (shell, _, svc) =>
+    {
+        var block = LeashHeadTests.BlockWithPunishment();
+        var pun = (Newtonsoft.Json.Linq.JObject)block["me"]!["pending"]![0]!;
+        (pun["kind"], pun["watch"]) = ("video", new Newtonsoft.Json.Linq.JObject { ["kind"] = "ht", ["id"] = "123" });
+        svc.ApplyBlock(block);
+        var oldWeb = LeashPunishWindow.CreateWeb;
+        var oldPlay = CoreAudio.PlayStoppableProvider;
+        var oldArt = CoreModArt.AudioOverridePathProvider;
+        var oldMuted = CoreAudio.IsOutputSuppressedProvider;
+        var oldRules = LeashSound.Rules;
+        var oldVolume = CoreSettings.Current.MasterVolume;
+        var file = Path.GetTempFileName();
+        var host = new LeashTaskHost();
+        int played = 0, stopped = 0;
+        try
+        {
+            LeashPunishWindow.CreateWeb = false;
+            CoreSettings.Current.MasterVolume = 50;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreModArt.AudioOverridePathProvider = _ => file;
+            CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) => { Assert.Equal("leash-denied", tag); played++; return () => stopped++; };
+            LeashSound.Rules = new LeashSfxRules();
+            Assert.True(host.OpenWatch(new LeashWatch("ht", "123", null)));
+            LeashPunishWindow.Current!.Close();
+            Assert.Equal(1, played);
+            // The gate is shared with UTC cues: a refusal on local time would let one through inside the gap.
+            Assert.False(LeashSound.Rules.TryPlay(LeashCue.Denied, DateTime.UtcNow, true, false));
+            Assert.NotNull(LeashPunishWindow.Current);
+            PanicSurfaces.All.Single(x => x.Id == "leash-task").Stop(shell);
+            Assert.Equal(1, stopped);
+            Assert.Null(LeashPunishWindow.Current);
+        }
+        finally
+        {
+            LeashPunishWindow.CloseNow(); host.Dispose(); LeashSound.StopRefusal();
+            (LeashPunishWindow.CreateWeb, CoreAudio.PlayStoppableProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules, CoreSettings.Current.MasterVolume) =
+                (oldWeb, oldPlay, oldArt, oldMuted, oldRules, oldVolume);
+            File.Delete(file);
+        }
+    });
 
     private static void StartFromTheGate(MainShellWindow shell, LauncherWindow launcher, FakeHost host, LeashTaskRunner runner)
     {
@@ -101,6 +203,27 @@ public sealed class LeashPunishTests
             Assert.False(shell.LeashGate!.IsUp);        // standing back ten minutes
         }
         finally { LockCardWindow.ForceCloseAll(); (PanicSurfaces.All, s.PanicKeyEnabled) = (oldSurfaces, oldKey); }
+    });
+
+    [Fact]
+    public void BlinkStopParksLinesBeforeClosingCards() => Run((shell, launcher, svc, host, runner) =>
+    {
+        var previous = PanicSurfaces.All;
+        try
+        {
+            StartFromTheGate(shell, launcher, host, runner);
+            LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
+            PanicSurfaces.All = previous.Where(x => x.Id is "leash-task" or "lock-cards").ToArray();
+            MainShellWindow.StopAllForRecalibration(shell);
+            Now += LeashTaskRunner.LockCardRetry + TimeSpan.FromSeconds(1);
+            runner.Tick();
+            Assert.False(runner.IsRunning);
+            Assert.Equal(1, host.Shows);
+            Assert.NotNull(svc.GateDue);
+            shell.CheckLeashGate();
+            Assert.False(shell.LeashGate!.IsUp);
+        }
+        finally { LockCardWindow.ForceCloseAll(); PanicSurfaces.All = previous; }
     });
 
     /// <summary>The real LeashTaskHost: a pending video punishment opens LOCKED (refuses a close), a task watch does not;
@@ -172,6 +295,115 @@ public sealed class LeashPunishTests
             host.Dispose();
             SettingsPaletteWindow.CloseIfOpen();
             (LeashPunishWindow.CreateWeb, CoreSettings.Current.MotionLevel, LeashPunishWindow.CutLeash, CoreSettings.Current.PanicKey) = (oldWeb, motion, oldCut, oldKey);
+            Directory.Delete(dir, true);
+        }
+    });
+    [Fact]
+    public void CatalogueDeeperCompletionMatchesOnlyTheOpenWatch() => LeashGateCardTests.Run(false, (shell, _, svc) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("leash-deeper-").FullName;
+        var path = Path.Combine(dir, "watch.ccpenh.json");
+        var other = Path.Combine(dir, "other.ccpenh.json");
+        var enh = new Enhancement { MediaType = MediaTypes.Video, MediaSource = "https://www.tiktok.com/@a/video/1" };
+        enh.Metadata.Name = "Watch";
+        File.WriteAllText(path, EnhancementSerializer.Save(enh));
+        File.WriteAllText(other, EnhancementSerializer.Save(enh));
+        CoreSettings.Current.DeeperSubmissions[path] = new DeeperSubmissionRecord { CatalogueId = "watch-id" };
+        var oldTimer = LeashTaskRunner.TimerFactory;
+        LeashTaskRunner.TimerFactory = () => null;
+        using var host = new LeashTaskHost();
+        var runner = new LeashTaskRunner(host);
+        var completed = 0;
+        runner.Completed += _ => completed++;
+        var now = DateTimeOffset.UtcNow;
+        var watch = new LeashWatch("catalogue", "watch-id", null);
+        var punishment = new Punishment("p", PunishKind.Video, 1, watch, new LeashPerson("u", "Holder", null), now, now.AddDays(1));
+        var different = new EnhancementPlayerWindow(null, null);
+        EnhancementPlayerWindow? player = null;
+        try
+        {
+            Assert.True(runner.Start(punishment));
+            player = shell.ShowOrActivateDeeperPlayer();
+            player.LoadEnhancementFile(path); // headless lifetime has no MainWindow
+            Assert.Equal(path, player.LoadedFilePath);
+            different.Show();
+            different.LoadEnhancementFile(other);
+            different.NotifyPlaybackFinished();
+            Assert.Equal(0, completed);
+            host.EndWatch();
+            player.NotifyPlaybackFinished();
+            Assert.Equal(0, completed);
+            runner.Cancel();
+            Assert.True(runner.Start(punishment));
+            player.NotifyPlaybackFinished();
+            Assert.Equal(1, completed);
+            Assert.False(runner.IsRunning);
+        }
+        finally
+        {
+            runner.Cancel();
+            different.Close();
+            player?.Close();
+            CoreSettings.Current.DeeperSubmissions.Remove(path);
+            LeashTaskRunner.TimerFactory = oldTimer;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public void CatalogueWatchFinishesWhenThePlayerAlreadyFinishedThatEntry() => LeashGateCardTests.Run(false, (shell, _, _) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("leash-deeper-again-").FullName;
+        var path = Path.Combine(dir, "watch.ccpenh.json");
+        var enh = new Enhancement { MediaType = MediaTypes.Video, MediaSource = "https://www.tiktok.com/@a/video/1" };
+        enh.Metadata.Name = "Watch";
+        File.WriteAllText(path, EnhancementSerializer.Save(enh));
+        CoreSettings.Current.DeeperSubmissions[path] = new DeeperSubmissionRecord { CatalogueId = "watch-id" };
+        var (oldTimer, oldShell) = (LeashTaskRunner.TimerFactory, LeashTaskHost.Shell);
+        LeashTaskRunner.TimerFactory = () => null;
+        LeashTaskHost.Shell = () => shell;
+        using var host = new LeashTaskHost();
+        var runner = new LeashTaskRunner(host);
+        var completed = 0;
+        runner.Completed += _ => completed++;
+        var now = DateTimeOffset.UtcNow;
+        var punishment = new Punishment("p", PunishKind.Video, 1, new LeashWatch("catalogue", "watch-id", null),
+            new LeashPerson("u", "Holder", null), now, now.AddDays(1));
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var navigated = typeof(EnhancementPlayerWindow).GetField("_videoNavigated", flags)!;
+        var poll = typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync", flags)!;
+        var value = "99.9|100|0";
+        EnhancementPlayerWindow? player = null;
+        void PlayToTheEnd()
+        {
+            navigated.SetValue(player, true);
+            var task = (System.Threading.Tasks.Task)poll.Invoke(player, null)!;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(task.IsCompleted);
+        }
+        try
+        {
+            // The user already played X to the end in Deeper; the window is still open.
+            player = shell.ShowOrActivateDeeperPlayer();
+            global::Avalonia.Controls.ControlExtensions.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>(player, "VideoBrowser")!.ScriptInvoker =
+                _ => System.Threading.Tasks.Task.FromResult<string?>(value);
+            player.LoadEnhancementFile(path);
+            PlayToTheEnd();
+            // Then the holder assigns X: WPF AppLeashTaskHost.cs:211 reloads it, so its end counts again.
+            Assert.True(runner.Start(punishment));
+            Assert.Same(player, shell.ShowOrActivateDeeperPlayer());
+            Assert.Equal(path, player.LoadedFilePath);
+            Assert.Equal(0, completed);
+            PlayToTheEnd();
+            Assert.Equal(1, completed);
+            Assert.False(runner.IsRunning);
+        }
+        finally
+        {
+            runner.Cancel();
+            player?.Close();
+            CoreSettings.Current.DeeperSubmissions.Remove(path);
+            (LeashTaskRunner.TimerFactory, LeashTaskHost.Shell) = (oldTimer, oldShell);
             Directory.Delete(dir, true);
         }
     });

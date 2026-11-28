@@ -13,6 +13,7 @@ public interface IWallpaperPlatform
 public sealed class WallpaperHost
 {
     private readonly IWallpaperPlatform _platform;
+    private readonly Action? _offerRemote;
     private readonly object _gate = new();
     private Task _tail = Task.CompletedTask;
     private string? _original, _current;
@@ -20,7 +21,11 @@ public sealed class WallpaperHost
     public bool IsActive { get; private set; }
     public Task WhenIdle { get { lock (_gate) return _tail; } }
     private static readonly string[] Extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff"];
-    public WallpaperHost(IWallpaperPlatform platform) => _platform = platform;
+    public WallpaperHost(IWallpaperPlatform platform, Action? offerRemote = null)
+    {
+        _platform = platform;
+        _offerRemote = offerRemote;
+    }
     private Task<bool> Queue(Func<bool> action)
     {
         lock (_gate)
@@ -43,7 +48,7 @@ public sealed class WallpaperHost
         var folder = Directory.Exists(custom) ? custom : Path.Combine(CorePaths.EffectiveAssets, "wallpapers");
         var pool = Directory.Exists(folder) ? Directory.GetFiles(folder)
             .Where(p => Extensions.Contains(Path.GetExtension(p).ToLowerInvariant())).ToArray() : [];
-        if (pool.Length == 0) return false;
+        if (pool.Length == 0) { _offerRemote?.Invoke(); return false; }
         if (!IsActive)
         {
             _original = _platform.Capture();

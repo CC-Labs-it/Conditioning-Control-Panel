@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using System;
 using System.IO;
 using System.Linq;
@@ -26,7 +27,7 @@ public sealed class StartModsTests
         AppContext.BaseDirectory, "..", "..", "..", "..", "CCP.Core.Tests", "Fixtures", name));
 
     [Fact]
-    public void StartModsSeedsCoreModsFromTheSavedActiveModAndMatchesTheGolden()
+    public void StartModsSeedsCoreModsFromTheSavedActiveModAndMatchesTheGolden() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         var root = CorePaths.UserData;
         Assert.Equal(TestUserDataProfile.Root, root);   // never the real profile
@@ -51,8 +52,14 @@ public sealed class StartModsTests
             string? switchedTo = null;
             EventHandler<ModPackage> onChanged = (_, p) => switchedTo = p.Id;
             CoreMods.ModChanged += onChanged;
-            try { AvApp.Mods.ActivateMod(BuiltInMods.SissyHypnoId); }
-            finally { CoreMods.ModChanged -= onChanged; }
+            var notifications = new System.Collections.Generic.List<string?>();
+            var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            System.ComponentModel.PropertyChangedEventHandler onText = (_, e) => notifications.Add(e.PropertyName);
+            loc.PropertyChanged += onText;
+            try { AvApp.Mods.ActivateMod(BuiltInMods.SissyHypnoId); Dispatcher.UIThread.RunJobs(); }
+            finally { CoreMods.ModChanged -= onChanged; loc.PropertyChanged -= onText; }
+            Assert.Contains("Item[]", notifications);
+            Assert.Contains("Item", notifications);
             Assert.Equal(BuiltInMods.SissyHypnoId, switchedTo);
             AvApp.Mods.ActivateMod(BuiltInMods.BambiSleepId);
 
@@ -77,7 +84,7 @@ public sealed class StartModsTests
             foreach (var dir in new[] { "mods", "builtin_mods" })
                 if (Directory.Exists(Path.Combine(root, dir))) Directory.Delete(Path.Combine(root, dir), recursive: true);
         }
-    }
+    });
 
     [Fact]
     public void ModSwitchPurgesOldBarkEchoesFromTheBrainCreatedAfterStartup() => WithBrainCreatedAfterStartup((_, brain) =>
