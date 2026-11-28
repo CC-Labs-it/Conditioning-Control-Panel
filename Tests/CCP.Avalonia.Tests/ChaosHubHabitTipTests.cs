@@ -23,7 +23,10 @@ public class ChaosHubHabitTipTests
             string Get(string name) => (string)type.GetProperty(name)!.GetValue(habit)!;
             var row = (Border)typeof(ChaosHubWindow).GetMethod("BuildUpgradeRow", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(hub, new[] { habit })!;
             var icon = ((Grid)row.Child!).Children[0];
-            var tip = Assert.IsType<StackPanel>(ToolTip.GetTip(icon));
+            var chrome = Assert.IsType<ToolTip>(ToolTip.GetTip(icon));
+            Assert.Equal(Color.FromArgb(0xF2, 0x15, 0x12, 0x26), Assert.IsType<SolidColorBrush>(chrome.Background).Color);
+            Assert.Equal(250, ToolTip.GetShowDelay(icon));
+            var tip = Assert.IsType<StackPanel>(chrome.Content);
             var texts = tip.Children.OfType<TextBlock>().ToArray();
             Assert.Equal(new[] { Get("Name"), Get("Desc"), Get("Flavor") }, texts.Select(t => t.Text));
             Assert.Equal(FontStyle.Italic, texts[2].FontStyle);
