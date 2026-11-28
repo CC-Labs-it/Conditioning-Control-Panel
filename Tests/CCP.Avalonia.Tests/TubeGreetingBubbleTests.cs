@@ -20,7 +20,7 @@ using AvApp = global::ConditioningControlPanel.Avalonia.App;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>The tube's startup greeting (WPF AvatarTubeWindow.Speech.cs:2558), random bubble
-/// (Speech.cs:1712-1834 + AvatarRandomBubble.cs).</summary>
+/// (Speech.cs:1712-1834 + AvatarRandomBubble.cs) and fullscreen poll (Windowing.cs:211-357).</summary>
 public sealed class TubeGreetingBubbleTests
 {
     private sealed class PrivateSettings : IDisposable
@@ -222,6 +222,69 @@ public sealed class TubeGreetingBubbleTests
         Assert.False(tube.RandomBubbleTimerRunning);         // closing the tube stops the loop
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task FullscreenHidesTheAttachedTubeAndADetachedOneStaysOnTop() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var saved = (s.AvatarEnabled, s.AvatarTubeDetached, AvatarTubeWindow.OtherAppFullscreen, AvatarTubeWindow.RaiseTopmost);
+        (s.AvatarEnabled, s.AvatarTubeDetached) = (true, false);
+        bool fullscreen = false;
+        int raised = 0;
+        AvatarTubeWindow.OtherAppFullscreen = () => fullscreen;
+        AvatarTubeWindow.RaiseTopmost = _ => { raised++; return true; };
+        var tube = OpenTube(new List<Action>());
+        try
+        {
+            tube.FullscreenCheckTick();
+            Assert.True(tube.IsVisible);
+            fullscreen = true;
+            tube.FullscreenCheckTick();
+            tube.FullscreenCheckTick();
+            Assert.False(tube.IsVisible);
+            Assert.True(tube.HiddenForFullscreen);
+            fullscreen = false;
+            tube.FullscreenCheckTick();
+            Assert.True(tube.IsVisible);
+            Assert.False(tube.HiddenForFullscreen);
+            Assert.Equal(0, raised);                         // attached: owned by main, never raised
+
+            tube.Detach();
+            Dispatcher.UIThread.RunJobs();
+            fullscreen = true;
+            tube.FullscreenCheckTick();
+            Assert.True(tube.IsVisible);                     // a free widget stays over fullscreen apps
+            Assert.Equal(1, raised);
+        }
+        finally
+        {
+            tube.Close();
+            (s.AvatarEnabled, s.AvatarTubeDetached, AvatarTubeWindow.OtherAppFullscreen, AvatarTubeWindow.RaiseTopmost) = saved;
+        }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public void WindowsFullscreenProbeUsesWpfRulesAndPlatformRoute()
+    {
+        var r = new Win32AwarenessForegroundProbe.Rect { Left = 0, Top = 0, Right = 1920, Bottom = 1080 };
+        const int popup = unchecked((int)0x80000000);
+        Assert.True(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup, 8, r, r));
+        Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(1, 1, "GameWindow", popup, 8, r, r));
+        Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "Chrome_WidgetWin_1", popup, 8, r, r));
+        Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup, 0, r, r));
+        Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup | 0x00c00000, 8, r, r));
+        var small = new Win32AwarenessForegroundProbe.Rect { Left = 0, Top = 0, Right = 100, Bottom = 100 };
+        Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup, 8, small, r));
+        // EWMH: ABOVE (9) and FULLSCREEN (5) are separate states; either marks an exclusive window.
+        Assert.False(X11ActiveWindow.TubeTopmost(new uint[] { 7 }, 9, 5)); // covering borderless window, neither state
+        Assert.False(X11ActiveWindow.TubeTopmost(System.Array.Empty<uint>(), 9, 5));
+        Assert.True(X11ActiveWindow.TubeTopmost(new uint[] { 7, 9 }, 9, 5));
+        Assert.True(X11ActiveWindow.TubeTopmost(new uint[] { 5 }, 9, 5)); // fullscreen-only game
+        Assert.False(X11ActiveWindow.TubeTopmost(new uint[] { 0 }, 0, 0)); // atoms unavailable
+        Assert.True(AvatarTubeWindow.ReadOtherAppFullscreen(true, () => true, () => false));
+        Assert.False(AvatarTubeWindow.ReadOtherAppFullscreen(false, () => true, () => false));
+    }
 
     [Fact]
     public void CategoryAudioPrefersOverrideThenCustomAndSkipsMissingFiles()

@@ -14,6 +14,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.AvatarTubeLayout;
 using Serilog;
@@ -332,6 +333,80 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 _ => new PixelRect(leftInset, 0, Math.Max(0, size.Width - leftInset - rightInset), size.Height),   // floating over the shell: both margins
             };
             RequestInputShape();
+        }
+
+        // WPF Windowing.cs:211-357 (StartFullscreenDetection / FullscreenCheckTimer_Tick), 500 ms poll.
+        private DispatcherTimer? _fullscreenCheckTimer;
+        private bool _hiddenForFullscreen;
+        internal bool HiddenForFullscreen => _hiddenForFullscreen;
+
+        /// <summary>Seam: another app's window is the active one and covers its monitor (WPF IsOtherAppFullscreen,
+        /// Windowing.cs:367). Routes to the native platform probe.</summary>
+        internal static bool ReadOtherAppFullscreen(bool windows, Func<bool> win32, Func<bool> x11) => windows ? win32() : x11();
+        internal static Func<bool> OtherAppFullscreen = static () => ReadOtherAppFullscreen(OperatingSystem.IsWindows(),
+            Platform.Win32AwarenessForegroundProbe.ReadTubeFullscreen, static () => Platform.X11ActiveWindow.ReadTubeSample() is { IsFullscreen: true } s
+                && !IsOwnWindow(s.Handle) && !FakeFullscreen(s.ProcessName));
+
+        /// <summary>Seam: WPF ReassertTopmost's raise (HWND_TOPMOST, no activation).</summary>
+        internal static Func<TopLevel, bool> RaiseTopmost = Platform.X11Overlay.RaiseManaged;
+
+        private static bool IsOwnWindow(IntPtr handle) =>
+            (global::Avalonia.Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)
+                ?.Windows.Any(w => w.TryGetPlatformHandle()?.Handle == handle) == true;
+
+        // WPF Windowing.cs:391-406 skips browsers and players by window class (their fullscreen is not exclusive);
+        // X11 has no such class here, so the same apps are matched by process name.
+        private static bool FakeFullscreen(string process) =>
+            new[] { "chrome", "chromium", "msedge", "brave", "firefox", "vlc", "mpv" }.Any(p => process.StartsWith(p, StringComparison.Ordinal));
+
+        private void StartFullscreenDetection()
+        {
+            if (_fullscreenCheckTimer != null) return;
+            _fullscreenCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _fullscreenCheckTimer.Tick += (_, _) => FullscreenCheckTick();
+            _fullscreenCheckTimer.Start();
+        }
+
+        private void StopFullscreenDetection()
+        {
+            _fullscreenCheckTimer?.Stop();
+            _fullscreenCheckTimer = null;
+        }
+
+        internal void FullscreenCheckTick()
+        {
+            try
+            {
+                // Avalonia twin of SuppressSelfRaiseForGameHost: a chaos run owns her placement.
+                if (_chaosRunActive) return;
+                bool enabled = CoreSettings.Current.AvatarEnabled;
+                if (_isAttached)
+                {
+                    bool fullscreen = OtherAppFullscreen();
+                    if (fullscreen && !_hiddenForFullscreen)
+                    {
+                        _hiddenForFullscreen = true;
+                        Hide();
+                        Log.Information("[AVATAR-BLINK] hidden, fullscreen app detected (attached)");
+                    }
+                    else if (!fullscreen && _hiddenForFullscreen && enabled
+                             && (_parentWindow == null || (_parentWindow.IsVisible && _parentWindow.WindowState != WindowState.Minimized)))
+                    {
+                        // Clear only once she is shown, so a minimized main during the exit retries next tick.
+                        _hiddenForFullscreen = false;
+                        Show();
+                        UpdatePosition();
+                        Log.Information("[AVATAR-BLINK] restored, fullscreen app closed");
+                    }
+                    return;
+                }
+                if (_hiddenForFullscreen && enabled) { _hiddenForFullscreen = false; Show(); }
+                // WPF ReassertTopmost (Windowing.cs:1921): not over a quiz or her own open menu; the bubble rides above.
+                if (Windows.PopQuizWindow.IsOpen || Windows.QuizWindow.IsOpen || this.FindControl<ContextMenu>("AvatarContextMenu")?.IsOpen == true) return;
+                RaiseTopmost(this);
+                if (_bubbleWindow is { IsVisible: true } bubble) RaiseTopmost(bubble);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Error checking fullscreen state"); }
         }
 
         /// <summary>The attached tube's dock-side input clip (window px) as last set by
