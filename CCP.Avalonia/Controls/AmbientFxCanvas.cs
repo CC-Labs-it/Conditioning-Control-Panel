@@ -116,20 +116,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// Viewbox-agnostic, while the two one-shot entry points (<see cref="Burst"/> and
     /// <see cref="BankTokens"/>) take plain element-local coordinates.</para>
     ///
-    /// <para><b>What changed in the port.</b> The WPF original hosted a SkiaSharp <c>SKElement</c>
-    /// as its <c>Decorator.Child</c> and painted every layer as one white radial <c>SKImage</c>
-    /// re-tinted by an <c>SKColorFilter</c> under <c>SKBlendMode.Plus</c>. Avalonia's
-    /// <see cref="DrawingContext"/> draws the same shapes natively - a <see cref="RadialGradientBrush"/>
-    /// stretched over an ellipse IS the soft sprite - so the port drops SkiaSharp entirely and
-    /// overrides <see cref="Render"/> on the control itself, keeping the head free of a Skia
-    /// dependency it otherwise does not need.</para>
-    ///
-    /// <para>ponytail: Avalonia's DrawingContext has no additive blend mode, so the layers composite
-    /// source-over where WPF composited Plus. Overlapping puffs therefore read a shade flatter
-    /// instead of blooming. The upgrade path is an <c>ICustomDrawOperation</c> holding an
-    /// <c>ISkiaSharpApiLease</c>, which buys back <c>SKBlendMode.Plus</c> at the cost of pulling
-    /// SkiaSharp into this project and of only working on the Skia backend; not worth it until the
-    /// owner says the bloom is missed.</para>
+    /// <para>Fog puffs use a Skia Plus operation when available. Other layers and the
+    /// non-Skia fallback still use DrawingContext compositing.</para>
     /// </summary>
     public partial class AmbientFxCanvas : Decorator
     {
@@ -176,6 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// the WPF original's one white sprite plus four <c>SKColorFilter</c>s: a gradient brush
         /// already carries its colour, so the tint IS the brush and no filter is needed.
         /// </summary>
+        private Color _mistColor;
         private IBrush? _mistDot, _particleDot, _glowDot, _flashDot, _glowSoft, _emberDot;
         private IBrush? _burstDot, _tokDot;
 
@@ -642,6 +631,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                     glow = tint;
                 }
 
+                _mistColor = mist;
                 _mistDot = MakeDot(mist, 0f);
                 _flashDot = MakeDot(flash, 0f);
                 ApplyAccent(particle, glow);
@@ -1183,7 +1173,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 var layers = _config.Layers;
 
                 if (!_fogOnly && (layers & AmbientFxLayers.AuroraWash) != 0) DrawAurora(context, w, h, intensity);
-                if ((layers & AmbientFxLayers.FogDrift) != 0) DrawFog(context, w, h, min, intensity);
+                if ((layers & AmbientFxLayers.FogDrift) != 0) DrawFogPlus(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.GlowBreath) != 0) DrawGlowBreath(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.DustField) != 0) DrawDust(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.Embers) != 0) DrawEmbers(context, w, h, min, intensity);
@@ -1212,23 +1202,6 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
             DrawSprite(ctx, _mistDot, cx, cy, bw, bh, 0.13f * intensity * _mistAlpha);
             DrawSprite(ctx, _glowDot, w - cx, h - cy, bw * 0.8f, bh * 0.8f, 0.10f * intensity * _mistAlpha);
-        }
-
-        private void DrawFog(DrawingContext ctx, float w, float h, float min, float intensity)
-        {
-            for (int i = 0; i < _puffs.Length; i++)
-            {
-                var p = _puffs[i];
-                // Position is a pure function of the clock — no integration state to drift, and a
-                // paused/resumed canvas picks up exactly where the elapsed time says it should.
-                float px = Frac2(p.X + p.VX * _fogT);
-                float py = Frac2(p.Y + p.VY * _fogT);
-                float a = p.BaseA * (0.70f + 0.30f * (float)Math.Sin(p.Phase + _fogT * p.PhaseSpd))
-                          * intensity * _mistAlpha;
-                if (a <= 0.004f) continue;
-                float d = p.R * min * 2f;
-                DrawSprite(ctx, _mistDot, px * w, py * h, d, d, a);
-            }
         }
 
         private void DrawGlowBreath(DrawingContext ctx, float w, float h, float min, float intensity)
@@ -1465,7 +1438,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
             /// <summary>WPF PerformanceProfile.HeavyElementCount: live flash windows + ambient bubbles.</summary>
             public static int HeavyElementCount =>
-                Views.Overlays.FlashOverlay.Active.Count + Views.Overlays.BubbleOverlay.Field.Bubbles.Count;
+                Views.Overlays.FlashOverlay.OnScreen + Views.Overlays.BubbleOverlay.Field.Bubbles.Count;
 
             /// <summary>PerformanceProfile.MaxAmbientParticles, verbatim.</summary>
             public static int MaxAmbientParticles(PerformanceTier tier) => tier switch

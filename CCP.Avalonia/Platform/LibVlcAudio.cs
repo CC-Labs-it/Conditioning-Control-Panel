@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// </summary>
     internal sealed class LibVlcAudio
     {
-        private readonly LibVLC _vlc;
+        private LibVLC _vlc => AcquireShared();
         private readonly Func<string, string> _pactl = Pactl;
         private readonly TimeProvider _duckClock = TimeProvider.System;
 
@@ -63,7 +63,50 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <summary>The process's one LibVLC, shared with video (MiniPlayerWindow), as WPF shares
         /// VideoService.SharedLibVLC. Null when libvlc did not load.</summary>
-        internal static LibVLC? Shared { get; private set; }
+        private static LibVLC? _shared;
+        // A retired shared engine owes a replacement until one is built; a failed build stays owed.
+        private static bool _rebuildPending;
+        private static int _rebuilding;
+        internal static LibVLC? Shared
+        {
+            get { LibVLC? s; bool kick; lock (_engineGate) { s = _shared; kick = s == null && _rebuildPending; } if (kick) RebuildInBackground(); return s; }
+            set { lock (_engineGate) { _shared = value; _rebuildPending = false; } }
+        }
+        private static readonly object _engineGate = new(), _rebuildGate = new();
+        private static readonly List<LibVLC> _retired = new();
+        internal static bool IsRetired(LibVLC? engine) { lock (_engineGate) return engine != null && _retired.Any(item => ReferenceEquals(item, engine)); }
+        // WPF VideoService.cs:1139-1163, 7769-7779: never dispose a retired instance; rebuild off-thread.
+        internal static void Retire(LibVLC? engine)
+        {
+            if (engine == null) return;
+            lock (_engineGate)
+            {
+                if (IsRetired(engine)) return;
+                _retired.Add(engine);
+                if (!ReferenceEquals(_shared, engine)) return;
+                (_shared, _rebuildPending) = (null, true);
+            }
+            RebuildInBackground();
+        }
+        private static void RebuildInBackground()
+        {
+            if (Interlocked.Exchange(ref _rebuilding, 1) == 0) _ = Task.Run(() =>
+            {
+                try { AcquireShared(); } catch (Exception ex) { Log.Warning(ex, "LibVLC shared engine replacement failed"); }
+                finally { Volatile.Write(ref _rebuilding, 0); }
+            });
+        }
+        /// <summary>The shared engine; waits for, or retries, the replacement of a retired one.</summary>
+        internal static LibVLC AcquireShared()
+        {
+            lock (_rebuildGate)
+            {
+                lock (_engineGate) if (_shared != null || !_rebuildPending) return _shared ?? throw new InvalidOperationException("LibVLC is unavailable");
+                var fresh = CreateIsolatedVideo();
+                if (IsRetired(fresh)) throw new InvalidOperationException("Retired LibVLC returned by factory");
+                lock (_engineGate) { if (_shared == null) (_shared, _rebuildPending) = (fresh, false); return _shared; }
+            }
+        }
         private static string[] _sharedOptions = Array.Empty<string>();
         // WPF VideoService.cs:1139-1163 retires a poisoned engine. Bubble Count instead
         // owns an isolated engine, so a wedged game cannot poison shared audio or video.
@@ -78,9 +121,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             InitializeNative();
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
             var effectiveOptions = WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray();
-            _vlc = new LibVLC(effectiveOptions);
-            if (Shared == null) { _sharedOptions = effectiveOptions; Shared = _vlc; }
-            _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
+            var vlc = new LibVLC(effectiveOptions);
+            if (Shared == null) { _sharedOptions = effectiveOptions; Shared = vlc; }
+            vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
 
         internal static void InitializeNative()
@@ -129,7 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>Ducking only, with pactl stubbed: for the state-machine test.</summary>
-        internal LibVlcAudio(Func<string, string> pactl, string? duckJournal = null) { _vlc = null!; _pactl = pactl; _journal = duckJournal; }
+        internal LibVlcAudio(Func<string, string> pactl, string? duckJournal = null) { _pactl = pactl; _journal = duckJournal; }
 
         /// <summary>Ducking only, pactl stubbed and the rescan timer on <paramref name="clock"/> (AudioDuckRescanTests).</summary>
         internal LibVlcAudio(Func<string, string> pactl, TimeProvider clock, string? duckJournal = null)
@@ -169,7 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public void Seed()
         {
             Instance = this;
-            LayeredAudio.Instance = new LayeredAudio((path, volume) => new LayeredAudio.VlcLayerPlayer(_vlc, path, initialVolume: volume));
+            LayeredAudio.Instance = new LayeredAudio((path, volume) => new LayeredAudio.VlcLayerPlayer(AcquireShared, path, initialVolume: volume));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
             CoreAudio.PlayStoppableProvider = PlayOneShot;
             // Windows ducking is seeded by StartDuckJournal (App start-up only): a probe or test must never
@@ -219,7 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 Volatile.Write(ref playing, 1);
                 // The bug report's last section (#4076): every sound, engine on or off.
-                ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("oneshot:" + tag, path, CoreEngine.IsRunning, false, DateTime.Now);
+                ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("oneshot:" + tag, path, CoreEngine.IsRunning || ConditioningControlPanel.CoreSession.IsSessionRunning, false, DateTime.Now);
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
                 // output only takes it once it exists, from a thread that is not libvlc's own.
                 ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { if (volume != 0f) ApplyPreferredDevice(player); player.Volume = vol; } });
@@ -230,9 +273,29 @@ namespace ConditioningControlPanel.Avalonia.Platform
             player.EndReached += (_, _) => Finish();
             player.EncounteredError += (_, _) => Finish();
             player.Stopped += (_, _) => Finish();
+            // Pause/resume work items can run out of order, so each applies the latest request, not its own.
+            int wantPaused = 0;
+            void ApplyPause() => ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try { lock (player) if (done == 0) player.SetPause(Volatile.Read(ref wantPaused) != 0); }
+                catch (Exception ex) { Log.Debug(ex, "[Audio] {Tag} pause", tag); }
+            });
+            // A rapid resume can precede completion of LibVLC's asynchronous pause (as Voice below).
+            player.Paused += (_, _) => { if (Volatile.Read(ref wantPaused) == 0) ApplyPause(); };
             if (!player.Play()) Finish();
             // Off the caller's thread: libvlc's Stop must never run inside one of its own events.
-            return () => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.Stop(); });
+            Action stop = () => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.Stop(); });
+            Pausers.AddOrUpdate(stop, paused => { Volatile.Write(ref wantPaused, paused ? 1 : 0); ApplyPause(); });
+            return stop;
+        }
+
+        /// <summary>WPF AudioPlaybackHandle.Pause/Resume for a one-shot, keyed by the stop it handed back.</summary>
+        internal static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Action, Action<bool>> Pausers = new();
+
+        /// <summary>Pauses or resumes the clip behind <paramref name="stop"/>; a no-op for any other stop.</summary>
+        internal static void SetPaused(Action stop, bool paused)
+        {
+            if (Pausers.TryGetValue(stop, out var pause)) pause(paused);
         }
 
         /// <summary>A clip the caller can re-volume and stop (mind wipe). A loop is WPF's overlap
@@ -405,7 +468,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     if (_paused) { _restartPending = true; return true; }
                     _restartPending = false;
                     v = null!;
-                    v = audio.NewVoice(path, () => Retire(v), loop: true);
+                    // The shared engine can be mid-rebuild or fail it; the next copy's start retries.
+                    try { v = audio.NewVoice(path, () => Retire(v), loop: true); }
+                    catch (Exception ex) { Log.Debug(ex, "[Audio] loop copy"); return false; }
                     v.Volume = _vol;
                     v.Started = Schedule;
                     _live.Add(v);
@@ -611,8 +676,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 foreach (var si in DuckRecovery.ParseSinkInputs(_pactl("-f json list sink-inputs")))
                 {
                     if (si.Pid == Environment.ProcessId) continue;
-                    // WPF AudioService.cs:1021-1041. WebKit audio runs in a child process.
-                    if ((CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true)
+                    // WPF AudioService.cs:1021-1041. WebKit audio runs in a child process; a browser video
+                    // session is the app's own audio, so it is never swept (WPF :1030-1031).
+                    if (((CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true) || BrowserVideoSurface.SessionActive)
                         && (si.Name.StartsWith("WebKit", StringComparison.Ordinal)
                             || si.Name.Contains("webview2", StringComparison.OrdinalIgnoreCase))) continue;
                     var index = si.Index;

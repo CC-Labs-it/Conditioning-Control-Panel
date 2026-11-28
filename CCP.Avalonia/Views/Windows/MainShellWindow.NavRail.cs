@@ -253,6 +253,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
 
+        // WPF hooks every rail door's press (:532); a stand-in seat over a covered door routes it here too.
+        internal void RouteDoorPress(Control door, PointerPressedEventArgs e)
+        {
+            if (_navSectionRows.Exists(r => r.Button == door)) NavDoorPossessionReroute(door, e);
+        }
+
         // WPF NavDoor_PossessionReroute: the press stands if the hook fails or its door is not live.
         private void NavDoorPossessionReroute(object? sender, PointerPressedEventArgs e)
         {
@@ -292,7 +298,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Log.Warning("OpenNavSection: no section {Section}", section);
                 return;
             }
-            ShowTab(section == NavSections.Settings ? "appsettings" : NavLastTabFor(section));
+            // WPF NavRailRules.TargetTab: Home is the way back from the hidden Premium page.
+            var tab = section == NavSections.Home ? NavSections.DefaultTab(section)!
+                : section == NavSections.Settings ? "appsettings" : NavLastTabFor(section);
+            ShowTab(tab);
         }
 
         /// <summary>WPF RegisterSectionShortcuts (:589): Ctrl+1..7 jump to the rail's sections.
