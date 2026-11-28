@@ -58,6 +58,38 @@ public sealed class NotificationServiceTests
         });
     }
 
+    [Fact]
+    public void QueuedToastsReplayInOrderAndNewToastsWaitTheirTurn()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            var service = new NotificationService();
+            var host = new StackPanel();
+            var key = "replay_" + Guid.NewGuid().ToString("N");
+            service.Show("first", duration: TimeSpan.FromMinutes(1));
+            service.ShowSticky(key, "sticky");
+            service.ShowSticky(key, "duplicate");
+            service.AttachHost(host);
+            Assert.Equal(TimeSpan.FromMilliseconds(900), NotificationService.ReplayGap);
+            Assert.Equal(new[] { "first" }, host.Children.Select(Message));
+            service.Show("later", duration: TimeSpan.FromMinutes(1));
+            Assert.Single(host.Children);
+            service.ShowNextPending();
+            Assert.Equal(new[] { "first", "sticky" }, host.Children.Select(Message));
+            service.ShowNextPending();
+            Assert.Equal(new[] { "first", "sticky", "later" }, host.Children.Select(Message));
+            service.Show("immediate", duration: TimeSpan.FromMinutes(1));
+            Assert.Equal(new[] { "first", "sticky", "later", "immediate" }, host.Children.Select(Message));
+            foreach (var toast in host.Children.OfType<Border>())
+                (toast.Tag as DispatcherTimer)?.Stop();
+        });
+    }
+
     private static string Message(Control toast) =>
         ((TextBlock)((Grid)((Border)toast).Child!).Children[0]).Text!;
 

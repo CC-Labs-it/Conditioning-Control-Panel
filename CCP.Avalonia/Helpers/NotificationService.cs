@@ -37,15 +37,39 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         // Both lanes use the same scheduler; the app still performs a real one-shot fade.
         internal Action<Action, TimeSpan> ScheduleRemoval = (remove, delay) => DispatcherTimer.RunOnce(remove, delay);
 
+        internal static readonly TimeSpan ReplayGap = TimeSpan.FromMilliseconds(900);
+        private DispatcherTimer? _replay;
+        private bool Queuing => _host == null || _replay != null;
+
         public void AttachHost(Panel host)
         {
             _host = host;
-            var queue = _pending.ToArray();
-            _pending.Clear();
-            foreach (var (msg, type, dur, key, label, action, secondaryLabel, secondaryAction) in queue)
+            ShowNextPending();
+        }
+
+        internal void ShowNextPending()
+        {
+            if (_host == null) return;
+            if (_pending.Count == 0)
             {
-                if (key != null) ShowSticky(key, msg, type, label, action);
-                else Show(msg, type, dur, label, action, secondaryLabel, secondaryAction);
+                _replay?.Stop();
+                _replay = null;
+                return;
+            }
+            var (msg, type, dur, key, label, action, secondaryLabel, secondaryAction) = _pending[0];
+            _pending.RemoveAt(0);
+            if (key != null)
+            {
+                if (NotificationDismissals.CanShow(key, CoreSettings.Current.DismissedNotificationKeys))
+                    ShowStickyInternal(key, msg, type, label, action);
+            }
+            else ShowInternal(msg, type, dur, label, action, secondaryLabel, secondaryAction);
+            if (_pending.Count == 0) { _replay?.Stop(); _replay = null; return; }
+            if (_replay == null)
+            {
+                _replay = new DispatcherTimer { Interval = ReplayGap };
+                _replay.Tick += (_, _) => ShowNextPending();
+                _replay.Start();
             }
         }
 
@@ -53,10 +77,15 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             string? actionLabel = null, Action? action = null,
             string? secondaryActionLabel = null, Action? secondaryAction = null)
         {
-            if (_host == null) { _pending.Add((message, type, duration, null, actionLabel, action, secondaryActionLabel, secondaryAction)); return; }
+            if (Queuing) { _pending.Add((message, type, duration, null, actionLabel, action, secondaryActionLabel, secondaryAction)); return; }
+            ShowInternal(message, type, duration, actionLabel, action, secondaryActionLabel, secondaryAction);
+        }
 
+        private void ShowInternal(string message, NotificationType type, TimeSpan? duration,
+            string? actionLabel, Action? action, string? secondaryActionLabel, Action? secondaryAction)
+        {
             var border = BuildToast(message, type, null, actionLabel, action, secondaryActionLabel, secondaryAction);
-            _host.Children.Add(border);
+            _host!.Children.Add(border);
             border.Opacity = 1; // fades in through the Opacity transition (WPF AnimateIn, 180 ms)
 
             var timer = new DispatcherTimer { Interval = duration ?? TimeSpan.FromSeconds(5) };
@@ -70,7 +99,11 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             string? actionLabel = null, Action? action = null)
         {
             if (!NotificationDismissals.CanShow(key, CoreSettings.Current.DismissedNotificationKeys)) return;
-            if (_host == null) { _pending.Add((message, type, null, key, actionLabel, action, null, null)); return; }
+            if (Queuing)
+            {
+                if (!_pending.Exists(p => p.key == key)) _pending.Add((message, type, null, key, actionLabel, action, null, null));
+                return;
+            }
             ShowStickyInternal(key, message, type, actionLabel, action);
         }
 
