@@ -127,6 +127,31 @@ public sealed class OnlineMeterSurfaceTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task Assets_card_styles_spent_and_upsell_lines_and_resets_them() => Run(() =>
+    {
+        var tab = new AssetsTabView();
+        var now = new DateTime(2026, 10, 23, 12, 0, 0);
+        var reset = now.Date.AddDays(1);
+        var spent = State(100, spent: true);
+        tab.PaintOnlineMeter(spent, now, reset);
+        Assert.Equal(Color.Parse("#CCCCE0"), Assert.IsAssignableFrom<ISolidColorBrush>(tab.TxtOnlineMeterPct.Foreground).Color);
+        Assert.Equal(Color.Parse("#F0F0F5"), Assert.IsAssignableFrom<ISolidColorBrush>(tab.TxtOnlineMeterSummary.Foreground).Color);
+        Assert.Equal(12.5, tab.TxtOnlineMeterSummary.FontSize);
+        Assert.Contains(string.Format(Loc.Get("online_meter_hours"), 12), tab.TxtOnlineMeterSummary.Text);
+        Assert.Equal("   " + Loc.Get(spent.UpsellKey!), tab.TxtOnlineMeterUpsell.Text);
+        Assert.Equal(Color.Parse("#E0B0FF"), Assert.IsAssignableFrom<ISolidColorBrush>(tab.TxtOnlineMeterUpsell.Foreground).Color);
+
+        var available = State(42, plan: ScrolllerPlan.Prime);
+        tab.PaintOnlineMeter(available, now, reset);
+        Assert.Equal(AssetsTabView.ToneColor(available.Tone), Assert.IsAssignableFrom<ISolidColorBrush>(tab.TxtOnlineMeterPct.Foreground).Color);
+        Assert.Equal(Color.Parse("#A7A7C1"), Assert.IsAssignableFrom<ISolidColorBrush>(tab.TxtOnlineMeterSummary.Foreground).Color);
+        Assert.Equal(11.5, tab.TxtOnlineMeterSummary.FontSize);
+        Assert.Equal(Loc.Get(available.UnderKey), tab.TxtOnlineMeterSummary.Text);
+        Assert.Equal("", tab.TxtOnlineMeterUpsell.Text);
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, -6)]
     [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, 0)]

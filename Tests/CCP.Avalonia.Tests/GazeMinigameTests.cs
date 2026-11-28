@@ -214,7 +214,7 @@ public sealed class GazeMinigameTests
             Assert.Empty(right.Children);
             Assert.Null(((Image)leftAsset).Source);
             Assert.Null(((Image)rightAsset).Source);
-            Assert.Equal(baselinePlayers, InlineLoopVideo.LivePlayers);
+            Assert.True(SpinUntil(() => baselinePlayers == InlineLoopVideo.LivePlayers));
             // A feedback continuation must not start the second round after panic.
             feedback.SetResult();
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();

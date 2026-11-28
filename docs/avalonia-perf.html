@@ -137,6 +137,8 @@ No new Windows parity result is claimed by this review fix.</p>
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
+<li>2026-11-24, startup recut on port/7.2: deferred Achievements art, direct pixel blur, Play hero reuse and TieredPGO disabled. Performance on this base is not verified; historical measurements on the original branch do not establish a result for this recut.</li>
+<li>2026-11-24, cloud Linux, PR #5202 recut on base <code>7db2f34de</code>: tab entrance tracks run on the compositor; the outgoing visibility track holds its first key frame at the initial sample. The focused first-frame test failed before the visibility fix and passed afterward. No new p95 benchmark or Windows parity result was measured here.</li>
 <li>2026-11-15, windows-latest, rgate 43712013418 on snapshot 780b71bc6 = port/7.2 669eb1b72b + #5199 + #5202 (branch avalonia-port/perf-measure-1115, never a PR): 51/51 PASS, 49/51 at or below WPF; startup 3841.3 vs 3792.8 ms, worst tab median 83.0 vs 143.0 ms, worst p95 111.8 vs 221.9 ms, working set 858.2 vs 1026.7 MB. Previous run 2026-11-14 (43595478555): 49/51, AvailableSubjects p95 and startup failed; both fixed by #5202 and #5199.</li>
 <li>2026-11-11, cloud Linux, test syntax correction on parent <code>217dae076</code>, base
 <code>e62cb9ecd005</code>: Core, Avalonia and Avalonia test projects built in Release;
