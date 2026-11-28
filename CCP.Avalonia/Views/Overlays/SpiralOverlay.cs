@@ -163,8 +163,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF OverlayService.cs:1129,1189: a Deeper band shares the sustained hold at its own opacity.
         private static readonly Dictionary<(object Owner, string Band), double> DeeperHolds = new();
         internal static double? DeeperOpacity => DeeperHolds.Count == 0 ? null : DeeperHolds.Values.Max();
-        internal static void SetSustained(Visual? host, object owner, string band, double? opacity)
+        internal static void SetSustained(Visual? host, object owner, string band, double? opacity, bool updateOnly = false)
         {
+            if (updateOnly && !DeeperHolds.ContainsKey((owner, band))) return; // WPF :1319-1362 ramp repaints, never shows
             if (opacity is { } o) DeeperHolds[(owner, band)] = Math.Clamp(o, 0, 1);
             else DeeperHolds.Remove((owner, band));
             if (host != null) Refresh(host);

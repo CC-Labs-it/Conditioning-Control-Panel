@@ -177,6 +177,29 @@ public class SpeakPlayerTests
         finally { first.ResetOverlayBands(); second.ResetOverlayBands(); SpiralOverlay.Stop(); host.Close(); }
     });
 
+    // WPF OverlayService.cs:1247,1319-1362: a ramp Update only repaints a live hold, never re-opens a stopped overlay.
+    [Theory]
+    [InlineData(OverlayKinds.Spiral)]
+    [InlineData(OverlayKinds.PinkFilter)]
+    public void UpdateAfterUserStopDoesNotReopenBand(string kind) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var host = new global::Avalonia.Controls.Window();
+        var dispatcher = new BrowserEnhancementDispatcher { OverlayHost = host };
+        var effect = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = kind,
+            EffectId = "band", Phase = EffectPhase.Start, Opacity = 0.7 };
+        double? Deeper() => kind == OverlayKinds.Spiral ? SpiralOverlay.DeeperOpacity : PinkFilterOverlay.DeeperOpacity;
+        try
+        {
+            dispatcher.Overlay(effect, CancellationToken.None);
+            Assert.Equal(0.7, Deeper());
+            if (kind == OverlayKinds.Spiral) SpiralOverlay.Stop(); else PinkFilterOverlay.Stop();
+            effect.Phase = EffectPhase.Update; effect.Opacity = 0.5;
+            dispatcher.Overlay(effect, CancellationToken.None);
+            Assert.Null(Deeper());
+        }
+        finally { dispatcher.ResetOverlayBands(); SpiralOverlay.Stop(); PinkFilterOverlay.Stop(); host.Close(); }
+    });
+
     private sealed class Camera : IEnhancementWebcam
     {
         public event Action? OnBlink, OnMouthOpen, OnFaceLost, OnFaceFound;

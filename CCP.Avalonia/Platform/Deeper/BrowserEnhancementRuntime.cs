@@ -131,10 +131,10 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
     }
 
     private static void OnUi(Action action) { if (Dispatcher.UIThread.CheckAccess()) action(); else Dispatcher.UIThread.Post(action); }
-    private void Sustain(global::Avalonia.Visual? host, string kind, string key, double? opacity)
+    private void Sustain(global::Avalonia.Visual? host, string kind, string key, double? opacity, bool updateOnly = false)
     {
-        if (kind == OverlayKinds.PinkFilter) Views.Overlays.PinkFilterOverlay.SetSustained(host, this, key, opacity);
-        else if (kind == OverlayKinds.Spiral) Views.Overlays.SpiralOverlay.SetSustained(host, this, key, opacity);
+        if (kind == OverlayKinds.PinkFilter) Views.Overlays.PinkFilterOverlay.SetSustained(host, this, key, opacity, updateOnly);
+        else if (kind == OverlayKinds.Spiral) Views.Overlays.SpiralOverlay.SetSustained(host, this, key, opacity, updateOnly);
     }
 
     // WPF RealActionDispatcher.cs:222-273 -> OverlayService.cs:924 (timed), :1129 (show), :1189 (hide), :1247 (ramp).
@@ -159,7 +159,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 break;
             case EffectPhase.Update:
                 lock (_overlayBands)
-                    if (_overlayBands.TryGetValue(key, out var activeKind)) Sustain(host, activeKind, key, effect.Opacity);
+                    if (_overlayBands.TryGetValue(key, out var activeKind)) Sustain(host, activeKind, key, effect.Opacity, updateOnly: true);
                 break;
             case EffectPhase.Restart: break; // WPF :258 no remaining time to recompute
             default:
