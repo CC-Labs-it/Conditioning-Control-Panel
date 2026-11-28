@@ -28,6 +28,12 @@ namespace ConditioningControlPanel.Services
         // and never held across the UI-thread serialize hop — both would deadlock the shutdown
         // path, where SaveImmediate runs ON the UI thread.
         private readonly object _saveLock = new();
+        // A second SettingsService can load while this instance is publishing. Recovery must not
+        // delete that live write's temp file, even after its write stream has been closed.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> ActiveTempFiles =
+            new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        internal Action<string>? BeforeAtomicPublishForTests { get; set; }
+        internal static FileStream OpenSettingsRead(string path) => new(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
         private readonly object _timerLock = new();
         // Instances with an armed debounce. Product code only adds/removes; the test isolation hook
         // disarms them after each test so a dead test's private service cannot write settings.json
@@ -77,6 +83,7 @@ namespace ConditioningControlPanel.Services
 
         // Per-instance seam for deterministic lifecycle proofs; production keeps the 500ms default.
         internal int SaveDebounceDueTimeMilliseconds { get; set; } = 500;
+        internal Action<bool>? DebouncedSaveCompletedForTest { get; set; }
 
         public AppSettings Current { get; private set; }
 
@@ -199,7 +206,9 @@ namespace ConditioningControlPanel.Services
 
                 if (File.Exists(_settingsPath))
                 {
-                    var json = File.ReadAllText(_settingsPath);
+                    using var stream = OpenSettingsRead(_settingsPath);
+                    using var reader = new StreamReader(stream);
+                    var json = reader.ReadToEnd();
 
                     // Use explicit settings to ensure lists are REPLACED, not merged with defaults.
                     // Error handler makes the load RESILIENT: a single unparseable member (e.g. an
@@ -365,7 +374,8 @@ namespace ConditioningControlPanel.Services
                 var dir = Path.GetDirectoryName(_settingsPath);
                 if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
 
-                var temps = Directory.GetFiles(dir, Path.GetFileName(_settingsPath) + "*.tmp");
+                var temps = Directory.GetFiles(dir, Path.GetFileName(_settingsPath) + "*.tmp")
+                    .Where(path => !ActiveTempFiles.ContainsKey(Path.GetFullPath(path))).ToArray();
                 if (temps.Length == 0) return;
 
                 if (!File.Exists(_settingsPath))
@@ -866,7 +876,8 @@ namespace ConditioningControlPanel.Services
                             _savePending = false;
                             var suppress = _suppressCloudBackupPending;
                             _suppressCloudBackupPending = false;
-                            SaveImmediate(suppress);
+                            var saved = TrySaveImmediate(suppress);
+                            DebouncedSaveCompletedForTest?.Invoke(saved);
                         }
                     }
                     finally { Interlocked.Decrement(ref _debouncedSavesInFlight); }
@@ -985,6 +996,8 @@ namespace ConditioningControlPanel.Services
                     // settings.json — #761). Flush(true) commits the bytes to the device before
                     // the rename makes them the live settings.
                     var tempPath = _settingsPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                    var activePath = Path.GetFullPath(tempPath);
+                    if (!ActiveTempFiles.TryAdd(activePath, 0)) throw new IOException("Settings temp path is already in use");
                     try
                     {
                         using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -994,6 +1007,7 @@ namespace ConditioningControlPanel.Services
                             writer.Flush();
                             stream.Flush(true);
                         }
+                        BeforeAtomicPublishForTests?.Invoke(tempPath);
                         PublishAtomicFile(tempPath);
                     }
                     catch
@@ -1001,6 +1015,7 @@ namespace ConditioningControlPanel.Services
                         try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
                         throw;
                     }
+                    finally { ActiveTempFiles.TryRemove(activePath, out _); }
 
                     Interlocked.Exchange(ref _lastWrittenSaveSequence, sequence);
                 }

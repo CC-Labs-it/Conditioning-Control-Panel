@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -73,14 +74,13 @@ public sealed class DeeperEditorTimelineTests
     {
         Setup();
         var oldProvider = CoreSettings.ServiceProvider;
-        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-timeline-" + Guid.NewGuid().ToString("N"));
-        var path = System.IO.Path.Combine(dir, "settings.json");
+        var path = System.IO.Path.Combine(TestUserDataProfile.Root, Guid.NewGuid().ToString("N"), "settings.json");
         var service = new ConditioningControlPanel.Services.SettingsService(path);
+        var savedToDisk = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.DebouncedSaveCompletedForTest = success => savedToDisk.TrySetResult(success);
         CoreSettings.ServiceProvider = () => service;
         service.Current.DeeperEditorTimelineHeight = 160;
         service.SaveImmediate();
-        var initialSave = service.LastWrittenSaveSequence;
-        Assert.True(initialSave > 0);
         var editor = new DeeperEditorWindow(new Enhancement(), null);
         DeeperEditorWindow? next = null;
         try
@@ -95,13 +95,7 @@ public sealed class DeeperEditorTimelineTests
             var saved = CoreSettings.Current.DeeperEditorTimelineHeight;
             Assert.InRange(saved, 220, 230);
             Assert.True(service.HasPendingSave);
-            var deadline = System.Diagnostics.Stopwatch.StartNew();
-            // Wait for the debounced save to publish without holding the destination open on Windows.
-            while (service.LastWrittenSaveSequence <= initialSave)
-            {
-                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(5), "timeline height was not saved");
-                await Task.Delay(50);
-            }
+            Assert.True(await savedToDisk.Task.WaitAsync(TimeSpan.FromSeconds(5)), "timeline height was not saved");
             Assert.Equal(saved, new ConditioningControlPanel.Services.SettingsService(path).Current.DeeperEditorTimelineHeight);
             editor.ForceClose();
             next = new DeeperEditorWindow(new Enhancement(), null);
@@ -112,7 +106,7 @@ public sealed class DeeperEditorTimelineTests
         {
             editor.ForceClose(); next?.ForceClose();
             service.SealForReset(); CoreSettings.ServiceProvider = oldProvider;
-            System.IO.Directory.Delete(dir, recursive: true);
+            Directory.Delete(System.IO.Path.GetDirectoryName(path)!, recursive: true);
         }
     });
 

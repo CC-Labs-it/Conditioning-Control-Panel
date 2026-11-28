@@ -108,7 +108,11 @@ public sealed class VoiceRemainingCommandsTests
             var shell = new MainShellWindow();
             shell.Show();
             var clip = Path.Combine(AppContext.BaseDirectory, "Assets", "voice-video-30s.mp4");
-            var scheduler = new MandatoryVideoScheduler(o, library: () => new[] { clip });
+            // The pre-roll fires when this test fires it, here on the dispatcher thread, never from a pool
+            // timer: on a busy CI runner that pool callback (Show -> UIThread.Invoke, then VideoStarted and
+            // the rest of the pre-roll body off-thread) raced the test body or arrived after the 10 s bound.
+            var preroll = new PrerollClock();
+            var scheduler = new MandatoryVideoScheduler(o, preroll, library: () => new[] { clip });
             try
             {
                 (s.AttentionChecksEnabled, s.VideoBlurredBackgroundEnabled, s.VideoMaxDurationSeconds) = (false, false, 0);
@@ -127,7 +131,9 @@ public sealed class VoiceRemainingCommandsTests
                     try
                     {
                         Assert.True(scheduler.Trigger(strict));
-                        await started.Task.WaitAsync(TimeSpan.FromSeconds(10)); // after the pre-roll, Sink exists
+                        // The pre-roll (and the freeze lead before it when a Freeze surface is seeded).
+                        while (!started.Task.IsCompleted && preroll.FireArmed()) { }
+                        Assert.True(started.Task.IsCompletedSuccessfully, "the pre-roll showed the clip"); // Sink exists
                     }
                     finally { scheduler.VideoStarted -= onStarted; }
                     await o.Sink!.SecondFrame.WaitAsync(TimeSpan.FromSeconds(10));
@@ -166,4 +172,35 @@ public sealed class VoiceRemainingCommandsTests
                 shell.Close();
             }
         });
+
+    /// <summary>The wall clock, except that every timer armed through it fires only from <see cref="FireArmed"/>.</summary>
+    private sealed class PrerollClock : TimeProvider
+    {
+        private readonly global::System.Collections.Generic.List<ManualTimer> _timers = new();
+
+        public override global::System.Threading.ITimer CreateTimer(global::System.Threading.TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new ManualTimer(() => callback(state));
+            timer.Change(dueTime, period);
+            _timers.Add(timer);
+            return timer;
+        }
+
+        /// <summary>Fires each armed timer once on the calling thread; false when none was armed.</summary>
+        public bool FireArmed()
+        {
+            var armed = _timers.Where(t => t.Armed).ToArray();
+            foreach (var t in armed) t.Fire();
+            return armed.Length > 0;
+        }
+
+        private sealed class ManualTimer(Action fire) : global::System.Threading.ITimer
+        {
+            internal bool Armed { get; private set; }
+            internal void Fire() { Armed = false; fire(); }   // a callback may re-arm it (freeze lead -> pre-roll)
+            public bool Change(TimeSpan dueTime, TimeSpan period) { Armed = dueTime != global::System.Threading.Timeout.InfiniteTimeSpan; return true; }
+            public void Dispose() => Armed = false;
+            public ValueTask DisposeAsync() { Armed = false; return default; }
+        }
+    }
 }

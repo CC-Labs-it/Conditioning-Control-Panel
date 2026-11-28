@@ -39,6 +39,54 @@ public sealed class ChaosGifCascadeOverlayTests
         public void Advance(double sec) => Now += TimeSpan.FromSeconds(sec).Ticks;
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ScrolllerCreditFollowsFallerAndPanic(bool panic)
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-rain-credit-").FullName;
+        var path = Path.Combine(dir, "ccp_temp_remote_test.gif");
+        File.WriteAllBytes(path, Convert.FromBase64String(TinyGif));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var oldRain = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+                var oldFlash = ChaosFlashOverlay.SkipPlatformChecksForTests;
+                var oldManual = ChaosGifCascadeOverlay.ManualFramesForTests;
+                try
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    int before = ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditChip.HolderCount;
+                    Show(path);
+                    var rain = ChaosGifCascadeOverlay.Active!;
+                    Assert.Equal(before + 1, ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditChip.HolderCount);
+                    if (panic) PanicSurfaces.All.Single(x => x.Id == "gif-cascade").Stop(null);
+                    else rain.Cascade.Clear();
+                    Assert.Equal(before, ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditChip.HolderCount);
+                    await rain.PendingDecodes;
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(before, ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditChip.HolderCount);
+                }
+                finally
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = oldRain;
+                    ChaosFlashOverlay.SkipPlatformChecksForTests = oldFlash;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = oldManual;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     [Fact]
     public void PackBatchRetriesDuplicatesAcrossShuffleCyclesAndCapsAtPoolSize()
     {
@@ -1048,6 +1096,7 @@ public sealed class ChaosGifCascadeOverlayTests
     // mid-run keeps the heavy gate shut 3 s more, never shortens a floor, and a dropped detonation says so.
     private sealed class GateVideoHost : global::ConditioningControlPanel.Services.IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
         public void ShowMessage(global::ConditioningControlPanel.Services.AttentionVerdict verdict, int ms, Action then) => then();

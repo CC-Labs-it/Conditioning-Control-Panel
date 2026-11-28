@@ -8,9 +8,22 @@ using ConditioningControlPanel.Services.EmiDesk;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
-// WPF EmiOptionsWindow.DeskItems.cs. B3: owned picks only; no Avalonia shop door.
+// WPF EmiOptionsWindow.DeskItems.cs: owned picks and the counter door.
 public partial class EmiOptionsWindow
 {
+    internal System.Action<string, string> LaunchPrizeCounter = (from, tab) =>
+        Views.Games.GameWindow.LaunchPrizeCounter(from, tab);
+
+    private void OpenCounterForDesk()
+    {
+        try
+        {
+            ClosePanel();
+            LaunchPrizeCounter("wallet", "desk");
+        }
+        catch (System.Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] counter open failed"); }
+    }
+
     private void RefreshDeskPicks() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (!_closingForGood) BuildDeskPicks(); });
     private void BuildDeskPicks()
     {

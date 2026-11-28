@@ -114,6 +114,20 @@ public sealed class NavSectionRailTests
     });
 
     [Fact]
+    public void HomeRowAndShortcutReturnFromPremiumToDashboard() => Run(w =>
+    {
+        w.ShowTab("premium");
+        Assert.Equal("premium", w.CurrentTab);
+        Click(w.Named<Button>("DoorHome")!);
+        Assert.Equal("settings", w.CurrentTab);
+
+        w.ShowTab("premium");
+        w.KeyPress(Key.D1, RawInputModifiers.Control, PhysicalKey.Digit1, "1");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("settings", w.CurrentTab);
+    });
+
+    [Fact]
     public void CtrlDigitJumpsToTheRailSection() => Run(w =>
     {
         w.KeyPress(Key.D5, RawInputModifiers.Control, PhysicalKey.Digit5, "5");
