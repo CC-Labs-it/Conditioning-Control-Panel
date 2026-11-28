@@ -96,8 +96,10 @@ public sealed class LeashPageTests
                 .Select(i => new Sticker(ids[i % ids.Length], new LeashPerson("from-" + i, "Sender " + i, null), DateTimeOffset.UtcNow)).ToArray() });
             var words = page.GetLogicalDescendants().OfType<TextBlock>().ToArray();
             if (hint)
-                Assert.Contains(words, t => t.Text == ConditioningControlPanel.Localization.Loc.GetF("leash_self_hold_hint",
-                    LeashHoldToCut.KeyLabel(ConditioningControlPanel.CoreSettings.Current.PanicKey)));
+                Assert.Contains(words, t => t.Text == (LeashHead.WaylandSession
+                    ? ConditioningControlPanel.Localization.Loc.Get("leash_self_cut_wayland")
+                    : ConditioningControlPanel.Localization.Loc.GetF("leash_self_hold_hint",
+                        LeashHoldToCut.KeyLabel(ConditioningControlPanel.CoreSettings.Current.PanicKey))));
             else
             {
                 var wrap = Assert.Single(page.GetLogicalDescendants().OfType<WrapPanel>());
