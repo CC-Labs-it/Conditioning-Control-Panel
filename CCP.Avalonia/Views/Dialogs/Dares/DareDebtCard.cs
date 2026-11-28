@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Dares;
@@ -35,6 +37,8 @@ public sealed class DareDebtCard : Window
     private readonly IDaresService _svc;
     private readonly DareBet _bet;
     private readonly StackPanel _body;
+    private StackPanel _inner = new();
+    private Panel _slip = new Grid();
     private readonly Queue<string> _consent = new();
     private bool _busy, _closed;
     /// <summary>The last Pay press that reached the service. Test seam.</summary>
@@ -86,26 +90,47 @@ public sealed class DareDebtCard : Window
         return w;
     }
 
-    /// <summary>"You lost to Moth. You owe 20 min Lockdown".</summary>
-    private void Frame(string title)
+    /// <summary>WPF :95-103: the desk heading and an empty lockcard; <see cref="_inner"/> is its inside.</summary>
+    private void Frame(string title, string? help)
     {
         _body.Children.Clear();
-        _body.Children.Add(DareLook.Words(title, 22));
+        _body.Children.Add(DareLook.DeskHead(title, help));
+        _slip = DareLook.LockCard(out _inner);
+        _body.Children.Add(_slip);
+    }
+
+    /// <summary>WPF :106-113: "You lost to Moth. You owe" and the stake in handwriting.</summary>
+    private void OweLine()
+    {
         var stake = _bet.MyStake;
         var owed = DareSlipRules.StakeText(stake, stake.Kind == DareStakeKind.Dare ? stake.DareNumber : 0, Loc.Get);
-        _body.Children.Add(DareLook.Words(Loc.GetF("dares_debt_lost", _bet.Friend.Name) + " " + owed, 20));
+        var line = new WrapPanel();
+        var lost = DareLook.Words(Loc.GetF("dares_debt_lost", _bet.Friend.Name) + " ", 21, DareLook.CardInkBrush);
+        lost.Margin = default;
+        line.Children.Add(lost);
+        line.Children.Add(DareLook.Hand(owed, 28, new SolidColorBrush(DareLook.ToneColor(DareSlipRules.ToneOf(stake.Kind)))));
+        _inner.Children.Add(line);
     }
 
     private void BuildCard()
     {
-        Frame(Loc.Get("dares_debt_title"));
-        if (_bet.Debt?.RetryUsed == true) _body.Children.Add(DareLook.Words(Loc.Get("dares_debt_retry"), 16, DareLook.WarnBrush, "dares-debt-retry"));
-        _body.Children.Add(DareLook.Words(Loc.Get("dares_debt_soft"), 16, DareLook.MutedBrush, "dares-debt-soft"));
+        Frame(Loc.Get("dares_debt_title"), null);
+        OweLine();
+        if (_bet.Debt?.RetryUsed == true) _inner.Children.Add(DareLook.Words(Loc.Get("dares_debt_retry"), 17, DareLook.WarnOnCardBrush, "dares-debt-retry"));
+        var soft = DareLook.Words(Loc.Get("dares_debt_soft"), 17, DareLook.CardInkBrush, "dares-debt-soft");
+        soft.Opacity = 0.7;
+        _inner.Children.Add(soft);
         var row = new WrapPanel { Margin = new(0, 14, 0, 0), Tag = "dares-debt-buttons" };
         row.Children.Add(DareLook.Act(Loc.Get(DareCardRules.PayKey(_bet.MyStake.Kind)), null, true, OnPay, "dares-pay"));
-        row.Children.Add(DareLook.Act(Loc.Get("dares_renounce"), Loc.Get("dares_renounce_sub"), false, () => _ = ActAsync(DareOp.Renounce), "dares-renounce"));
-        row.Children.Add(DareLook.Act(Loc.Get("dares_close_ccp"), Loc.Get("dares_close_ccp_sub"), false, OnCloseApp, "dares-close-ccp"));
-        _body.Children.Add(row);
+        // WPF :127-131: Renounce carries its (?).
+        var renounce = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+        renounce.Children.Add(DareLook.Act(Loc.Get("dares_renounce"), Loc.Get("dares_renounce_sub"), false, () => _ = ActAsync(DareOp.Renounce), "dares-renounce", onCard: true));
+        var help = DareLook.Help("dares_help_renounce", DareLook.CardInkBrush);
+        help.Margin = new(-6, 0, 12, 10);
+        renounce.Children.Add(help);
+        row.Children.Add(renounce);
+        row.Children.Add(DareLook.Act(Loc.Get("dares_close_ccp"), Loc.Get("dares_close_ccp_sub"), false, OnCloseApp, "dares-close-ccp", onCard: true));
+        _inner.Children.Add(row);
     }
 
     private void OnPay()
@@ -123,23 +148,24 @@ public sealed class DareDebtCard : Window
         if (_consent.Count == 0) { LastPay = ActAsync(DareCardRules.PayOp(_bet.MyStake.Kind)); return; }
         if (_consent.Dequeue() == "lockdown")
         {
-            Frame(Loc.Get("dares_ld_title"));
+            Frame(Loc.Get("dares_ld_title"), "dares_help_lockdown");
             // WPF 13fe8883df :167-170: the real Lockdown turns the panic key off only when the player's own
             // Lockdown setting says so (Dares never forces it), so the consent says what will happen.
             var panicOff = CoreSettings.Current.LockdownDisablePanicKey;
-            _body.Children.Add(DareLook.Words("• " + Loc.GetF(panicOff ? "dares_ld_length" : "dares_ld_length_panic", _bet.MyStake.Amount), 19, null, "dares-consent-lockdown"));
-            _body.Children.Add(DareLook.Words("• " + Loc.Get("dares_ld_phrase"), 19));
-            _body.Children.Add(DareLook.Words("• " + Loc.Get("dares_ld_early"), 19));
+            _inner.Children.Add(DareLook.Words("• " + Loc.GetF(panicOff ? "dares_ld_length" : "dares_ld_length_panic", _bet.MyStake.Amount), 21, DareLook.CardInkBrush, "dares-consent-lockdown"));
+            _inner.Children.Add(DareLook.Words("• " + Loc.Get("dares_ld_phrase"), 21, DareLook.CardInkBrush));
+            _inner.Children.Add(DareLook.Words("• " + Loc.Get("dares_ld_early"), 21, DareLook.CardInkBrush));
         }
         else
         {
-            Frame(Loc.Get("dares_ld_startup_title"));
-            _body.Children.Add(DareLook.Words(Loc.Get("dares_ld_startup_body"), 19, null, "dares-consent-startup"));
+            Frame(Loc.Get("dares_ld_startup_title"), null);
+            _inner.Children.Add(DareLook.Words(Loc.Get("dares_ld_startup_body"), 20, DareLook.CardInkBrush, "dares-consent-startup"));
         }
         var row = new WrapPanel { Margin = new(0, 16, 0, 0) };
         row.Children.Add(DareLook.Act(Loc.Get("dares_ld_sure"), null, true, () => { FriendsSfx.Click(); NextConsentOrPay(); }, "dares-consent-yes"));
-        row.Children.Add(DareLook.Act(Loc.Get("dares_not_now"), null, false, () => { FriendsSfx.Dismiss(); _consent.Clear(); BuildCard(); }, "dares-consent-no"));
-        _body.Children.Add(row);
+        row.Children.Add(DareLook.Act(Loc.Get("dares_not_now"), null, false, () => { FriendsSfx.Dismiss(); _consent.Clear(); BuildCard(); }, "dares-consent-no", onCard: true));
+        _inner.Children.Add(row);
+        DareLook.CardIn(_slip);
     }
 
     /// <summary>WPF :210-246: Pay, I did it, Start Lockdown or Renounce, worded. Internal for the suite.</summary>
@@ -156,7 +182,7 @@ public sealed class DareDebtCard : Window
         {
             FriendsSfx.Denied();
             BuildCard();
-            _body.Children.Add(DareLook.Words(Loc.Get(DareCardRules.ActKey(r)), 17, DareLook.WarnBrush, "dares-debt-result"));
+            _inner.Children.Add(DareLook.Words(Loc.Get(DareCardRules.ActKey(r)), 17, DareLook.WarnOnCardBrush, "dares-debt-result"));
             return r;
         }
         // The Lockdown takes the screen now; the card steps out of its way at once.
@@ -164,10 +190,11 @@ public sealed class DareDebtCard : Window
         FriendsSfx.Accepted();
         var key = op == DareOp.Renounce ? "dares_debt_renounced" : DareCardRules.PaidKey(_bet.MyStake.Kind);
         var text = key == "dares_debt_done" ? Loc.Get(key) : Loc.GetF(key, _bet.Friend.Name);
-        Frame(Loc.Get("dares_debt_title"));
-        _body.Children.Add(DareLook.Stamp(Loc.Get(op == DareOp.Renounce ? "dares_stamp_renounced" : "dares_stamp_paid"), grey: op == DareOp.Renounce));
-        _body.Children.Add(DareLook.Words(text, 20, null, "dares-debt-result"));
-        _body.Children.Add(DareLook.Act(Loc.Get("dares_close"), null, false, Close, "dares-done"));
+        Frame(Loc.Get("dares_debt_title"), null);
+        OweLine();
+        _slip.Children.Add(DareLook.Stamp(Loc.Get(op == DareOp.Renounce ? "dares_stamp_renounced" : "dares_stamp_paid"), grey: op == DareOp.Renounce));
+        _inner.Children.Add(DareLook.Words(text, 20, DareLook.GoodOnCardBrush, "dares-debt-result"));
+        _inner.Children.Add(DareLook.Act(Loc.Get("dares_close"), null, false, () => DareLook.FadeOutThen(this, Close), "dares-done", onCard: true));
         return r;
     }
 

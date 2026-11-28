@@ -123,6 +123,21 @@ public sealed class DareCardTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task Cards_wear_the_slip_and_lockcard_with_their_help() => Run((_, _, service) =>
+    {
+        DareOfferCard.Present(null, "o1");
+        var offer = DareOfferCard.Open!;
+        foreach (var tag in new[] { "dares-slip", "dares-help:dares_help_numbers", "dares-help:dares_help_lockdown", "dares-close" })
+            Assert.True(Has(offer, tag), tag);
+        var debt = OpenDebt(service);
+        Assert.True(Has(debt, "dares-lockcard"));
+        Assert.True(Has(debt, "dares-help:dares_help_renounce"));   // WPF DareDebtCard.cs:127-131
+        Press(debt, "dares-pay");
+        Assert.True(Has(debt, "dares-help:dares_help_lockdown"));   // WPF :166
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false, "dares_ld_length_panic", "dares_offer_consent_panic")]
     [InlineData(true, "dares_ld_length", "dares_offer_consent")]

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Dares;
@@ -26,7 +27,8 @@ public sealed class DareOfferCard : Window, IPassiveStartupSurface
     private readonly IDaresService _svc;
     private readonly string _betId;
     private readonly StackPanel _body;
-    private bool _busy, _closed;
+    private Panel _paper = new Grid();
+    private bool _busy, _closed, _leaving;
 
     internal static void CloseForPanic()
     {
@@ -37,11 +39,11 @@ public sealed class DareOfferCard : Window, IPassiveStartupSurface
     {
         _svc = svc;
         _betId = bet.Id;
-        _body = DareLook.Shell(this, 560, "dares-offer-card");
+        _body = DareLook.Shell(this, 640, "dares-offer-card");
         Closed += (_, _) => _closed = true;
         // WPF :42-43: the first-time introduction comes before the first offer.
         if (DareIntro.Seen()) Build(bet);
-        else _body.Children.Add(DareIntro.Build(() => { _body.Children.Clear(); Build(Find(_svc, _betId) ?? bet); }));
+        else _body.Children.Add(DareIntro.Build(() => Build(Find(_svc, _betId) ?? bet)));
     }
 
     public static void Present(Window? owner, string betId)
@@ -62,22 +64,45 @@ public sealed class DareOfferCard : Window, IPassiveStartupSurface
         try { return svc?.Snapshot.Bets.FirstOrDefault(b => b.Id == id); } catch { return null; }
     }
 
+    /// <summary>WPF :75-108: the slip as it reads from my side, its notes on the desk, Accept or Pass.</summary>
     private void Build(DareBet bet)
     {
-        _body.Children.Add(DareLook.Words(Loc.GetF("dares_offer_title", bet.Friend.Name), 22));
-        foreach (var line in DareSlipRules.Sentence(bet, Loc.Get)) _body.Children.Add(DareLook.Words(line.Plain, 18));
+        _body.Children.Clear();
+        var sentence = new StackPanel();
+        foreach (var line in DareSlipRules.Sentence(bet, Loc.Get)) sentence.Children.Add(DareLook.Words(line.Plain, 21, DareLook.PrintBrush));
+        _body.Children.Add(DareLook.Slip(DareLook.SlipHead(Loc.GetF("dares_offer_title", bet.Friend.Name), "dares_help_numbers", Leave),
+            sentence, out _paper));
         if (DareCardRules.OfferNeedsConsent(bet))
         {
             // WPF 13fe8883df :83-85: panic is off only when the player's own Lockdown setting says so.
             var panicOff = CoreSettings.Current.LockdownDisablePanicKey;
-            _body.Children.Add(DareLook.Words(Loc.GetF(panicOff ? "dares_offer_consent" : "dares_offer_consent_panic", bet.MyStake.Amount),
-                17, null, "dares-offer-consent"));
+            _body.Children.Add(Note("ldn", Loc.GetF(panicOff ? "dares_offer_consent" : "dares_offer_consent_panic", bet.MyStake.Amount),
+                "dares_help_lockdown", "dares-offer-consent", 16));
         }
-        if (bet.Camera) _body.Children.Add(DareLook.Words(Loc.Get("dares_offer_camera"), 17));
+        if (bet.Camera) _body.Children.Add(Note("eye", Loc.Get("dares_offer_camera"), "dares_help_camera", null, 10));
         var buttons = new WrapPanel { Margin = new(0, 18, 0, 0), Tag = "dares-offer-buttons" };
         buttons.Children.Add(DareLook.Act(Loc.Get("dares_accept"), null, true, () => _ = AnswerAsync(DareOp.Accept), "dares-accept"));
         buttons.Children.Add(DareLook.Act(Loc.Get("dares_pass"), null, false, () => _ = AnswerAsync(DareOp.Pass), "dares-pass"));
         _body.Children.Add(buttons);
+    }
+
+    /// <summary>WPF :110-128: a line on the desk under the slip, an icon, the words, its (?).</summary>
+    private static Control Note(string icon, string text, string helpKey, string? tag, double top)
+    {
+        var g = new Grid { ColumnDefinitions = new("Auto,*,Auto"), Margin = new(0, top, 0, 0) };
+        var i = DareLook.Icon(icon, 24, DareLook.ChalkBrush);
+        i.VerticalAlignment = VerticalAlignment.Top;
+        i.Margin = new(0, 1, 10, 0);
+        g.Children.Add(i);
+        var t = DareLook.Words(text, 18, null, tag);
+        t.Margin = default;
+        Grid.SetColumn(t, 1);
+        g.Children.Add(t);
+        var h = DareLook.Help(helpKey, DareLook.MutedBrush);
+        h.VerticalAlignment = VerticalAlignment.Top;
+        Grid.SetColumn(h, 2);
+        g.Children.Add(h);
+        return g;
     }
 
     /// <summary>WPF :119-149: Accept or Pass, worded. Internal for the suite.</summary>
@@ -104,16 +129,24 @@ public sealed class DareOfferCard : Window, IPassiveStartupSurface
         if (r == DareActResult.Done)
         {
             if (op == DareOp.Accept) FriendsSfx.Accepted(); else FriendsSfx.Dismiss();
-            _body.Children.Add(DareLook.Stamp(Loc.Get(op == DareOp.Accept ? "dares_stamp_on" : "dares_stamp_passed"), grey: op != DareOp.Accept));
+            _paper.Children.Add(DareLook.Stamp(Loc.Get(op == DareOp.Accept ? "dares_stamp_on" : "dares_stamp_passed"), grey: op != DareOp.Accept));
             _body.Children.Add(DareLook.Words(Loc.Get(op == DareOp.Accept ? "dares_offer_on" : "dares_offer_passed"), 20, null, "dares-offer-result"));
-            if (op == DareOp.Accept) DispatcherTimer.RunOnce(Close, AcceptedLinger);
+            // WPF :152-165: the stamp lands, a beat, then the card steps out on its own.
+            if (op == DareOp.Accept) DispatcherTimer.RunOnce(Leave, TimeSpan.FromMilliseconds(DareLook.StampLandMs) + AcceptedLinger);
         }
         else
         {
             FriendsSfx.Denied();
             _body.Children.Add(DareLook.Words(Loc.Get(DareCardRules.ActKey(r)), 20, DareLook.WarnBrush, "dares-offer-result"));
         }
-        _body.Children.Add(DareLook.Act(Loc.Get("dares_close"), null, false, Close, "dares-done"));
+        _body.Children.Add(DareLook.Act(Loc.Get("dares_close"), null, false, Leave, "dares-done"));
         return r;
+    }
+
+    private void Leave()
+    {
+        if (_leaving || _closed) return;
+        _leaving = true;
+        DareLook.FadeOutThen(this, Close);
     }
 }
