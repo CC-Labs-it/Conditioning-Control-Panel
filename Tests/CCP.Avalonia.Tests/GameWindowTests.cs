@@ -1738,12 +1738,21 @@ public sealed partial class GameWindowTests
             Assert.Equal(!countdown, ChaosRunHost.IsDescending);
 
             shell.HandlePanicKeyPress(DateTime.Now);
-            Assert.False(ChaosRunHost.IsActive);
+            if (countdown) Assert.False(ChaosRunHost.IsActive);
+            else
+            {
+                // WPF MainWindow.xaml.cs:1737 hands the press to ChaosModeService.cs:288: press 1 pauses, press 2 ends the descent.
+                Assert.True(ChaosRunHost.IsManuallyPaused);
+                Assert.True(ChaosRunHost.IsDescending);
+                shell.HandlePanicKeyPress(DateTime.Now);
+                Assert.False(ChaosRunHost.IsManuallyPaused);
+            }
             overlay.FinishCountdown(); // a queued start must not revive the run after panic
             Assert.False(ChaosRunHost.IsDescending);
-            Assert.False(breakout.IsVisible);
+            // The descent rung returns before either game rung, so only the countdown's stop pass hides them.
+            Assert.Equal(!countdown, breakout.IsVisible);
             Assert.DoesNotContain(frames, f => (string?)f["type"] == "suspend");
-            if (dtrh != null) Assert.False(dtrh.IsVisible);
+            if (dtrh != null) Assert.Equal(!countdown, dtrh.IsVisible);
             Assert.Equal(0, shell.PanicPressCountForTest);
         }
         finally

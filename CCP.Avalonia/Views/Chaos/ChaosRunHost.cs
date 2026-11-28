@@ -1516,6 +1516,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
+        internal static void OnPanicKeyDuringRun()
+        {
+            if (!_spawning || _lessonCardPaused || _draftPaused) return;
+            if (!_manualPaused) ToggleManualPause();
+            else RequestStop();
+        }
+
         public static void RequestStop()
         {
             if (_manualPaused) { _manualPaused = false; _hud?.SetPausedUi(false); }

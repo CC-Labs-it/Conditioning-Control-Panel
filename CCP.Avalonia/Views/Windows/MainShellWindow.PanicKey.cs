@@ -157,7 +157,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
             // WPF MainWindow.xaml.cs:1734: a live Chaos descent outranks both game handoffs.
-            // This head stops Chaos through the normal stop pass, including during its countdown.
+            if (rung == PanicPolicy.Rung.RunLadder && Chaos.ChaosRunHost.IsDescending)
+            {
+                // WPF :1726 closes the Counter before a game consumes the ladder press.
+                try { Games.GameWindow.CloseCounterForPanic(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Panic: closing the Prize Counter failed"); }
+                Chaos.ChaosRunHost.OnPanicKeyDuringRun();
+                StopCameraForPanic();
+                return;
+            }
             if (rung == PanicPolicy.Rung.RunLadder && !Chaos.ChaosRunHost.IsActive)
             {
                 // WPF MainWindow.xaml.cs:1741,1763: DtRH before the Back Room, including Breakout.
