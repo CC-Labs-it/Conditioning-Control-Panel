@@ -81,7 +81,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private Media? _media;
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
-        private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed, _safetyLengthArmed;
+        private bool _closing, _attention, _gracePaused, _graceConsumed, _safetyLengthArmed;
+        private volatile bool _didDuck;
+        internal bool HoldsAudioDuck => _didDuck && Scheduler.IsPlaying;
         /// <summary>WPF _safetyTimer / _fallbackSafetyTimer: wall clock, length + 5 s (else the fallback).
         /// Only a grace pause suspends it; a voice pause (PausePrimary) does not.</summary>
         internal readonly ConditioningControlPanel.Services.Video.VideoSafetyDeadline SafetyDeadline = new();

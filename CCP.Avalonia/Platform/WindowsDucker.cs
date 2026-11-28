@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Services.Audio;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -297,11 +298,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (Volatile.Read(ref _depth) == 0) Enqueue(() => HandBack(retry: true));
         }
 
-        private void WatchdogTick()
+        internal Func<bool> DuckOwnerAlive { get; set; } = () => Views.Overlays.MandatoryVideoOverlay.Instance.HoldsAudioDuck;
+
+        private bool OwnerAlive()
+        {
+            try { return DuckOwnerAlive(); }
+            catch (Exception ex) { Log.Debug("[Ducking] Owner check failed: {E}", ex.Message); return false; }
+        }
+
+        internal void WatchdogTick()
         {
             lock (_lock)
             {
-                if (!_ducked) { _watchdog?.Dispose(); _watchdog = null; return; }
+                var step = DuckWatchdogRule.Decide(_ducked, OwnerAlive());
+                if (step == DuckWatchdogStep.Retire) { _watchdog?.Dispose(); _watchdog = null; return; }
+                if (step == DuckWatchdogStep.Rearm) return;
                 Log.Warning("[Ducking] Watchdog fired after {Ms}ms - force-unducking to prevent stuck volume", WatchdogMs);
                 _ducked = false;
                 _count = 0;
