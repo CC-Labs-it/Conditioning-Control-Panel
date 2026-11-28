@@ -21,9 +21,6 @@ public interface IDareCameraProbe
     void Stop();
 }
 
-/// <summary>Where the check stands, for a line on a camera bet.</summary>
-public enum DareCameraState { Idle, Watching, HeldOff, Unavailable }
-
 /// <summary>
 /// THE CAMERA CHECK (CONTRACT.md "Counting", camera). While a camera bet's counting is live it looks
 /// every <see cref="DareGrammar.CameraSampleMs"/> and adds the step to "counted", and to "seen" when a

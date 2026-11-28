@@ -63,7 +63,7 @@ public sealed class DaresApi : IDaresApi
         catch (OperationCanceledException) { return null; }
         catch (Exception ex)
         {
-            App.Logger?.Debug("Dares {Op} failed: {E}", op, ex.Message);
+            Serilog.Log.Debug("Dares {Op} failed: {E}", op, ex.Message);
             return null;
         }
     }
