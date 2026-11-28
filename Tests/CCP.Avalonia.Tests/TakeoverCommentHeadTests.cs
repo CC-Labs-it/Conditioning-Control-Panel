@@ -50,6 +50,7 @@ public class TakeoverCommentHeadTests
             async Task Reply(AiReplyResult result)
             {
                 ai.Result = result; await shell.MakeAutonomyCommentAsync(); Dispatcher.UIThread.RunJobs();
+                while (tube.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             }
             await Reply(new("first line", true, null));
             Assert.Equal("first line", text.Text);
@@ -77,6 +78,7 @@ public class TakeoverCommentHeadTests
             if (panic) shell.StopAutonomyForPanic(); else shell.Autonomy.Stop();
             ai.Pending.SetResult(new("completed after stop", true, null));
             await pending; Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } typed) typed();
             // Panic and Stop must suppress a reply that was already in flight.
             Assert.Equal("first line", text.Text);
         }

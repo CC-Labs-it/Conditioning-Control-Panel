@@ -127,6 +127,7 @@ public sealed class AwarenessAiRoutingTests
             Dispatcher.UIThread.RunJobs();
             var request = Assert.Single(requests);
             Assert.Contains("League of Legends", request);
+            while (tube.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             Assert.Equal("caught you gaming", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
         }));
 

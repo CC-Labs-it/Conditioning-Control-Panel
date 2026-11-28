@@ -38,6 +38,7 @@ public sealed class CompanionQuietTests
             Assert.Same(tube, BarkHead.TubeProvider());
             BarkHead.Speak(new BarkSpeech("sensing", null, true, null, false, Unprompted: true));
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } typed) typed();   // priority lines type (WPF Speech.cs:373,515)
             Assert.Equal("sensing", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
             Assert.True(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
             Assert.Equal(0, audio);
