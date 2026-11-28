@@ -175,6 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CoreSettings.Current.AutoPerformanceMode = ChkAutoPerformance.IsChecked ?? true;
             Log.Information("Auto performance mode set to {Enabled}", CoreSettings.Current.AutoPerformanceMode);
             CoreSettings.Save();
+            // The requested target is WPF #5802 UiUpdates.cs:2350; the base WPF handler does not notify yet.
             global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
         }
 
