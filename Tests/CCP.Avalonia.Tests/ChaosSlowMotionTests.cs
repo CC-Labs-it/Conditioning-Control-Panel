@@ -123,4 +123,62 @@ public sealed class ChaosSlowMotionTests
         Assert.True(live.Popping);   // the maxed toy snaps every live bubble
         Assert.Equal(0, toy.ChargesLeft);
     }, pendulum: false);
+
+    // WPF ChaosModeService.cs:2351-2375, :2407-2415: a darter catch shows the Time Slow banner; a catch
+    // inside a running slow-mo adds 0.8 s and hands a pendulum swing back to normal pay.
+    [Fact]
+    public void Darter_catch_shows_time_slow_and_a_catch_in_the_slow_adds_0_8s() => Run(s =>
+    {
+        s.PendulumPayMult = 3;
+        double score = s.Score, mult = s.TotalMult;   // the catch's combo bump moves TotalMult after scoring
+        var first = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0.5), motion: ChaosMotion.RoamBounce);
+        BubbleOverlay.PopChaos(first);
+        Assert.Equal(ChaosRunHost.SlowMoDurationSec + s.SlowMoBonusSec, ChaosRunHost.SlowMoRemainingSec, 6);
+        Assert.Equal(ChaosRunHost.SlowMoFactor, BubbleOverlay.Field.ChaosTimeScale);
+        var banner = Assert.Single(ChaosEffectBannerOverlay.Active!.Strip.Row, e => e.Id == "slowmo" && e.IsLive);
+        Assert.Equal("Time Slow", banner.Text);
+        Assert.Equal("slowmo", banner.ArtKey);
+        Assert.Equal(ChaosBubbleVariants.DARTER_BASE_POINTS * mult, s.Score - score, 6);   // still telegraphing: not quick
+        Assert.Contains(s.RecentEvents, e => e.EndsWith("time slows"));
+        ChaosRunHost.ActivateSlowMo(2.5, pendulum: true, "Pendulum");
+        Assert.Equal(3.0, ChaosRunHost.PendulumMultiplier);
+        BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0.5), motion: ChaosMotion.RoamBounce));
+        Assert.Equal(2.5 + 0.8, ChaosRunHost.SlowMoRemainingSec, 6);
+        Assert.Equal(1.0, ChaosRunHost.PendulumMultiplier);
+        Assert.Contains(s.RecentEvents, e => e.EndsWith("+0.8s"));
+    }, pendulum: false);
+
+    // WPF ChaosModeService.cs:1202-1212: the darter rolls on every spawn tick when darters are on.
+    [Fact]
+    public void Spawn_tick_releases_a_rolled_darter_only_when_darters_are_on() => Run(s =>
+    {
+        var roll = ChaosRunHost.RollDarter;
+        try
+        {
+            ChaosRunHost.RollDarter = (i, _) => ChaosBubbleVariants.BuildDarter(i);
+            ChaosRunHost.SpawnTick();
+            var darter = Assert.Single(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true);
+            Assert.Equal(ChaosMotion.RoamBounce, darter.TriggerMotion);
+            BubbleOverlay.ClearChaos();
+            s.Config.DartersEnabled = false;
+            ChaosRunHost.SpawnTick();
+            Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true);
+        }
+        finally { ChaosRunHost.RollDarter = roll; }
+    }, pendulum: false);
+
+    // Panic: the chaos surface clears the darters, ends the slow-mo and closes the banner.
+    [Fact]
+    public void Panic_clears_darters_and_ends_time_slow() => Run(s =>
+    {
+        BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0.5), motion: ChaosMotion.RoamBounce));
+        BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0.5), motion: ChaosMotion.RoamBounce);
+        Assert.True(ChaosRunHost.SlowMoRemainingSec > 0);
+        PanicSurfaces.All.Single(x => x.Id == "chaos").Stop(null);
+        Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true);
+        Assert.Equal(0, ChaosRunHost.SlowMoRemainingSec);
+        Assert.Equal(1.0, BubbleOverlay.Field.ChaosTimeScale);
+        Assert.Equal(1.0, EffectPayload.GlobalDurationMult);
+        Assert.Null(ChaosEffectBannerOverlay.Active);
+    }, pendulum: false);
 }

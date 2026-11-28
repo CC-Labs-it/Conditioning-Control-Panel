@@ -95,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private static readonly Random PbpRng = new();
 
         private bool _pbpOpen;
+        private bool _pbpCounterHooked;
         private bool _pbpSettingsPosted, _pbpIdentityPosted;
         private Task? _pbpBootFrames;   // single-flight: settings always precedes identity, even during an OS query
         private bool _pbpPinged;
@@ -133,6 +134,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_pbpOpen) return;
             _pbpOpen = false;
+            if (_pbpCounterHooked) OpenCounterWindow()?._counterOnClosed.Remove(OnPbpCounterClosed);
+            _pbpCounterHooked = false;
             PrizeOwnership.GrantsChanged -= OnPbpGrantsChanged;
             CoreAccount.UnifiedIdentityChanged -= OnPbpIdentityChanged;
             _pbpEquipLifetime.Cancel();
@@ -192,7 +195,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         PickPbpLook(o);
                         return true;
                     case PbpLookRules.CounterType:
-                        // B3: the Prize Counter is WPF desktop only in 7.2.
+                        Action<string>? hook = _pbpCounterHooked ? null : OnPbpCounterClosed;
+                        _pbpCounterHooked = true;
+                        try { LaunchPrizeCounter(PbpLookRules.CounterFrom, PbpLookRules.CounterTabOf(o), hook); }
+                        catch { _pbpCounterHooked = false; throw; }
                         return true;
                     case "pbp:friend-challenge": OnPbpFriendChallenge(o); return true;
                     case "pbp:net":
@@ -212,6 +218,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 return true;
             }
             return false;
+        }
+
+        private void OnPbpCounterClosed(string reason)
+        {
+            _pbpCounterHooked = false;
+            if (!_pbpOpen || _closing) return;
+            PostPbpWardrobe();
+            if (PbpLookRules.CounterHandsFocusBack(reason)) { Activate(); Web.FocusPage(); }
         }
 
         /// <summary>The web engine reads the OS motion preference on both platforms. Tests supply the same answer.</summary>
@@ -246,7 +260,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 : !osAnimations ? MotionLevel.Reduced : s.MotionLevel;
             var frame = PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds,
                 withoutGentle != MotionLevel.Full || s.GentleVisuals, PbpWhispers());
-            frame["prizeCounter"] = false;
             frame["letPeopleWatch"] = PbpWatchRules.LetPeopleWatch(s);
             frame["watchEffects"] = PbpWatchRules.WatchEffects(s);
             frame["watchAmount"] = PbpWatchRules.WatchAmount(s);

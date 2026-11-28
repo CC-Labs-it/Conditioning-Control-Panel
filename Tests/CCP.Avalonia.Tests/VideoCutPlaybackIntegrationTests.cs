@@ -17,7 +17,7 @@ public class VideoCutPlaybackIntegrationTests
     // Drive the real Show -> GuardTick -> grace/replay -> Scheduler.Stop -> CloseAll chain.
     // Only the decoder and time are fake. No fonts, window layout, native codecs or delays.
     [Fact]
-    public Task Seek_buffering_grace_and_stop_credit_only_advancing_playback() => Run(10, (o, v, clock, players, credit) =>
+    public Task Seek_buffering_grace_and_stop_credit_only_advancing_playback() => Run(10, async (o, v, clock, players, credit) =>
     {
         var p = players.Single();
         o.GuardTick();
@@ -38,6 +38,7 @@ public class VideoCutPlaybackIntegrationTests
         Step(o, clock, p, 2000);
         v.Stop();
         Assert.Equal(3, credit()); // excludes seek, buffer and pause; includes the final stop sample
+        await WaitUntil(() => p.Stopped && p.Disposed);
         Assert.True(p.Stopped && p.Disposed);
         Assert.Empty(o.Windows);
         v.Stop();
@@ -45,7 +46,7 @@ public class VideoCutPlaybackIntegrationTests
     });
 
     [Fact]
-    public Task Replay_preserves_the_cap_and_watch_credit_and_stop_samples_the_tail() => Run(5, (o, v, clock, players, credit) =>
+    public Task Replay_preserves_the_cap_and_watch_credit_and_stop_samples_the_tail() => Run(5, async (o, v, clock, players, credit) =>
     {
         var first = players.Single();
         o.GuardTick();
@@ -53,6 +54,7 @@ public class VideoCutPlaybackIntegrationTests
         Step(o, clock, first, 2000);
         o.FrameTs = Stopwatch.GetTimestamp() - 10 * Stopwatch.Frequency; // deterministic output loss, not a real-time wait
         o.GuardTick();
+        await WaitUntil(() => players.Count == 2 && first.Stopped && first.Disposed);
         Assert.Equal(2, players.Count);
         Assert.True(first.Stopped && first.Disposed);
         Assert.Equal(2, credit()); // WPF credits at the heal teardown, before playback restarts
@@ -66,22 +68,25 @@ public class VideoCutPlaybackIntegrationTests
         second.Time += 1000; // Stop must sample this, without a preceding guard tick
         v.Stop();
         Assert.Equal(5, credit());
+        await WaitUntil(() => second.Stopped && second.Disposed);
         Assert.True(second.Stopped && second.Disposed);
     });
 
     [Fact]
-    public Task Replay_cannot_restart_the_cap() => Run(5, (o, v, clock, players, credit) =>
+    public Task Replay_cannot_restart_the_cap() => Run(5, async (o, v, clock, players, credit) =>
     {
         var p = players.Single();
         o.GuardTick(); o.GuardTick();
         Step(o, clock, p, 2000);
         o.FrameTs = Stopwatch.GetTimestamp() - 10 * Stopwatch.Frequency;
         o.GuardTick();
+        await WaitUntil(() => players.Count == 2);
         p = players.Last();
         o.GuardTick(); o.GuardTick();
         Step(o, clock, p, 3000);
         Assert.False(v.IsPlaying);
         Assert.Equal(5, credit());
+        await WaitUntil(() => p.Stopped && p.Disposed);
         Assert.True(p.Stopped && p.Disposed);
     });
 
@@ -98,6 +103,7 @@ public class VideoCutPlaybackIntegrationTests
         clock.Advance(1000);
         o.GuardTick();
         Assert.False(v.IsPlaying);
+        return Task.CompletedTask;
     });
 
     [Fact]
@@ -113,7 +119,24 @@ public class VideoCutPlaybackIntegrationTests
         o.ResumeFromGrace("test");
         Step(o, clock, p, 20000); // 120 s of the 125 s spent outside the pause
         Assert.True(v.IsPlaying);
+        return Task.CompletedTask;
     });
+
+    private static async Task WaitUntil(Func<bool> ready)
+    {
+        var elapsed = Stopwatch.StartNew();
+        while (!ready() && elapsed.Elapsed < TimeSpan.FromSeconds(10)) await Task.Delay(10);
+        Assert.True(ready(), "Playback teardown or replay did not complete");
+    }
+
+    [Fact]
+    public Task Chaos_segment_seeks_with_fifteen_seconds_left() => Run(0, (o, v, clock, players, credit) =>
+    {
+        o.GuardTick();
+        Assert.Equal(60000, players.Single().Time);
+        Assert.InRange(players.Single().Time, 0, players.Single().Length - 15000);
+        return Task.CompletedTask;
+    }, chaos: true);
 
     private static void Step(MandatoryVideoOverlay o, Clock clock, Decoder p, int ms)
     {
@@ -123,8 +146,8 @@ public class VideoCutPlaybackIntegrationTests
         o.GuardTick();
     }
 
-    private static Task Run(int cap, Action<MandatoryVideoOverlay, MandatoryVideoScheduler, Clock, List<Decoder>, Func<double>> body)
-        => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task Run(int cap, Func<MandatoryVideoOverlay, MandatoryVideoScheduler, Clock, List<Decoder>, Func<double>, Task> body, bool chaos = false)
+        => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var s = CoreSettings.Current;
         var saved = (s.VideoMaxDurationSeconds, s.VideoCutRandomStart);
@@ -142,10 +165,12 @@ public class VideoCutPlaybackIntegrationTests
             (s.VideoMaxDurationSeconds, s.VideoCutRandomStart) = (cap, true);
             CoreDispatch.PostProvider = a => a();
             CoreProgression.TrackVideoWatchedProvider = n => credit += n;
-            Assert.True(v.Trigger());
+            int token = chaos ? v.ClaimChaosVideoToken() : 0;
+            if (chaos) v.ArmRandomSegment(token, 15);
+            Assert.True(v.Trigger(chaosToken: token));
             clock.Fire(); // pre-roll, no sleeping
             Assert.Single(players);
-            body(o, v, clock, players, () => credit);
+            await body(o, v, clock, players, () => credit);
         }
         finally
         {
@@ -154,7 +179,6 @@ public class VideoCutPlaybackIntegrationTests
             CoreProgression.TrackVideoWatchedProvider = track;
             (s.VideoMaxDurationSeconds, s.VideoCutRandomStart) = saved;
         }
-        return Task.CompletedTask;
     });
 
     private sealed class FixedRandom : Random { public override long NextInt64(long max) => 60000; }
@@ -165,7 +189,8 @@ public class VideoCutPlaybackIntegrationTests
         public bool IsPlaying => !Paused && !Stopped;
         public bool IsSeekable => true;
         public bool HasVideo => true;
-        public bool Paused, Stopped, Disposed;
+        public bool Paused;
+        public volatile bool Stopped, Disposed;
         public void SetPause(bool paused) => Paused = paused;
         public void Stop() => Stopped = true;
         public void Dispose() => Disposed = true;
