@@ -80,6 +80,7 @@ public sealed class MandatoryVideoFloatingHostTests
                 = (true, 3, together, keepSound, false, false, false, false, 0, false);
             var decoders = new List<Decoder>();
             var o = new MandatoryVideoOverlay(() => { var d = new Decoder(); decoders.Add(d); return d; });
+            o.FloatingInputRegionWriter = (_, _, _) => true;
             o.Scheduler = new MandatoryVideoScheduler(o, new StillTime(), () => new[] { "/v/a.mp4", "/v/b.mp4", "/v/c.mp4", "/v/d.mp4", "/v/e.mp4" });
             try
             {
@@ -111,14 +112,19 @@ public sealed class MandatoryVideoFloatingHostTests
             ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
             ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
             CoreEngine.Video = o.Scheduler;
+            var regions = new List<PixelRect[]?>();
+            o.FloatingInputRegionWriter = (_, rects, _) => { regions.Add(rects); return true; };
             Assert.True(o.TryFloatingTrigger(userInitiated: true));
             var joined = Assert.Single(o.Floaters);
             var reveal = Assert.IsType<FloatingVideoReveal>(joined.Surface.Reveal);
             Assert.True(reveal.IsAnimating);
+            Assert.NotEmpty(regions);
+            Assert.NotNull(regions[^1]);
             var stoppedBeforeDecoder = false;
-            decoders[^1].BeforeStop = () => stoppedBeforeDecoder = !reveal.IsAnimating;
+            decoders[^1].BeforeStop = () => stoppedBeforeDecoder = !reveal.IsAnimating && regions[^1] == null;
             PanicSurfaces.All.Single(s => s.Id == "engine").Stop(null);
             Assert.True(stoppedBeforeDecoder);
+            Assert.Null(regions[^1]);
             Assert.False(reveal.IsAnimating);
             Assert.False(joined.Window.IsVisible);
             reveal.RevealAt(260);

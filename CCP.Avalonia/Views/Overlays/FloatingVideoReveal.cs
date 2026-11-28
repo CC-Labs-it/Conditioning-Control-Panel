@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -20,6 +21,9 @@ internal sealed class FloatingVideoReveal
     private DispatcherTimer? _timer;
     private readonly Stopwatch _clock = new();
     internal bool IsAnimating => _timer != null;
+    internal Func<Window, PixelRect[]?, bool, bool> InputRegionWriter { get; set; } =
+        (window, rects, sync) => X11Overlay.SetWindowInputRegion(window, rects, sync);
+    private bool _inputRegionChanged;
     private double _width, _height;
     private Control? _frame;
     private Geometry? _previousClip;
@@ -49,10 +53,13 @@ internal sealed class FloatingVideoReveal
             _clip = new RectangleGeometry();
             frame.Clip = _clip;
             RevealAt(0);
-            _clock.Restart();
-            _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-            _timer.Tick += (_, _) => RevealAt(_clock.Elapsed.TotalMilliseconds);
-            _timer.Start();
+            if (_clip != null)
+            {
+                _clock.Restart();
+                _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+                _timer.Tick += (_, _) => RevealAt(_clock.Elapsed.TotalMilliseconds);
+                _timer.Start();
+            }
         }
         _window.Show();
         if (!_closed) _holdAudio?.Invoke(false);
@@ -67,7 +74,32 @@ internal sealed class FloatingVideoReveal
         var width = _width * scale;
         var height = _height * scale;
         _clip.Rect = new Rect((_width - width) / 2, (_height - height) / 2, width, height);
-        if (t >= 1) StopAnimation();
+        if (t >= 1) { StopAnimation(); return; }
+        // X11 and Win32 input regions are physical pixels; the clip is in DIPs. Before Show,
+        // use the chosen screen's scale and synchronize the region before the window is mapped.
+        var scaling = _window.IsVisible ? _window.RenderScaling
+            : _window.Screens.ScreenFromPoint(_window.Position)?.Scaling ?? _window.RenderScaling;
+        var rect = InputRect(_clip.Rect, scaling);
+        _inputRegionChanged = true;
+        try
+        {
+            if (!InputRegionWriter(_window, new[] { rect }, !_window.IsVisible)) StopAnimation();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Debug(ex, "VideoService: floating input region failed");
+            StopAnimation();
+        }
+    }
+
+    internal static PixelRect InputRect(Rect clip, double scaling)
+    {
+        if (!double.IsFinite(scaling) || scaling <= 0) scaling = 1;
+        var left = (int)Math.Ceiling(clip.X * scaling);
+        var top = (int)Math.Ceiling(clip.Y * scaling);
+        var right = (int)Math.Floor(clip.Right * scaling);
+        var bottom = (int)Math.Floor(clip.Bottom * scaling);
+        return new PixelRect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
     }
 
     private void StopAnimation()
@@ -75,6 +107,12 @@ internal sealed class FloatingVideoReveal
         _timer?.Stop();
         _timer = null;
         _clock.Stop();
+        if (_inputRegionChanged)
+        {
+            _inputRegionChanged = false;
+            try { InputRegionWriter(_window, null, false); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "VideoService: floating input restore failed"); }
+        }
         if (_frame != null) _frame.Clip = _previousClip;
         _frame = null;
         _clip = null;
