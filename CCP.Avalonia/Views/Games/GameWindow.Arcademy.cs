@@ -149,7 +149,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             // WPF ArcademyHostService.cs:5857: the card follows the rung from every surface, the page's own write included.
             if (e.PropertyName == nameof(AppSettings.ArcademyPresenceShare))
-                Dispatcher.UIThread.Post(() => { if (IsReady) ArcademyPushProfile(); });
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!IsReady || _closing) return;
+                    ArcademyPushProfile();
+                    if (string.Equals(CoreSettings.Current.ArcademyPresenceShare?.Trim(), "discord", StringComparison.OrdinalIgnoreCase))
+                        ArcademyKickAvatar();   // WPF :5858-5860
+                });
             if (_arcademyWriting) return;
             Dispatcher.UIThread.Post(() =>
             {
@@ -427,6 +433,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Post(new { type = "fullscreen", on = WindowState == WindowState.FullScreen });
                     ArcademyPushSuspension();
                     Web.FocusPage();
+                    ArcademyKickAvatar();   // WPF ArcademyHostService.cs:529-532
                     break;
                 case "resume-request":
                     ArcademyResume(message);
