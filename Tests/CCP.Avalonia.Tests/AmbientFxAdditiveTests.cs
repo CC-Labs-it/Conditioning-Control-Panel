@@ -49,4 +49,32 @@ public class AmbientFxAdditiveTests
         Assert.NotEqual(background, actualBitmap.GetPixel(32, 32));
     }
 
+    [Fact]
+    public void BankTokenCoreAndHaloAddOnTransparentSurface()
+    {
+        var sprites = new System.Collections.Generic.List<AmbientFxCanvas.FogSprite>();
+        AmbientFxCanvas.AddTokenSprites(sprites, 32, 32, 24, 0.3f, 0.5f);
+        Assert.Equal(2, sprites.Count);
+        Assert.True(sprites[0].Size > sprites[1].Size);
+        using var surface = SKSurface.Create(new SKImageInfo(64, 64));
+        surface.Canvas.Clear(SKColors.Transparent);
+        AmbientFxCanvas.PaintFog(surface.Canvas, sprites.ToArray(), Colors.White, new SKRect(0, 0, 64, 64));
+        using var image = surface.Snapshot();
+        using var bitmap = SKBitmap.FromImage(image);
+        var combined = bitmap.GetPixel(32, 32).Alpha;
+        using var single = SKSurface.Create(new SKImageInfo(64, 64));
+        single.Canvas.Clear(SKColors.Transparent);
+        AmbientFxCanvas.PaintFog(single.Canvas, new[] { sprites[1] }, Colors.White, new SKRect(0, 0, 64, 64));
+        using var singleImage = single.Snapshot();
+        using var singleBitmap = SKBitmap.FromImage(singleImage);
+        var coreAlpha = singleBitmap.GetPixel(32, 32).Alpha;
+        using var halo = SKSurface.Create(new SKImageInfo(64, 64));
+        halo.Canvas.Clear(SKColors.Transparent);
+        AmbientFxCanvas.PaintFog(halo.Canvas, new[] { sprites[0] }, Colors.White, new SKRect(0, 0, 64, 64));
+        using var haloImage = halo.Snapshot();
+        using var haloBitmap = SKBitmap.FromImage(haloImage);
+        var haloAlpha = haloBitmap.GetPixel(32, 32).Alpha;
+        Assert.InRange(combined, coreAlpha + haloAlpha - 1, coreAlpha + haloAlpha + 1);
+    }
+
 }

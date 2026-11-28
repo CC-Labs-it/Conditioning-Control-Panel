@@ -167,6 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private Color _mistColor;
         private IBrush? _mistDot, _particleDot, _glowDot, _flashDot, _glowSoft, _emberDot;
         private IBrush? _burstDot, _tokDot;
+        private Color _tokColor;
 
         // ---- clocks ----
         private readonly System.Diagnostics.Stopwatch _clock = new();
@@ -509,7 +510,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (plan.Length == 0) { SettleNow(count, onLand); return; }
                 count = plan.Length;
 
-                _tokDot = MakeDot(color ?? Env.ParticleColor, 0f);
+                _tokColor = color ?? Env.ParticleColor;
+                _tokDot = MakeDot(_tokColor, 0f);
 
                 // Geometry is done in element px and normalized once at the end: normalized space is
                 // anisotropic, so a perpendicular computed in it would bow the wrong way on any
@@ -1309,7 +1311,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// </summary>
         private void DrawTokens(DrawingContext ctx, float w, float h, float min)
         {
-            if (_tok == null || _tokN == 0) return;
+            if (_tok == null || _tokN == 0 || _tokDot is not IImmutableBrush brush) return;
+            var sprites = new System.Collections.Generic.List<FogSprite>(_tokN * 2);
 
             for (int i = 0; i < _tokN; i++)
             {
@@ -1324,12 +1327,16 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 float core = t.Size * min * 2f;
                 float x = t.X * w, y = t.Y * h;
 
-                DrawSprite(ctx, _tokDot, x, y, core * BankTokenGlowScale, core * BankTokenGlowScale,
-                           BankTokenGlowAlpha * a);
-
-                // The core brightens as it closes, so the last thing the eye tracks is the arrival.
-                DrawSprite(ctx, _tokDot, x, y, core, core, (0.75f + 0.25f * p) * a);
+                AddTokenSprites(sprites, x, y, core, a, p);
             }
+            ctx.Custom(new FogDrawOp(new Rect(0, 0, w, h), sprites.ToArray(), _tokColor, brush));
+        }
+
+        internal static void AddTokenSprites(System.Collections.Generic.List<FogSprite> sprites,
+            float x, float y, float core, float alpha, float progress)
+        {
+            sprites.Add(new FogSprite(x, y, core * BankTokenGlowScale, BankTokenGlowAlpha * alpha));
+            sprites.Add(new FogSprite(x, y, core, (0.75f + 0.25f * progress) * alpha));
         }
 
         /// <summary>
