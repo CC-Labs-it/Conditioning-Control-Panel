@@ -29,9 +29,9 @@ internal sealed class PortalEmiHotkey : IDisposable
 
     internal PortalEmiHotkey(Action pressed, Action<bool> stateChanged) { _pressed = pressed; _stateChanged = stateChanged; }
     internal static Func<DBusConnection> OpenConnection = () => new DBusConnection(DBusAddress.Session!);
-    internal void SetSessionForTests(string session, ChordMods mods, string key)
+    internal void SetSessionForTests(string session, ChordMods mods, string key, bool bound = true)
     {
-        lock (_gate) { _session = session; _id = IdFor(mods, key); _bound = true; }
+        lock (_gate) { _session = session; _id = IdFor(mods, key); _bound = bound; }
     }
 
     internal static string PreferredTrigger(ChordMods mods, string key)
@@ -88,16 +88,27 @@ internal sealed class PortalEmiHotkey : IDisposable
                 w.WriteArrayEnd(shortcuts); w.WriteString("");
                 w.WriteDictionary(new Dictionary<string, VariantValue> { ["handle_token"] = token });
             });
-            if (code != 0) { Dispose(); return; }
-            lock (_gate)
-            {
-                if (_disposed) return;
-                Trigger = PortalPanicShortcut.TriggerOf(result, id);
-                _bound = true;
-                _stateChanged(true);
-            }
+            CompleteBind(code, result, id);
         }
         catch (Exception ex) { Log.Warning(ex, "EMI Desk shortcut portal unavailable"); Dispose(); }
+    }
+
+    // A successful portal response can omit our shortcut entirely. A missing trigger description
+    // is different: a listed shortcut is bound even when the compositor provides no display text.
+    internal void CompleteBind(uint code, Dictionary<string, VariantValue> result, string id)
+    {
+        bool found = false;
+        if (code == 0 && result.TryGetValue("shortcuts", out var list))
+            for (int i = 0; i < list.Count; i++)
+                if (list.GetItem(i).GetItem(0).GetString() == id) { found = true; break; }
+        if (!found) { Dispose(); return; }
+        lock (_gate)
+        {
+            if (_disposed || id != _id) return;
+            Trigger = PortalPanicShortcut.TriggerOf(result, id);
+            _bound = true;
+            _stateChanged(true);
+        }
     }
 
     internal void Route(string session, string id, bool down, DateTime? now = null)

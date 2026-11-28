@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
+using Tmds.DBus.Protocol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -74,6 +75,48 @@ public sealed class EmiPortalHotkeyTests
         Assert.Equal(2, count);
         portal.Dispose();
         Assert.Equal(new[] { false }, states);
+    }
+
+    private static Dictionary<string, VariantValue> Response(params string[] ids) => new()
+    {
+        ["shortcuts"] = new Tmds.DBus.Protocol.Array<Struct<string, Dict<string, VariantValue>>>(
+            ids.Select(id => Struct.Create(id, new Dict<string, VariantValue>())).ToArray()).AsVariantValue(),
+    };
+
+    [Fact]
+    public void BindRequiresTheRequestedShortcutInTheResponse()
+    {
+        var mods = ChordMods.Ctrl | ChordMods.Alt;
+        var id = PortalEmiHotkey.IdFor(mods, "E");
+        foreach (var (code, result) in new[]
+        {
+            (0u, new Dictionary<string, VariantValue>()),
+            (0u, Response()),
+            (0u, Response("other")),
+            (1u, Response(id)),
+        })
+        {
+            int presses = 0;
+            var states = new List<bool>();
+            using var portal = new PortalEmiHotkey(() => presses++, states.Add);
+            portal.SetSessionForTests("/session", mods, "E", bound: false);
+            portal.CompleteBind(code, result, id);
+            Assert.False(portal.IsBound);
+            Assert.Equal(new[] { false }, states);
+            portal.Route("/session", id, true);
+            Assert.Equal(0, presses);
+        }
+
+        int delivered = 0;
+        var accepted = new List<bool>();
+        using var bound = new PortalEmiHotkey(() => delivered++, accepted.Add);
+        bound.SetSessionForTests("/session", mods, "E", bound: false);
+        bound.CompleteBind(0, Response("other", id), id);
+        Assert.True(bound.IsBound);
+        Assert.Equal(new[] { true }, accepted);
+        Assert.Equal("", bound.Trigger);
+        bound.Route("/session", id, true);
+        Assert.Equal(1, delivered);
     }
 
     [Fact]
