@@ -36,6 +36,7 @@ public sealed class PanelDoorLinkShellTests
     private static Task Shell(Action<MainShellWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         SetUp();
+        var previousProvider = global::ConditioningControlPanel.CoreSettings.ServiceProvider;
         var service = new global::ConditioningControlPanel.Services.SettingsService();
         global::ConditioningControlPanel.CoreSettings.ServiceProvider = () => service;
         var st = global::ConditioningControlPanel.CoreSettings.Current;
@@ -56,7 +57,7 @@ public sealed class PanelDoorLinkShellTests
             PanelDoorLink.OpenLauncherDoor = hook;
             PanelDoorLink.Fallback = fallback;
             PanelDoorLink.IsLockedDown = locked;
-            global::ConditioningControlPanel.CoreSettings.ServiceProvider = null;
+            global::ConditioningControlPanel.CoreSettings.ServiceProvider = previousProvider;
         }
         return Task.CompletedTask;
     });
@@ -87,7 +88,7 @@ public sealed class PanelDoorLinkShellTests
     });
 
     [Fact]
-    public Task DuringLockdownPlayOpensNothingAndTheStripSaysWhereTheGamesWent() => Shell(shell =>
+    public Task DuringLockdownPlayOpensNothingAndTheStripSaysWhyEveryTime() => Shell(shell =>
     {
         var opened = new List<string>();
         var fellBack = 0;
@@ -97,15 +98,39 @@ public sealed class PanelDoorLinkShellTests
         shell.ShowTab("presets");
         Dispatcher.UIThread.RunJobs();
 
-        shell.ShowTab("play");
+        global::ConditioningControlPanel.CoreSettings.Current.NavMovedToastHits = 3;
+        for (var i = 0; i < 4; i++)
+        {
+            shell.ShowTab("play");
+            Assert.True(shell.PageStrip!.MovedNoteShown);
+            Assert.Equal(global::ConditioningControlPanel.Localization.Loc.Get(PanelDoorLink.LockdownLineKey),
+                shell.PageStrip.MovedNoteTextForTests);
+            if (i < 3) shell.PageStrip.HideNote();
+        }
+        Assert.Equal(3, global::ConditioningControlPanel.CoreSettings.Current.NavMovedToastHits);
         Dispatcher.UIThread.RunJobs();
 
         Assert.Empty(opened);
         Assert.Equal(0, fellBack);
         Assert.Equal("presets", shell.CurrentTab);
         Assert.True(shell.PageStrip!.MovedNoteShown);
-        Assert.Contains(global::ConditioningControlPanel.Localization.Loc.Get("nav_tab_games"),
+        Assert.Contains(global::ConditioningControlPanel.Localization.Loc.Get(PanelDoorLink.LockdownLineKey),
             shell.PageStrip.MovedNoteTextForTests ?? "", StringComparison.Ordinal);
+    });
+
+    [Fact]
+    public Task PanicStopsTheLockdownNoteAndItsTimer() => Shell(shell =>
+    {
+        PanelDoorLink.IsLockedDown = () => true;
+        shell.ShowTab("play");
+        var strip = shell.PageStrip!;
+        Assert.True(strip.MovedNoteShown);
+        PanicSurfaces.All.Single(s => s.Id == "nav-window-confirm").Stop(shell);
+        Assert.False(strip.MovedNoteShown);
+        var timer = (DispatcherTimer?)typeof(ConditioningControlPanel.Avalonia.Views.Controls.SectionTabStrip)
+            .GetField("_noteTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(strip);
+        Assert.NotNull(timer);
+        Assert.False(timer!.IsEnabled);
     });
 
     [Fact]

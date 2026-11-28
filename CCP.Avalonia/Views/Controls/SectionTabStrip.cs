@@ -273,6 +273,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _noteFadeTimer.Start();
         }
 
+        internal void StopNoteForPanic()
+        {
+            _noteTimer?.Stop();
+            HideNote();
+        }
+
         internal void HideNote()
         {
             _noteFadeTimer?.Stop();
@@ -564,7 +570,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // Launchers and windows open something else; the page on screen keeps its pill.
             if (tab.Kind is NavTabKind.Tab or NavTabKind.Zone) SetActive(tab.Key, animate: true);
             if (focus) PillFor(tab.Key)?.Focus();
-            if (NavStripTable.AsksBeforeOpening(tab)) { AskBeforeOpening(tab); return; }
+            if (NavStripTable.AsksBeforeOpening(tab) && !PanelDoorLink.RefusedNow(tab.Key)) { AskBeforeOpening(tab); return; }
             TabRequested?.Invoke(tab);
         }
 

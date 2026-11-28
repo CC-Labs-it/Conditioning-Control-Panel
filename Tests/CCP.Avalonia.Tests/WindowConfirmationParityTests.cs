@@ -155,6 +155,39 @@ public sealed class WindowConfirmationParityTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task GamesAsksNormallyButRequestsImmediatelyWhenLockdownRefuses() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var oldLock = PanelDoorLink.IsLockedDown;
+        var strip = new SectionTabStrip { MotionOverride = MotionLevel.Off };
+        // Own window, not Host/ClosingWindow: keeps this test independent of how the older tests host the strip.
+        var window = new Window { Content = strip, Width = 1400, Height = 180 };
+        window.Show();
+        try
+        {
+            strip.Show(NavSections.Play, "playeyes");
+            window.UpdateLayout();
+            var requests = 0;
+            strip.TabRequested += tab => { Assert.Equal("play", tab.Key); requests++; };
+            PanelDoorLink.IsLockedDown = () => false;
+            Click(strip.PillFor("play")!);
+            Assert.Equal("play", strip.ConfirmingKey);
+            Assert.Equal(0, requests);
+            strip.CloseConfirm();
+            PanelDoorLink.IsLockedDown = () => true;
+            Click(strip.PillFor("play")!);
+            Assert.Null(strip.ConfirmationPopup);
+            Assert.Equal(1, requests);
+        }
+        finally
+        {
+            PanelDoorLink.IsLockedDown = oldLock;
+            window.Close();
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("confirm")]
     [InlineData("cancel")]

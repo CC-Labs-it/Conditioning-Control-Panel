@@ -50,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("awareness-observer", _ => App.StopAwarenessObserverForPanic()),   // stricter than WPF: the v2 poll stops
             new("awareness-companion", sh => sh?.Named<Tabs.AwarenessTabView>("AwarenessTab")?.StopCompanionPrivacyForPanic()), // hosted card clocks and armed wipe
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
-            new("nav-window-confirm", sh => sh?.PageStrip?.CloseConfirm()),
+            new("nav-window-confirm", sh => { sh?.PageStrip?.CloseConfirm(); sh?.PageStrip?.StopNoteForPanic(); }),
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => { Platform.RaceEngineDownload.Cancel(); Games.GameWindow.CloseAllForPanic(); }, Games.GameWindow.IsAnyOpen),
             new("upgrade-intro", MainShellWindow.StopUpgradeIntroForPanic),
