@@ -12,6 +12,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using Avalonia;
+using Avalonia.Headless;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
@@ -89,6 +91,13 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             // flash burst in the process; the real app exits there, a test host does not.
             ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.ResetClosedForTests();
         });
+    internal static void EnsureInter()
+    {
+        if (global::Avalonia.Application.Current == null) return;
+        var fonts = global::Avalonia.Media.FontManager.Current;
+        var face = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter), global::Avalonia.Media.FontStyle.Normal, global::Avalonia.Media.FontWeight.Bold);
+        if (!fonts.TryGetGlyphTypeface(face, out _)) fonts.AddFontCollection(new global::Avalonia.Fonts.Inter.InterFontCollection());
+    }
     public override void After(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
