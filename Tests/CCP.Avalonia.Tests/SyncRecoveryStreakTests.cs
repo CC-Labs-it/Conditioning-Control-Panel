@@ -44,11 +44,11 @@ public sealed partial class AccountSeedTests
                 + today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) + "\"}}}";
             Assert.True(await sync.PushAfterFailedReadAsync());
             Assert.False(sync.Loaded);
-            Assert.Single(queued);
+            Assert.Equal(2, queued.Count);
             if (scenario == 1) { sync.Reset(); sync.MarkLoaded(null); }
             if (scenario == 2) s.UnifiedId = "u2";
             if (scenario == 3) sync.MarkLoaded(null);
-            queued.Dequeue()();
+            while (queued.Count > 0) queued.Dequeue()();
             Assert.Equal(0, resets);
             Assert.Equal(1, s.StreakShieldsRemaining);
             if (scenario is 0 or 3)

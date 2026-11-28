@@ -9,9 +9,7 @@
        ToolTip="..."                   -> ToolTip.Tip="..."
        Click="X_Click"                 -> x:Name + a handler wired in the constructor, per the
                                           convention the other ported windows follow
-       <WindowChrome.WindowChrome>     -> dropped; Avalonia has no twin. ponytail: the 6px
-                                          resize border is lost, CanResize="True" leaves the
-                                          platform's own edge grab in its place.
+       <WindowChrome.WindowChrome>     -> resize hit-testing is wired in code-behind.
 
      ActionButton / SecondaryButton / DangerButton were three local <Style x:Key> blocks in the
      WPF file. They already exist as ControlThemes in Theme/Styles.xaml with the same setters and

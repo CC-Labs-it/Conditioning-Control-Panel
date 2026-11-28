@@ -40,20 +40,6 @@
         ShowInTaskbar="False"
         CanResize="False">
 
-    <Window.Styles>
-        <!-- Fluent's TextBox paints PART_BorderElement opaque on hover and focus, and that setter
-             sits on the template child, so it outranks the TextBox's own Background="Transparent".
-             The card focuses TxtInput on show, so without this the input reads as a pale slab
-             inside the pink-bordered field - the WPF original never changed background on focus.
-             ponytail: local copy of MantraWindow.axaml's TextBox.transparent style, hoist to
-             Theme/Styles.xaml when a third view needs it. -->
-        <Style Selector="TextBox.transparent /template/ Border#PART_BorderElement">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-    </Window.Styles>
-
     <!-- Semi-transparent background -->
     <Grid x:Name="MainGrid">
         <Grid.Background>

@@ -73,6 +73,9 @@ internal static class X11ActiveWindow
     internal static (string Title, string Process) ReadForeground() =>
         ReadActive(window => (ReadTitle(window), ReadProcessName(window)), ("", ""));
 
+    // Keyword scope needs the PID as well as the name, so our own windows can be excluded.
+    internal static uint ReadForegroundPid() => ReadActive(ReadProcessId, 0u);
+
     /// <summary>Restack b179 (#3946): the v2 observer's foreground sample (WPF AwarenessProbes.cs:72-96,
     /// 135-149) from the same active window: title, normalised process and the fullscreen flag. A
     /// desktop or dock window is never fullscreen. Null when nothing can be read.</summary>
@@ -197,17 +200,22 @@ internal static class X11ActiveWindow
 
     private static string ReadProcessName(IntPtr window)
     {
+        var pid = ReadProcessId(window);
+        if (pid == 0) return "";
+        try { using var process = Process.GetProcessById((int)pid); return process.ProcessName ?? ""; }
+        catch { return ""; }
+    }
+
+    private static uint ReadProcessId(IntPtr window)
+    {
         if (XGetWindowProperty(_display, window, _netWmPid, 0, 1, false, _cardinal,
-                out var actualType, out var format, out var n, out _, out var prop) != 0 || prop == IntPtr.Zero) return "";
+                out var actualType, out var format, out var n, out _, out var prop) != 0 || prop == IntPtr.Zero) return 0;
         try
         {
-            if (actualType != _cardinal || format != 32 || n != 1) return "";
-            var pid = Marshal.ReadIntPtr(prop).ToInt64(); // Xlib stores format-32 values as longs
-            if (pid <= 0 || pid > int.MaxValue) return "";
-            using var process = Process.GetProcessById((int)pid);
-            return process.ProcessName ?? "";
+            if (actualType != _cardinal || format != 32 || n != 1) return 0;
+            var pid = Marshal.ReadIntPtr(prop).ToInt64();
+            return pid > 0 && pid <= int.MaxValue ? (uint)pid : 0;
         }
-        catch { return ""; }
         finally { XFree(prop); }
     }
 
