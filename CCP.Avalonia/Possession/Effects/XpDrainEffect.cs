@@ -25,7 +25,9 @@ internal sealed class XpDrainEffect : PossessionEffectBase
     private IDisposable? _barOpacity;
     private IFrameSource? _frames;
     private TimeSpan? _start;
-    private double _width;
+    private double _width, _returnFrom, _returnMs;
+    private bool _returning;
+    private CancellationTokenSource? _returnCts;
 
     public override string Id => "xpdrain";
     public override PossessionRung MinRung => PossessionRung.Melt;
@@ -74,17 +76,52 @@ internal sealed class XpDrainEffect : PossessionEffectBase
         }
         _frames = host.PossessionFrames;
         _frames.Subscribe(Frame);
+        // WPF waits for the drain before the director starts the six-second hold.
+        await Task.Delay(1530, ct).ConfigureAwait(true);
     }
 
     private void Frame(TimeSpan now)
     {
         if (_ghost == null) return;
         _start ??= now;
-        double t = Math.Clamp((now - _start.Value).TotalMilliseconds / 1500, 0, 1);
-        _ghost.Width = _width * (1 - t * t * (3 - 2 * t));
+        double elapsed = (now - _start.Value).TotalMilliseconds;
+        if (_returning)
+        {
+            double t = Math.Clamp(elapsed / _returnMs, 0, 1);
+            _ghost.Width = _returnFrom + (_width - _returnFrom) * (1 - Math.Pow(1 - t, 3));
+        }
+        else
+        {
+            double t = Math.Clamp(elapsed / 1500, 0, 1);
+            _ghost.Width = _width * (1 - t * t * (3 - 2 * t));
+        }
     }
 
-    protected override Task UndoCoreAsync(TimeSpan duration)
+    protected override async Task UndoCoreAsync(TimeSpan duration)
+    {
+        if (duration <= TimeSpan.Zero)
+        {
+            _returnCts?.Cancel();
+            Cleanup();
+            return;
+        }
+        if (_ghost == null) { Cleanup(); return; }
+        var source = new CancellationTokenSource();
+        _returnCts = source;
+        _returning = true;
+        _returnFrom = _ghost.Width;
+        _returnMs = Math.Clamp(duration.TotalMilliseconds, 260, 700);
+        _start = null;
+        try { await Task.Delay((int)_returnMs + 30, source.Token).ConfigureAwait(true); }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (ReferenceEquals(_returnCts, source)) { _returnCts = null; Cleanup(); }
+            source.Dispose();
+        }
+    }
+
+    private void Cleanup()
     {
         _frames?.Unsubscribe(Frame); _frames = null; _start = null;
         _barOpacity?.Dispose(); _barOpacity = null;
@@ -92,8 +129,14 @@ internal sealed class XpDrainEffect : PossessionEffectBase
         _ghost = null; _layer = null;
         if (_chip != null && _original != null && _chip.Text == _fake) _chip.Text = _original;
         _chip = null; _original = null; _fake = null;
+        _returning = false;
         Live.Remove(this);
-        return Task.CompletedTask;
+    }
+
+    internal static void StopForHost(IPossessionHost host)
+    {
+        foreach (var effect in Live.ToArray())
+            if (ReferenceEquals(effect.Context?.Host, host)) _ = effect.UndoAsync(TimeSpan.Zero);
     }
 
     internal static void UndoAllLive()
