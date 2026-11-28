@@ -21,6 +21,7 @@ public sealed class LeashAskWindow : Window
     internal static LeashAskWindow? Current { get; private set; }
     internal static event Action? CurrentClosed;
     internal static event Action<LeashOffer>? OfferShown;
+    internal LeashOffer? Offer { get; private set; }
     internal Control Body { get; }
     internal LeashAskCard Card => (LeashAskCard)Body;
     internal LeashSnapCard? SnapCard => Body as LeashSnapCard;
@@ -59,7 +60,7 @@ public sealed class LeashAskWindow : Window
     /// the offer seen once it is up. An accept swaps the ask for the snap (holder left, this account right).</summary>
     internal static LeashAskWindow? Open(LeashOffer offer, Func<ILeashService?> service, Window? owner)
     {
-        var w = new LeashAskWindow(new LeashAskCard(offer, service));
+        var w = new LeashAskWindow(new LeashAskCard(offer, service)) { Offer = offer };
         w.Card.Answered += (o, accepted, _) =>
         {
             if (accepted) OpenSnap(o.From, Me(), owner);   // closes this ask in the same step

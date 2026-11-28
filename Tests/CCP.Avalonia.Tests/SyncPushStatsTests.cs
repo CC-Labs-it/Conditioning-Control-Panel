@@ -14,6 +14,53 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class AccountSeedTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SyncStreakReplyUsesSessionGuard(bool switchAccount) => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        var queued = new Queue<Action>();
+        var previous = CoreDispatch.PostProvider;
+        var calls = 0;
+        sync.ApplyLoginStreak = stats => { calls++; Assert.Equal(9, (int)stats!["consecutive_days"]!); };
+        try
+        {
+            CoreDispatch.PostProvider = queued.Enqueue;
+            wire.SyncReply = """{"success":true,"user":{"stats":{"consecutive_days":9}}}""";
+            sync.UtcNow = () => T0.AddSeconds(31);
+            Assert.True(await sync.PushAsync("streak"));
+            if (switchAccount) CoreSettings.Current.UnifiedId = "u2";
+            else { sync.Reset(); sync.MarkLoaded(null); }
+            while (queued.Count > 0) queued.Dequeue()();
+            Assert.Equal(0, calls);
+        }
+        finally { CoreDispatch.PostProvider = previous; }
+    });
+
+    [Fact]
+    public void SyncStreakReplyDispatchesEvenWithoutStats() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        var previous = CoreDispatch.PostProvider;
+        var calls = 0;
+        sync.ApplyLoginStreak = stats => { if (calls == 0) Assert.Equal(9, (int)stats!["consecutive_days"]!); else Assert.Null(stats); calls++; };
+        try
+        {
+            CoreDispatch.PostProvider = action => action();
+            wire.SyncReply = """{"success":true,"user":{"stats":{"consecutive_days":9}}}""";
+            sync.UtcNow = () => T0.AddSeconds(31);
+            Assert.True(await sync.PushAsync("streak"));
+            wire.SyncReply = """{"success":true}""";
+            sync.UtcNow = () => T0.AddSeconds(62);
+            Assert.True(await sync.PushAsync("streak without stats"));
+            Assert.Equal(2, calls);
+        }
+        finally { CoreDispatch.PostProvider = previous; }
+    });
+
     [Fact]
     public void QuestResetRepliesAreDispatchedAndAcknowledged() => WithFreshInstall(async () =>
     {

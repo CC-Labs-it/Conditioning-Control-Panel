@@ -252,6 +252,7 @@ internal static class AccountSeed
         {
             // A minutes lift rebaselines the day log once, through ProfileAdopt.ConditioningMinutesLifted
             // (RebaselineDayLogAfterCloudMerge), for the profile read and the sync reply alike.
+            ApplyLoginStreak = stats => LoginStreakHead.ProfileLoaded(CoreSettings.Current.UnifiedId!, stats),
             ResetDailyQuest = () => App.Quests?.ForceRegenerateDailyQuest(),
             ResetWeeklyQuest = () => App.Quests?.ForceRegenerateWeeklyQuest(),
             // WPF ProfileSyncService.cs:1574-1610,2031-2051: the lifetime stats block both ways.

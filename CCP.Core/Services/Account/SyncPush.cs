@@ -107,6 +107,7 @@ namespace ConditioningControlPanel.Services
         public bool Adopted => _adopted;
         public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
         public Action? LifetimeLifted { get; set; }
+        public Action<JObject?>? ApplyLoginStreak { get; set; }
         public Action? ResetDailyQuest { get; set; }
         public Action? ResetWeeklyQuest { get; set; }
         /// <summary>The head's lifetime stores for the stats block (WPF App.Achievements, App.Quests, App.FeatureDayLog).
@@ -490,7 +491,7 @@ namespace ConditioningControlPanel.Services
                         try { CosmeticsReady?.Invoke(); } catch (Exception ex) { Log.Debug("V2 Sync: CosmeticsReady handler threw: {Error}", ex.Message); }
                     }
                     ClaimWebXp(s, reply, allowUnread, session, id);
-                    ApplyQuestResets(s, id, session, reply);
+                    ApplyQuestResets(s, id, session, reply, unread);
                     ApplyStats(s, id, session, reply, allowUnread);
                     // Then the level/XP adopt (held while a migration is pending) and WPF's migration handshake
                     // (ProfileSyncService.cs:1903-1904): the ack first, the offer second. A taken offer syncs again.
@@ -535,17 +536,20 @@ namespace ConditioningControlPanel.Services
 
         // WPF ProfileSyncService.cs:1791-1800. The queued action belongs to the request's
         // account and session, even if logout or another login happens before UI dispatch.
-        private void ApplyQuestResets(AppSettings s, string account, int session, JObject reply)
+        private void ApplyQuestResets(AppSettings s, string account, int session, JObject reply, bool unread)
         {
             bool daily = reply["reset_daily_quest"]?.Type == JTokenType.Boolean && reply.Value<bool>("reset_daily_quest");
             bool weekly = reply["reset_weekly_quest"]?.Type == JTokenType.Boolean && reply.Value<bool>("reset_weekly_quest");
-            if (!daily && !weekly) return;
+            // WPF ProfileSyncService.cs:2035-2057 settles a deferred break even without stats.
+            var stats = (reply["user"] as JObject)?["stats"] as JObject;
+            if (!daily && !weekly && ApplyLoginStreak == null) return;
             CoreDispatch.Post(() =>
             {
-                if (!Loaded || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                if ((!Loaded && !unread) || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
                     || !SignedIn(s) || s.UnifiedId != account) return;
-                if (daily) ResetDailyQuest?.Invoke();
-                if (weekly) ResetWeeklyQuest?.Invoke();
+                ApplyLoginStreak?.Invoke(stats);
+                if (!unread && Loaded && daily) ResetDailyQuest?.Invoke();
+                if (!unread && Loaded && weekly) ResetWeeklyQuest?.Invoke();
             });
         }
 
