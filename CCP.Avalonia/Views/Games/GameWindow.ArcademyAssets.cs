@@ -16,6 +16,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games;
 internal sealed partial class GameWindow
 {
     private static readonly Dictionary<string, IReadOnlyList<string>> ArcademyTaggedSubs = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, SemaphoreSlim> ArcademyFetchGates = new(StringComparer.Ordinal);
+    // Stands in for the coordinator's network fetch only; it gets the subs the coordinator's provider would read.
     internal Func<FeedMediaKind, IReadOnlyList<string>, Task<List<FypAssetManifest.Entry>>>? ArcademyFetchForTests;
     // WPF RemoteBuffer (ArcademyHostService.cs:106): a batch's surplus rows wait here for the next ask. Per window, so a close clears it (WPF :6078).
     private readonly Dictionary<string, List<object>> _arcademyAssetBuffer = new(StringComparer.Ordinal);
@@ -70,20 +72,29 @@ internal sealed partial class GameWindow
             var entries = new List<FypAssetManifest.Entry>();
             try
             {
-                if (ArcademyFetchForTests is { } fetch) entries = await fetch(mediaKind, subs);
-                else
+                // One fetch per tenant at a time (WPF TaggedFetchesInFlight :4971-4981, _remoteFetchInFlight): the coordinator reads
+                // its subs through a shared provider, so an overlapping fetch for new subs would swap them under this one.
+                string tenant = tagged ? "arcademy:sort:" + tag : "arcademy";
+                SemaphoreSlim gate;
+                lock (ArcademyTaggedSubs) if (!ArcademyFetchGates.TryGetValue(tenant, out gate!)) ArcademyFetchGates[tenant] = gate = new SemaphoreSlim(1, 1);
+                await gate.WaitAsync();
+                try
                 {
-                    string tenant = tagged ? "arcademy:sort:" + tag : "arcademy";
                     bool changed;
                     lock (ArcademyTaggedSubs)
                     {
                         changed = !ArcademyTaggedSubs.TryGetValue(tenant, out var old) || !old.SequenceEqual(subs, StringComparer.OrdinalIgnoreCase);
                         ArcademyTaggedSubs[tenant] = subs;
                     }
-                    var coordinator = FypOnlineCoordinator.For(tenant, () => { lock (ArcademyTaggedSubs) return ArcademyTaggedSubs.GetValueOrDefault(tenant) ?? Array.Empty<string>(); }, FeedMediaKind.Any);
-                    if (changed) coordinator.ResetChannels();
-                    (entries, _) = await coordinator.FetchBatchAsync(mediaKind, CancellationToken.None);
+                    if (ArcademyFetchForTests is { } fetch) entries = await fetch(mediaKind, ArcademyChannels(tenant));
+                    else
+                    {
+                        var coordinator = FypOnlineCoordinator.For(tenant, () => ArcademyChannels(tenant), FeedMediaKind.Any);
+                        if (changed) coordinator.ResetChannels();
+                        (entries, _) = await coordinator.FetchBatchAsync(mediaKind, CancellationToken.None);
+                    }
                 }
+                finally { gate.Release(); }
             }
             catch (Exception ex) { Log.Debug(ex, "[Arcademy] remote assets unavailable"); }
             var allowed = new HashSet<string>(subs, StringComparer.OrdinalIgnoreCase);
@@ -129,6 +140,11 @@ internal sealed partial class GameWindow
                 }
             });
         });
+    }
+
+    private static IReadOnlyList<string> ArcademyChannels(string tenant)
+    {
+        lock (ArcademyTaggedSubs) return ArcademyTaggedSubs.GetValueOrDefault(tenant) ?? Array.Empty<string>();
     }
 
     private object[] TakeArcademyBuffered(string key, int count)
