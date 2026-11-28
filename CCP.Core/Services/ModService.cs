@@ -1290,7 +1290,7 @@ namespace ConditioningControlPanel.Services
         /// ask this so an emptied pool means "name no video" (ccp-bugs #1754).
         /// </summary>
         public bool UserEmptiedVideoLinks() =>
-            App.Settings?.Current?.VideoLinksByMod?.TryGetValue(_activeMod.Id, out var links) == true
+            CoreSettings.Current?.VideoLinksByMod?.TryGetValue(_activeMod.Id, out var links) == true
             && links != null && links.Count == 0;
 
         /// <summary>

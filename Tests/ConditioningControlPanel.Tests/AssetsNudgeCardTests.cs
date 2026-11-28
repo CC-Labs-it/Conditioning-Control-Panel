@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Tests;
 /// upgrades only with an empty library; still arrow under reduced motion; Help replays it; every
 /// language file carries its words; each card realizes offscreen.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class AssetsNudgeCardTests
 {
     private static string RepoRoot()
@@ -82,7 +83,7 @@ public class AssetsNudgeCardTests
     [Fact]
     public void Every_language_file_carries_the_text()
     {
-        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var f in files)

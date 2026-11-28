@@ -2,8 +2,13 @@ using System;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.Sparkles.Claims;
-public sealed record SparklesResult(string Kind, int Place = 0, int Of = 0, string? Outcome = null, string? Medal = null)
+public sealed record SparklesResult(string Kind, int Place = 0, int Of = 0, string? Outcome = null, string? Medal = null,
+    string? Id = null)
 {
+    // \z, not $: a .NET $ also matches before a trailing newline.
+    private static readonly Regex StickerIdShape = new(@"^[a-z0-9_-]{1,40}\z", RegexOptions.CultureInvariant);
+    public static bool IsStickerId(string? id) => id != null && StickerIdShape.IsMatch(id);
+    public static SparklesResult ForSticker(string id) => new("sticker", Id: id);
     public static SparklesResult ForPlace(int place, int of) => new("place", Place: place, Of: of);
     public static SparklesResult ForDuel(string outcome) => new("duel", Outcome: outcome);
     public static SparklesResult ForMedal(string medal) => new("medal", Medal: medal);
@@ -12,6 +17,7 @@ public sealed record SparklesResult(string Kind, int Place = 0, int Of = 0, stri
         "place" => new JObject { ["kind"] = "place", ["place"] = Place, ["of"] = Of },
         "duel" => new JObject { ["kind"] = "duel", ["outcome"] = Outcome },
         "medal" => new JObject { ["kind"] = "medal", ["medal"] = Medal },
+        "sticker" => new JObject { ["kind"] = "sticker", ["id"] = Id },
         _ => new JObject { ["kind"] = Kind },
     };
 }
@@ -27,8 +33,8 @@ public sealed record SparklesClaim(
 {
     private static readonly Regex ClaimIdShape = new("^[A-Za-z0-9_-]{16,64}$", RegexOptions.CultureInvariant);
     public static bool IsGame(string? g) =>
-        g is "rt3d" or "chess" or "goon" or "arcademy" or "breakout" or "dtrh" or "caucus" or "intake";
-    public static bool IsMode(string? m) => m is "solo" or "trial" or "ghost" or "online" or "practice";
+        g is "rt3d" or "chess" or "goon" or "arcademy" or "breakout" or "dtrh" or "caucus" or "intake" or "tc";
+    public static bool IsMode(string? m) => m is "solo" or "trial" or "ghost" or "online" or "practice" or "sticker";
     public static bool IsClaimId(string? id) => id != null && ClaimIdShape.IsMatch(id);
     public static string NewClaimId() => Guid.NewGuid().ToString("N");
     public static SparklesClaim Create(string game, string mode, SparklesResult result, long durationMs,
@@ -36,7 +42,10 @@ public sealed record SparklesClaim(
         new(claimId ?? NewClaimId(), game, mode, result, Math.Max(0, durationMs), detail, proof,
             ServerClock.UtcNow.ToUnixTimeMilliseconds());
     public bool IsWellFormed =>
-        IsClaimId(ClaimId) && IsGame(Game) && IsMode(Mode) && Result.Kind is "place" or "duel" or "medal";
+        IsClaimId(ClaimId) && IsGame(Game) && IsMode(Mode) && Result != null
+        && (Mode == "sticker"
+            ? Game == "tc" && Result.Kind == "sticker" && SparklesResult.IsStickerId(Result.Id)
+            : Result.Kind is "place" or "duel" or "medal");
     public JObject ToJson(string unifiedId)
     {
         var o = new JObject

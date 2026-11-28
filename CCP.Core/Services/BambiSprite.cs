@@ -70,7 +70,7 @@ namespace ConditioningControlPanel.Services
                 // list only when the pool is empty and the user did not empty it on purpose (an
                 // emptied pool means "name no video", ccp-bugs #1754).
                 var sampled = SampleVideoTitles(BambiTitleSample);
-                var userEmptied = sampled.Count == 0 && App.Mods?.UserEmptiedVideoLinks() == true;
+                var userEmptied = sampled.Count == 0 && CoreMods.Service?.UserEmptiedVideoLinks() == true;
                 string bambiVideoTitles = sampled.Count > 0
                     ? string.Join(", ", sampled)
                     : userEmptied
@@ -1200,7 +1200,7 @@ LINK RULE (applies to every reply, no exceptions):
             // Only when there is genuinely nothing to name do we fall back to "browse HypnoTube"
             // (the LinkFloorRule below is appended AFTER both branches — see its remarks). A pool
             // the user emptied on purpose counts too, Bambi mode included (ccp-bugs #1754).
-            var userEmptied = poolNames.Count == 0 && App.Mods?.UserEmptiedVideoLinks() == true;
+            var userEmptied = poolNames.Count == 0 && CoreMods.Service?.UserEmptiedVideoLinks() == true;
             if (poolNames.Count == 0 && ((!isBambiMode && !hasUserSHLinks) || userEmptied))
             {
                 sb.AppendLine($@"

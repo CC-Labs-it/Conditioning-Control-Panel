@@ -13,10 +13,12 @@
 ; - Store install path in registry for Velopack updates
 
 #define MyAppName "Conditioning Control Panel"
-#define MyAppVersion "7.4.1"
+#define MyAppVersion "7.4.2"
 #define MyAppPublisher "CodeBambi"
 #define MyAppURL "https://github.com/CC-Labs-it/Conditioning-Control-Panel"
 #define MyAppExeName "ConditioningControlPanel.exe"
+; The app's single-instance mutex: must equal App.xaml.cs MutexName (InstallerMutexTests).
+#define MyAppMutex "ConditioningControlPanel_SingleInstance_Mutex"
 ; 7.2+: the Avalonia head's exe as published. It is installed under MyAppExeName (DestName) so the
 ; AppId, folder, exe name, shortcuts, taskkill and the updater's relaunch all stay what WPF had
 ; (docs/avalonia-decisions.html, "Upgrade in place from WPF").
@@ -244,7 +246,6 @@ Type: filesandordirs; Name: "{app}\logs"
 #include "installer-avalonia-code-1.iss"
 // Remove file associations when the task is not selected
 #include "installer-avalonia-code-2.iss"
-      if CheckForMutexes('ConditioningControlPanel_SingleInstance_Mutex') then
 #include "installer-avalonia-code-3.iss"
 
     // The InfoBeforeFile page showed the browser reset notice, so the app need not repeat it

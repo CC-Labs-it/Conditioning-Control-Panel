@@ -72,17 +72,9 @@ public class StopTraceTests
     [InlineData("App.xaml.cs", "StopTrace.Begin(\"kill all audio\")")]
     public void Every_stop_path_is_timed_and_finished(string file, string begin)
     {
-        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", file.Replace('/', Path.DirectorySeparatorChar)));
+        var src = SourceRoots.ReadProductFile(file.Split('/'));
         var at = src.IndexOf(begin, StringComparison.Ordinal);
         Assert.True(at > 0, begin);
         Assert.True(src.IndexOf("trace.Finish();", at, StringComparison.Ordinal) > at, file);
-    }
-
-    private static string RepoRoot()
-    {
-        var d = new DirectoryInfo(AppContext.BaseDirectory);
-        while (d != null && !d.GetDirectories("ConditioningControlPanel").Any(x => File.Exists(Path.Combine(x.FullName, "ConditioningControlPanel.csproj"))))
-            d = d.Parent;
-        return d?.FullName ?? throw new InvalidOperationException("repo root not found");
     }
 }

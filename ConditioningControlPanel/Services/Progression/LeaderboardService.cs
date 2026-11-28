@@ -157,14 +157,39 @@ public class LeaderboardService : IDisposable
     {
         try
         {
-            return LeaderboardClient.PlayerPercentile(YourRank, YourTotal, Entries, TotalUsers,
+            var percentile = LeaderboardClient.PlayerPercentile(YourRank, YourTotal, Entries, TotalUsers,
                 App.UnifiedUserId, App.Discord?.UserId, App.UserDisplayName);
+            LogPercentile(percentile);
+            return percentile;
         }
         catch (Exception ex)
         {
             App.Logger?.Warning(ex, "Failed to calculate player percentile");
             return 0;
         }
+    }
+
+    // The rule is Core's (LeaderboardClient.PlayerPercentile); this names which way it went, once per change.
+    private void LogPercentile(int percentile)
+    {
+        if (YourRank.HasValue && YourTotal is > 0)
+        {
+            if (_percentileLog.Changed($"{YourRank.Value}/{YourTotal.Value}/{percentile}"))
+                App.Logger?.Debug("GetPlayerPercentile: Server rank {Position}/{Total} = Top {Percentile}%",
+                    YourRank.Value, YourTotal.Value, percentile);
+        }
+        else if (Entries.Count == 0 || TotalUsers <= 0)
+        {
+            if (_percentileLog.Changed($"none/{Entries.Count}/{TotalUsers}"))
+                App.Logger?.Debug("GetPlayerPercentile: No entries ({Count}) or users ({Total})", Entries.Count, TotalUsers);
+        }
+        else if (percentile == 0)
+        {
+            if (_percentileLog.Changed("not-found"))
+                App.Logger?.Debug("GetPlayerPercentile: Player not found in leaderboard");
+        }
+        else if (_percentileLog.Changed($"scan/{TotalUsers}/{percentile}"))
+            App.Logger?.Debug("GetPlayerPercentile: Fallback scan of {Total} = Top {Percentile}%", TotalUsers, percentile);
     }
 
     public void Dispose()

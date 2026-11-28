@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Services.Diagnostics
     /// first step (open windows, private MB), so a process that dies mid-stop still leaves it; a
     /// <c>stop:end</c> line; then the time to the first rendered frame and to dispatcher idle after it.</para>
     /// </summary>
-    internal sealed class StopTrace
+    internal sealed class StopTrace : IStopTrace
     {
         /// <summary>A stop under this writes nothing.</summary>
         public const long SlowMs = 1000;
@@ -163,12 +163,6 @@ namespace ConditioningControlPanel.Services.Diagnostics
         }
 
         /// <summary>"Type.Method" of a handler (a lambda reads as its enclosing type plus the compiler name).</summary>
-        public static string HandlerName(Delegate d)
-        {
-            var m = d.Method;
-            var type = m.DeclaringType;
-            while (type is { IsNested: true } && type.Name.StartsWith("<", StringComparison.Ordinal)) type = type.DeclaringType;
-            return (type?.Name ?? "?") + "." + m.Name;
-        }
+        public static string HandlerName(Delegate d) => CoreStopTrace.HandlerName(d);
     }
 }

@@ -95,7 +95,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Speed" FontSize="13" FontWeight="SemiBold"
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_speed}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <Slider Grid.Column="1" x:Name="SliderSpeed" sessionLock:SessionLock.Owned="True" Minimum="0" Maximum="500" Value="0"
                                         VerticalAlignment="Center" Margin="14,0"/>

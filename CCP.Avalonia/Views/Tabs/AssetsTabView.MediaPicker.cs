@@ -230,17 +230,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>The ask's title and text, shared with the launcher's media dialog (WPF asks the same, word for word).</summary>
-        internal static (string Title, string Message) RemoteMediaConsentText()
-        {
-            var title = LocOr("title_remote_media_consent", "Use Reddit media?");
-            var message = LocOr("msg_remote_media_consent",
-                "Pull media from Reddit?\n\n" +
-                "The app will stream images and clips from the subreddits you pick, straight from your own machine. " +
-                "Nothing is saved to your disk, nothing is uploaded, and none of it goes through our servers.\n\n" +
-                "It is adult content and it is not curated by us - you choose the niches and subreddits, and only those are ever fetched.\n\n" +
-                "Turn it on?");
-            return (title, message);
-        }
+        internal static (string Title, string Message) RemoteMediaConsentText() => (
+            LocOr(ConditioningControlPanel.Services.Fyp.Online.RemoteMediaConsentCopy.TitleKey, ConditioningControlPanel.Services.Fyp.Online.RemoteMediaConsentCopy.Title),
+            LocOr(ConditioningControlPanel.Services.Fyp.Online.RemoteMediaConsentCopy.MessageKey, ConditioningControlPanel.Services.Fyp.Online.RemoteMediaConsentCopy.Message));
 
         private void RemoteNicheChip_Changed()
         {
