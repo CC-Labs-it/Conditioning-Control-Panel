@@ -342,15 +342,16 @@ namespace ConditioningControlPanel.Services
             {
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop(); CoreMindWipe.Stop();
-                if (playerStopped)
-                    try { CoreEngine.StopBrainDrain?.Invoke(); }
-                    catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] Brain Drain stop failed"); }
+                // WPF StopRemoteTriggeredEffects stops Brain Drain even if the session keeps its engine.
+                try { CoreEngine.StopBrainDrain?.Invoke(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] Brain Drain stop failed"); }
             }
             CoreLockCard.CloseAll();   // WPF LockCardWindow.ForceCloseAll (:1020, :1179), a card still posted included
             // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
             // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
             // comes back on except while a running Lockdown holds it off; its own end restores it.
-            var restoredVisuals = Remote.RemoteWearer.HandBackAllButStrict(playerStopped);
+            // Restore the saved setting without restarting a player stopped for controller leave.
+            var restoredVisuals = Remote.RemoteWearer.HandBackAllButStrict(playerStopped || controllerLeft);
             Remote.RemoteWearer.ReleaseSafetyState(); // WPF RemoteControlService.cs:1036-1043: safety before head refresh
             if (restoredVisuals > 0)
                 try { RefreshOverlays?.Invoke(); }
