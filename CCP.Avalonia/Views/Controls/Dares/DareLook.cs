@@ -1,6 +1,10 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Templates;
+using Avalonia.Automation;
+using Avalonia.Input;
 using Avalonia.Media;
 using ConditioningControlPanel.Controls.Dares;
 
@@ -25,7 +29,7 @@ internal static class DareLook
         _ => Color.FromRgb(0x3A, 0x1D, 0x78),
     };
 
-    public static string ToneIcon(DareTone tone) => tone switch
+    public static string ToneIconName(DareTone tone) => tone switch
     {
         DareTone.Pics => "picture",
         DareTone.Minutes or DareTone.When => "clock",
@@ -51,22 +55,67 @@ internal static class DareLook
         DareTone.Cant => "\uE711", DareTone.Duel => "\uE8AB", _ => "\uE77B",
     };
 
-    // WPF 8d480c7d3f Controls/Dares/DareLook.cs:774-790: choices have a flat base edge.
+    // WPF c2cf10de4d DareLook.cs:52-69 MDL2 glyphs, as Fluent kinds (IconMap D5 where it has the codepoint).
+    public static IconKind ToneIcon(DareTone tone) => tone switch
+    {
+        DareTone.Pics => IconKind.Image, DareTone.Minutes => IconKind.Clock, DareTone.Video => IconKind.Video,
+        DareTone.Session => IconKind.Play, DareTone.Bubbles => IconKind.BubbleMultiple, DareTone.Dare => IconKind.Mail,
+        DareTone.Sp => IconKind.Star, DareTone.Lock => IconKind.Key, DareTone.Lockdown => IconKind.Shield,
+        DareTone.When => IconKind.Calendar, DareTone.CameraOn => IconKind.Eye, DareTone.CameraOff => IconKind.EyeOff,
+        DareTone.Cant => IconKind.Dismiss, DareTone.Duel => IconKind.ArrowSwap, _ => IconKind.Person,
+    };
+
+    // WPF 8d480c7d3f Controls/Dares/DareLook.cs:774-799.
     public static Button Choice(string label, Color color, string? tip, Action onClick, string tag)
     {
-        var button = new Button
+        // Retain the original lane API; WPF's later light-card design uses a shared edge color.
+        _ = color;
+        var tile = new SolidColorBrush(Color.FromRgb(0xF7, 0xEE, 0xF8));
+        var face = new Border
         {
-            Content = new TextBlock { Text = label, FontSize = 14, FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xF1, 0xEA, 0xFF)) },
-            Background = new SolidColorBrush(Color.FromRgb(0x1C, 0x12, 0x33)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0xA0, color.R, color.G, color.B)),
+            Background = tile,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDC, 0xC6, 0xDD)),
             BorderThickness = new Thickness(1, 1, 1, 4),
             CornerRadius = new CornerRadius(7),
             Padding = new Thickness(14, 6, 14, 5),
+            Child = new TextBlock
+            {
+                Text = label,
+                FontFamily = new FontFamily("Arial Narrow, Segoe UI"),
+                FontSize = 19,
+                FontWeight = FontWeight.Bold,
+                FontFeatures = new FontFeatureCollection { FontFeature.Parse("tnum") },
+                Foreground = new SolidColorBrush(Color.FromRgb(0x2E, 0x18, 0x3A)),
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+            },
+        };
+        var shadow = new Border
+        {
+            Background = tile,
+            CornerRadius = new CornerRadius(7),
+            Margin = new Thickness(8, 6, 8, 1),
+            BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 3, Blur = 7, Color = Color.FromArgb(102, 0, 0, 0) }),
+            IsHitTestVisible = false,
+        };
+        var button = new Button
+        {
+            Content = new Grid { Children = { shadow, face } },
+            Template = new FuncControlTemplate<Button>((b, _) => new ContentPresenter
+            {
+                [!ContentPresenter.ContentProperty] = b[!ContentControl.ContentProperty],
+            }),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 8, 8),
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Focusable = false,
             Tag = tag,
         };
+        AutomationProperties.SetName(button, label);
         ToolTip.SetTip(button, tip);
+        button.PointerEntered += (_, _) => face.Background = Brushes.White;
+        button.PointerExited += (_, _) => face.Background = tile;
         button.Click += (_, _) => onClick();
         return button;
     }
