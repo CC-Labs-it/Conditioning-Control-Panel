@@ -4,9 +4,9 @@
 // frame passes Core TcFrameGate first. Every ready gets a fresh init (the pause card's Main menu reloads the page and
 // waits for init with no timeout). Hard exits (panic, title-bar X, a dead page, the watchdog) close the window at once;
 // the page's own exit ends on its exit-done or at 800 ms. Escape is its pause (GameWindow.Escape.cs); panic closes it
-// with every other game (PanicSurfaces "games"). Not on this head yet, so the init does not offer them: pictures and
-// the Sparkles medal (s20-tc-media), toy pulses and live settings (s20-tc-feel), the save carry (s20-tc-save) and
-// the Llama Expo (s20-tc-expo). Their frames are refused here with a log line.
+// with every other game (PanicSurfaces "games"). The save carry is in GameWindow.Tc.Save.cs. Not on this head yet,
+// so the init does not offer them: pictures and the Sparkles medal (s20-tc-media), toy pulses and live settings
+// (s20-tc-feel) and the Llama Expo (s20-tc-expo). Their frames are refused here with a log line.
 using System;
 using System.IO;
 using Avalonia.Threading;
@@ -115,7 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 var s = CoreSettings.Current;
-                var caps = TcRules.Caps(_tcEdition, saveSlot: false);   // no save carry on this head yet (s20-tc-save)
+                var caps = TcRules.Caps(_tcEdition, saveSlot: TcSaveSlotOpen);
                 Post(TcHostRules.InitFrame(LocalizationManager.Instance.CurrentLanguage, s.MotionLevel, GentleVisuals.On, CoreMods.ActiveModId, caps,
                     picturesOn: false, sparkles: false, toys: false, toysConnected: false, ownMedia: false));
             }
@@ -133,6 +133,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!gate.Accepted || gate.Frame is not { } f)
             {
                 Log.Debug("Tc: page frame refused ({Type}: {Why})", (string?)o["type"], gate.Refusal);
+                // A save over the caps still gets its answer (the page shows the card's reason), WPF TcHostService.cs:243.
+                if ((string?)o["type"] == "save-offer")
+                    PostTcSave(TcSaveRules.Result(false, gate.Refusal == TcFrameGate.RefuseTooBig ? TcSaveRules.ReasonTooBig : TcSaveRules.ReasonRefused));
                 return true;
             }
             try
@@ -147,6 +150,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         break;
                     case "heartbeat":
                         _tcLastBeatUtc = _tcLastAnyUtc;
+                        break;
+                    case "save-offer":
+                        OnTcSaveOffer(f);
+                        break;
+                    case "save-ask":
+                        OnTcSaveAsk();
                         break;
                     case "boot-error":
                         Log.Warning("Tc: page boot-error: {Msg}", f.Save);
