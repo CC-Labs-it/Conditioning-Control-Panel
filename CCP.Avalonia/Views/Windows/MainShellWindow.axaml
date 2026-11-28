@@ -2510,13 +2510,20 @@
             <Border Background="{DynamicResource SurfaceBgBrush}" CornerRadius="16" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="3"
                     MaxWidth="450" MaxHeight="220" VerticalAlignment="Center" HorizontalAlignment="Center"
                     Padding="40,30">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Grid>
+                <StackPanel x:Name="DropOverlayPrompt" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock x:Name="DropOverlayIcon" Text="📂" FontSize="48" HorizontalAlignment="Center"/>
                     <TextBlock x:Name="DropOverlayTitle" Text="{loc:Str label_drop_to_import}" Foreground="{DynamicResource PinkBrush}" FontSize="20" FontWeight="Bold"
                                HorizontalAlignment="Center" Margin="0,15,0,5"/>
                     <TextBlock x:Name="DropOverlaySubtitle" Text="{loc:Str label_images_videos_zips_folders}" Foreground="#909090" FontSize="14"
                                HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
                 </StackPanel>
+                <StackPanel x:Name="DropImportProgress" IsVisible="False" Width="320" VerticalAlignment="Center">
+                    <TextBlock Text="{loc:Str drop_import_busy}" Foreground="{DynamicResource PinkBrush}" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                    <ProgressBar x:Name="DropImportBar" Minimum="0" Maximum="100" Height="6" IsIndeterminate="True" Foreground="{DynamicResource PinkBrush}" Background="#30FFFFFF"/>
+                    <TextBlock x:Name="DropImportCount" Foreground="#909090" FontSize="13" Margin="0,10,0,0" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                </Grid>
             </Border>
         </Border>
 
