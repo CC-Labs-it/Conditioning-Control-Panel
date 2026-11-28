@@ -135,10 +135,11 @@ public sealed class ChaosAnnouncerOverlayTests
             for (int i = 0; i < 4 * 49; i++)   // 49 s
             {
                 ChaosRunHost.Tick();
-                // The last loop (40 s) has its own banner (WPF ChaosModeService.cs:1460, #3541): let it play out.
+                // The last loop (40 s) has its own banner (WPF ChaosModeService.cs:1460, #3541), and a fresh profile's
+                // ready Ripple offers its teach past 6 s (WPF ChaosModeService.cs:993-999): let them play out.
                 while (ChaosAnnouncerOverlay.IsShowing)
                 {
-                    Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
+                    Assert.Contains(ChaosAnnouncerOverlay.Active!.Current!.ArtKey, new[] { "final_loop", "ripple_teach" });
                     Step(clock, 10000);
                 }
             }

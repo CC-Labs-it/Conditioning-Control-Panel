@@ -445,6 +445,63 @@ public sealed class ChaosRunHostTests
     });
 
     [Fact]
+    public async Task Ripple_offer_test_restores_the_previous_meta_state()
+    {
+        var previous = ChaosMeta.State;
+        bool seen = previous.SeenRippleTeach;
+        try
+        {
+            await Ripple_offer_waits_for_ready_and_repeats_only_until_first_cast();
+            Assert.Same(previous, ChaosMeta.State);
+            Assert.Equal(seen, ChaosMeta.State.SeenRippleTeach);
+        }
+        finally
+        {
+            typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, previous);
+        }
+    }
+
+    [Fact]
+    public async Task Ripple_offer_waits_for_ready_and_repeats_only_until_first_cast()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var previous = ChaosMeta.State;
+            try
+            {
+                FreshMeta();
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                state.RippleCooldown = 20;
+                Ticks(25);
+                string line = LocalizationManager.Instance.Get("chaos_ripple_offer_event");
+                Assert.DoesNotContain(line, state.RecentEvents);
+                state.RippleCooldown = 0;
+                Ticks(1);
+                Assert.Single(state.RecentEvents.Where(x => x == line));
+                Ticks(2);
+                Assert.Single(state.RecentEvents.Where(x => x == line));
+                ChaosRunHost.ForceShutdown();
+                ChaosMeta.State.SeenRippleTeach = true;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Ticks(25);
+                Assert.DoesNotContain(line, ChaosRunHost.State!.RecentEvents);
+            }
+            finally
+            {
+                try { ChaosRunHost.ForceShutdown(); }
+                finally { typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, previous); }
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Ripple_gathers_only_during_an_active_unpaused_run()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
@@ -929,6 +986,8 @@ public sealed class ChaosRunHostTests
     [InlineData(true, true), InlineData(false, true), InlineData(false, false)]
     public Task Fourth_descent_rigs_first_sin_and_spends_demo_on_pick_or_skip(bool pick, bool allow) => WithFreshRun(() =>
     {
+        // Keep the ripple tutorial from occupying the announcer in this scenario.
+        ChaosMeta.State.SeenRippleTeach = true;
         var meta = ChaosMeta.State; meta.RunsCompleted = 3; meta.LessonsComplete.Add("silk_touch");
         CoreSettings.Current.ChaosAnnouncerEnabled = true;
         var cfg = Cfg(); cfg.BoonDraftEnabled = true; cfg.AllowCurses = allow; cfg.SinChance = 0;
@@ -950,6 +1009,8 @@ public sealed class ChaosRunHostTests
     [Fact]
     public Task Eligible_loadout_deals_the_duo_demo_once() => WithFreshRun(() =>
     {
+        // Keep the ripple tutorial from occupying the announcer in this scenario.
+        ChaosMeta.State.SeenRippleTeach = true;
         var oldEngine = BarkHead.Engine; var settings = CoreSettings.Current;
         var oldAvatar = settings.AvatarEnabled; var oldVolume = settings.MasterVolume;
         int spoken = 0;
@@ -1010,6 +1071,8 @@ public sealed class ChaosRunHostTests
     [Fact]
     public Task Draft_choices_report_resistance_and_sins() => WithFreshRun(() =>
     {
+        // Keep the ripple tutorial from occupying the announcer in this scenario.
+        ChaosMeta.State.SeenRippleTeach = true;
         var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
         ChaosMeta.State.LessonsComplete.Add("silk_touch");
         CoreSettings.Current.ChaosAnnouncerEnabled = true;
