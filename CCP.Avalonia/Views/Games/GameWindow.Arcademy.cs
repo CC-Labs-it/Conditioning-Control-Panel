@@ -212,7 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 motionLevel = ArcademyMotion(), reducedMotion = ArcademyMotion() != 2,
                 utcDateSeed = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
                 localDate = DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
-                settings = Parse(s.ArcademySettingsJson), keybinds = Parse(s.ArcademyKeybindsJson),
+                settings = ArcademySettingsBag(Parse(s.ArcademySettingsJson)), keybinds = Parse(s.ArcademyKeybindsJson),
                 hideTutorial = s.ArcademyHideTutorial, meta = _arcademyMeta?.Snapshot() ?? new JObject(),
                 panicKey = s.PanicKey, panicKeyEnabled = s.PanicKeyEnabled,
             };
