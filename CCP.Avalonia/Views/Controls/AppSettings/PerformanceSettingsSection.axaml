@@ -190,6 +190,35 @@
 
                 </StackPanel>
 
+                <!-- Accessibility (WPF 91938be4d0, a light-sensitivity ask): "Limit pink filter to", off
+                     by default; the slider shows only while it is on. The limit is applied where the
+                     tint and the Super fog are painted (PinkFilterOverlay.Paint, SteamOverlay), so no
+                     preset, session, mod or ramp can paint past it. Range from Core Looks/PinkComfort. -->
+                <TextBlock Text="{loc:Str set2_accessibility_header}" FontSize="12.5" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextLightBrush}" Margin="0,10,0,0"/>
+                <Grid MinHeight="34" Margin="0,2,0,0" ColumnDefinitions="*,Auto"
+                      ToolTip.Tip="{loc:Str tooltip_pink_comfort_limit}">
+                    <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
+                               Text="{loc:Str setting_pink_comfort_limit}"
+                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <CheckBox Grid.Column="1" x:Name="ChkPinkComfortLimit"
+                              Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                              IsCheckedChanged="ChkPinkComfortLimit_Changed"/>
+                </Grid>
+                <Grid x:Name="PnlPinkComfortLimit" IsVisible="False" MinHeight="34" Margin="14,0,0,0"
+                      ColumnDefinitions="*,160,Auto" ToolTip.Tip="{loc:Str tooltip_pink_comfort_limit}">
+                    <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
+                               Text="{loc:Str setting_pink_comfort_max}"
+                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <Slider Grid.Column="1" x:Name="SliderPinkComfortLimit"
+                            Minimum="5" Maximum="50" Value="10" SmallChange="1" LargeChange="5"
+                            IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"
+                            ValueChanged="SliderPinkComfortLimit_Changed"/>
+                    <TextBlock Grid.Column="2" x:Name="TxtPinkComfortLimit" Text="10%" MinWidth="44"
+                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0,0,0"
+                               Foreground="{DynamicResource PinkBrush}" FontSize="12.5" FontWeight="Bold"/>
+                </Grid>
+
                 <!-- Lighter effects (Avalonia head only, lane perf 2026-11-06; WPF has no software tier).
                      Item order IS the LighterEffectsMode ordinal (Auto=0, On=1, Off=2) - never reorder.
                      Auto takes WPF's Performance-mode FX tier when Skia draws on the CPU (no GPU). -->
