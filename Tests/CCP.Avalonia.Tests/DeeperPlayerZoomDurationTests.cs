@@ -80,6 +80,10 @@ public class DeeperPlayerZoomDurationTests
         Assert.NotNull(script);
         Assert.Contains("scrollIntoView({block:'center'})", script);
         Assert.Contains("if(!l._ccpScrolled)", script);
+        Assert.Contains("r.width>0&&r.height>0", script);
+        Assert.Contains("querySelectorAll('iframe')", script);
+        Assert.True(script.IndexOf("querySelectorAll('iframe')", StringComparison.Ordinal)
+            < script.IndexOf("if(!l)return", StringComparison.Ordinal));
         ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "deeper-player").Stop(null);
         Assert.False(EnhancementPlayerWindow.IsAnyEnhancementRunning);
     });

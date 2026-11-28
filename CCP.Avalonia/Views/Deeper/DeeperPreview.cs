@@ -71,12 +71,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// banners above the player, so without it the preview lands at scrollTop=0 with the video
         /// offscreen. The flag lives on the element, so a navigation resets it for free.</summary>
         private const string ScrollOnce =
-            "if(!l._ccpScrolled){l._ccpScrolled=1;try{l.scrollIntoView({block:'center'});}catch(e){}}";
+            "(function scan(d){d.querySelectorAll('video').forEach(function(l){if(!l._ccpScrolled){var r=l.getBoundingClientRect();if(r.width>0&&r.height>0){try{l.scrollIntoView({block:'center'});}catch(e){}l._ccpScrolled=1;}}});d.querySelectorAll('iframe').forEach(function(f){try{if(f.contentDocument)scan(f.contentDocument);}catch(e){}});})(document);";
 
         /// <summary>Wraps <paramref name="body"/> - JS statements, with <c>l</c> bound, carrying
         /// their own <c>return</c> - in the finder.</summary>
         internal static string LargestVideo(string body, bool scrollIntoView = false)
-            => Find + (scrollIntoView ? ScrollOnce : "") + body + "})()";
+            => (scrollIntoView ? ScrollOnce : "") + Find + body + "})()";
 
         /// <summary>"currentTime|duration|paused" off the page's largest video, or "".</summary>
         internal static string ReadTime(bool scrollIntoView = false)
