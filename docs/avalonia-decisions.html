@@ -1804,5 +1804,12 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>Visible difference: no blur and no melt warp. Bubbles v2 is offered on this head on that basis.</li>
 <li>Alternatives: hold the pop until a self-excluding capture exists (the bubble would pay XP only); a blurred capture that includes the overlays.</li>
 </ul>
+<h2 id="2026-11-28-remote-start-session-strict-lock-full-tier">2026-11-28: Remote start_session switches Strict Lock on only in a Full-tier session (row8 remote-start-session; owner)</h2>
+<ul>
+<li>Decision: <code>MainShellWindow.StartSessionFromRemote</code> writes <code>StrictLockEnabled</code> for a <code>strict_lock</code> flag only when the relay session's <code>RemoteRelay.Tier</code> is <code>&quot;full&quot;</code>, after the leash and Lockdown screens. On a Light or Standard session it drops the flag, still starts the session and logs one line.</li>
+<li>Deviation from WPF: 7.4.1 <code>RemoteControlService.cs:1569-1578</code> applies <code>strict_lock</code> with no client-side tier check, so this head is stricter.</li>
+<li>Source: owner answer relayed by CB in <a href="https://github.com/CC-Labs-it/Conditioning-Control-Panel/pull/5842#issuecomment-7192542031">#5842</a> (&quot;#5247 (a Strict Lock write without the Full-tier check)&quot;).</li>
+<li>Tests: <code>RemoteControlShellTests.Remote_start_uses_sessions_or_wearer_settings</code> (<code>strict_light</code>, <code>strict_standard</code> fail-proven; <code>strict_panic</code> pins that trigger_panic still stops the session and clears the lock).</li>
+</ul>
 </body>
 </html>

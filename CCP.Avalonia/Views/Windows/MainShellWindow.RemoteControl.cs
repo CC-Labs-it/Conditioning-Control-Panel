@@ -100,7 +100,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Escape integrity (docs/avalonia-decisions.html, 2026-09-30): no controller may switch Strict Lock on during Lockdown.
             var lockdown = ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;
             if (asksStrict && lockdown) Serilog.Log.Information("Remote start_session: strict_lock dropped during Lockdown");
-            if (asksStrict && !lockdown && verdict != ConditioningControlPanel.Services.Leash.LeashRemoteVerdict.StripStrict)
+            // Only a Full-tier session may switch Strict Lock on (docs/avalonia-decisions.html, 2026-11-28; stricter than WPF).
+            var full = relay.Tier == "full";
+            if (asksStrict && !lockdown && !full) Serilog.Log.Information("Remote start_session: strict_lock dropped on tier {Tier}", relay.Tier);
+            if (asksStrict && !lockdown && full && verdict != ConditioningControlPanel.Services.Leash.LeashRemoteVerdict.StripStrict)
             {
                 ConditioningControlPanel.Services.Remote.RemoteWearer.NoteWrite(ConditioningControlPanel.Services.Remote.RemoteHeld.StrictLock, 1);
                 s.StrictLockEnabled = true;

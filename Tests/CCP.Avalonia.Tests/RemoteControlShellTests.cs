@@ -434,6 +434,9 @@ public sealed class RemoteControlShellTests
     [InlineData("leashed")]
     [InlineData("strict")]
     [InlineData("lockdown")]
+    [InlineData("strict_light")]
+    [InlineData("strict_standard")]
+    [InlineData("strict_panic")]
     public Task Remote_start_uses_sessions_or_wearer_settings(string kind) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var oldRelay = RemoteControlTabView.Relay;
@@ -462,10 +465,11 @@ public sealed class RemoteControlShellTests
             shell = new MainShellWindow();
             relay.SessionsProvider = () => new[] { known };
             if (kind == "known") runner.Start(new Session { Id = "wearer", DurationMinutes = 30 });
-            Assert.Equal("ABC123", await relay.StartAsync("full"));
+            // #5842 (owner answer via CB): only a Full-tier session may switch Strict Lock on.
+            Assert.Equal("ABC123", await relay.StartAsync(kind == "strict_light" ? "light" : kind == "strict_standard" ? "standard" : "full"));
             var id = kind == "known" || kind == "unavailable" ? "known" : "absent";
             var p = kind == "missing" ? new JObject() : new JObject { ["session_id"] = id };
-            if (kind == "leashed" || kind == "strict" || kind == "lockdown") p["strict_lock"] = true;
+            if (kind is "leashed" or "lockdown" || kind.StartsWith("strict")) p["strict_lock"] = true;
             if (kind == "lockdown")
             {
                 settings.Current.LockdownForceStrictLock = false;
@@ -484,7 +488,15 @@ public sealed class RemoteControlShellTests
                 Assert.Equal(17, runner.CurrentSession.Settings.FlashPerHour);
                 Assert.Equal(4, runner.CurrentSession.Settings.SubliminalPerMin);
             }
-            if (kind == "leashed" || kind == "lockdown") Assert.False(settings.Current.StrictLockEnabled);
+            if (kind is "leashed" or "lockdown" or "strict_light" or "strict_standard") Assert.False(settings.Current.StrictLockEnabled);
+            if (kind == "strict_panic")
+            {
+                Assert.True(settings.Current.StrictLockEnabled);
+                fake.Poll = new JObject { ["controller_connected"] = true, ["commands"] = new JArray(new JObject { ["id"] = "2", ["action"] = "trigger_panic" }) }.ToString();
+                await relay.PollOnceAsync();
+                Assert.False(runner.IsRunning);
+                Assert.False(settings.Current.StrictLockEnabled);
+            }
             if (kind == "strict")
             {
                 Assert.True(settings.Current.StrictLockEnabled);
