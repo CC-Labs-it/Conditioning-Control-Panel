@@ -318,8 +318,8 @@ public sealed class HapticsHeadTests
     }
 
     /// <summary>WPF HapticsSetupWindow.xaml.cs, from the Studio rack's "?" (MainWindow.Haptics.cs:668):
-    /// pick Mock, Next commits the provider, Connect works without premium (toys are free since main
-    /// f54203401b, HapticsAccess), lists the (virtual) toys, swaps Connect for Done, Test buzz reaches
+    /// pick Mock, Next commits the provider, Connect works without premium (toys are free since
+    /// 2026-11-11, HapticsAccess.IsOpen) and connects, lists the (virtual) toys, swaps Connect for Done, Test buzz reaches
     /// the toy, and closing the wizard re-reads the page.</summary>
     [Fact]
     public void SetupWizardFromStudioPicksMockConnectsAndBuzzes() => AvaloniaTestDispatcher.Run(() =>
@@ -352,7 +352,9 @@ public sealed class HapticsHeadTests
                 Assert.Equal(ConditioningControlPanel.Services.Haptics.HapticProviderType.Mock, s.Provider);
                 Assert.True(wiz.ConnectPage.IsVisible && wiz.BtnConnect.IsVisible && !wiz.BtnDone.IsVisible);
 
-                click(wiz.BtnConnect);                                 // no premium, no free day: toys are free
+                // Toys are free (owner 2026-11-11, HapticsAccess.IsOpen): a free account connects too.
+                Assert.False(CoreEntitlement.HasPremium);
+                click(wiz.BtnConnect);
                 Assert.True(Wait(pump(() => wiz.BtnDone.IsVisible)), wiz.TxtConnectStatus.Text);
                 Assert.True(h.IsConnected);
                 Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("wizard_connect_ok"), wiz.TxtConnectStatus.Text);
@@ -377,7 +379,8 @@ public sealed class HapticsHeadTests
         });
     });
 
-    /// <summary>The page loads real settings, lets Enable on without premium (toys free since main f54203401b), and a connect
+    /// <summary>The page loads real settings, lets a free account Enable (toys are free since 2026-11-11,
+    /// HapticsAccess.IsOpen; WPF #1917 gated it before), and a connect
     /// with Intiface not running ends "Disconnected" with the button usable again.</summary>
     [Fact]
     public void TabLoadsSettingsGatesEnableAndFailsConnectGracefully()
@@ -398,7 +401,7 @@ public sealed class HapticsHeadTests
                     Assert.Equal("ws://127.0.0.1:1", tab.TxtHapticIntifaceUrl.Text);
                     Assert.False(tab.ChkHapticsEnabled.IsChecked);
 
-                    tab.ChkHapticsEnabled.IsChecked = true;                 // no premium: allowed, toys are free
+                    tab.ChkHapticsEnabled.IsChecked = true;                 // no premium: toys are free (HapticsAccess.IsOpen)
                     Dispatcher.UIThread.RunJobs();
                     Assert.True(tab.ChkHapticsEnabled.IsChecked);
                     Assert.True(h.Settings.Enabled);

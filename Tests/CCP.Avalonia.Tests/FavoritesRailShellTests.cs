@@ -55,10 +55,10 @@ public sealed class FavoritesRailShellTests
                 Assert.Empty(favs.Children);
                 Assert.True(dash.FindControl<TextBlock>("FavoritesEmpty")!.IsVisible);
 
-                w.ShowTab("haptics");          // a visit
+                w.ShowTab("awareness");          // a visit
                 w.ShowTab("settings");
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal(new[] { "tab.haptics" }, Tags(recent));
+                Assert.Equal(new[] { "tab.awareness" }, Tags(recent));
                 Assert.False(dash.FindControl<TextBlock>("RecentEmpty")!.IsVisible);
 
                 // A repeat show must not replace either stack's visuals or build any chips.
@@ -71,11 +71,11 @@ public sealed class FavoritesRailShellTests
                 Assert.Equal(builds, w.RailChipBuildCount);
                 Assert.Equal(chips, recent.Children.ToArray());
 
-                // Right-click the Studio strip's Haptics pill (WPF ea2d4cfca; the rail rows left):
+                // Right-click the Companion strip's Awareness pill (WPF ea2d4cfca; Haptics was the locked example until toys went free):
                 // the menu reads "Pin to favorites" and pins it.
-                w.ShowTab("haptics");
+                w.ShowTab("awareness");
                 Dispatcher.UIThread.RunJobs();
-                var row = w.PageStrip!.PillFor("haptics")!;
+                var row = w.PageStrip!.PillFor("awareness")!;
                 var menu = row.ContextMenu!;
                 row.RaiseEvent(new ContextRequestedEventArgs());   // what a right-click raises
                 Dispatcher.UIThread.RunJobs();
@@ -85,11 +85,11 @@ public sealed class FavoritesRailShellTests
                 menu.Close();
                 Dispatcher.UIThread.RunJobs();
 
-                Assert.Equal(new[] { "tab.haptics" }, Tags(favs));
+                Assert.Equal(new[] { "tab.awareness" }, Tags(favs));
                 Assert.Empty(recent.Children);   // a pinned destination leaves RECENT
                 var chip = (Button)favs.Children[0];
-                Assert.IsType<ImageBrush>(chip.Background);   // features/vibe.png, cover-cropped
-                Assert.False(HasPadlock(chip), "toys are free (main f54203401b): the Haptics chip wears no padlock");
+                Assert.IsType<ImageBrush>(chip.Background);   // features/awareness.png, cover-cropped
+                Assert.True(HasPadlock(chip), "a locked destination's chip wears no padlock");
 
                 // Visits change only RECENT; a pinned chip retains its visual and context menu.
                 int pinnedBuilds = w.RailChipBuildCount;
@@ -106,19 +106,20 @@ public sealed class FavoritesRailShellTests
                 Assert.Contains(recentChip, recent.Children);
                 Assert.Same(recentChip, recent.Children[0]);
 
-                // A locked destination (Awareness, Basic) wears one, and a tier change repaints through
-                // RefreshNavPremiumTags (App.axaml.cs RepaintVeils), exactly as WPF NavPremiumTags.cs:158 repaints the chips.
-                s.RailFavorites.Add("tab.awareness");
+                s.RailFavorites.Add("tab.haptics");
                 w.RefreshNavPremiumTags();
-                Assert.True(HasPadlock((Button)favs.Children[1]), "a locked destination's chip wears no padlock");
+                Assert.False(HasPadlock((Button)favs.Children[1]), "free Haptics must not wear a padlock");
+
+                // A tier change repaints through RefreshNavPremiumTags (App.axaml.cs RepaintVeils),
+                // exactly as WPF NavPremiumTags.cs:158 repaints the chips.
                 premium = true;
                 w.RefreshNavPremiumTags();
-                Assert.False(HasPadlock((Button)favs.Children[1]), "padlock kept after the door opened");
                 chip = (Button)favs.Children[0];
+                Assert.False(HasPadlock(chip), "padlock kept after the door opened");
 
                 chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal("haptics", w.CurrentTab);
+                Assert.Equal("awareness", w.CurrentTab);
             }
             finally
             {
