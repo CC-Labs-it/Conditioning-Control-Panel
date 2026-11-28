@@ -267,11 +267,18 @@ internal sealed partial class MandatoryVideoOverlay
         // WPF :613: focus first, so a window that does not take the sound is never heard when the reveal lifts its hold.
         _audioFocus.Join(f.Window, CoreSettings.Current.MandatoryVideoFloatingKeepSound);
         ApplyAudioFocus();
-        f.Surface.Reveal?.Present();
+        // Keep watching Lockdown, and keep the existing picture fade running during the grow.
+        // Controls need both the picture fade and WPF's reveal callback to finish.
+        WatchForLocks();
+        bool revealed = false, faded = false;
+        void ShowWhenReady() { if (revealed && faded) ShowInstanceControls(f); }
         var w = f.Window;
         f.Fade = new VideoReveal(_videoFadeSeconds, tick => w.RequestAnimationFrame(_ => tick()),
-            opacity => f.Surface.Picture.Opacity = opacity, () => ShowInstanceControls(f));
-        f.Fade.Start();
+            opacity => f.Surface.Picture.Opacity = opacity, () => { faded = true; ShowWhenReady(); });
+        if (f.Surface.Reveal is { } reveal)
+            reveal.Present(() => { revealed = true; ShowWhenReady(); });
+        else revealed = true;
+        if (!f.Closed) f.Fade.Start();
     }
 
     private void ShowInstanceControls(FloatingInstance f)

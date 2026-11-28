@@ -48,9 +48,11 @@ public class FloatingVideoRevealTests
             {
                 InputRegionWriter = (w, rects, sync) => { requests.Add((rects, !w.IsVisible, sync)); return true; }
             };
+            var completed = 0;
             try
             {
-                reveal.Present();
+                reveal.Present(() => { Assert.True(window.IsVisible); completed++; });
+                Assert.Equal(animates ? 0 : 1, completed);
                 Assert.Equal(animates, reveal.IsAnimating);
                 window.UpdateLayout();
                 Assert.Equal(400, window.Width, 3);
@@ -88,6 +90,9 @@ public class FloatingVideoRevealTests
                     Assert.Null(requests[^1].Rects);
                     Assert.Equal(pictureBounds, picture.Bounds);
                     Assert.False(reveal.IsAnimating);
+                    Assert.Equal(1, completed);
+                    reveal.RevealAt(260);
+                    Assert.Equal(1, completed);
                 }
                 else { Assert.Null(frame.Clip); Assert.Empty(requests); }
             }
@@ -139,10 +144,12 @@ public class FloatingVideoRevealTests
                     return rects == null || (failAfterStart && calls.Count == 1);
                 }
             };
+            var completed = 0;
             try
             {
-                reveal.Present();
-                if (failAfterStart) { Assert.True(reveal.IsAnimating); reveal.RevealAt(130); }
+                reveal.Present(() => { Assert.True(window.IsVisible); completed++; });
+                if (failAfterStart) { Assert.True(reveal.IsAnimating); Assert.Equal(0, completed); reveal.RevealAt(130); }
+                Assert.Equal(1, completed);
                 Assert.False(reveal.IsAnimating);
                 Assert.True(window.IsVisible);
                 Assert.Null(frame.Clip);

@@ -18,6 +18,7 @@ internal sealed class FloatingVideoReveal
     private bool _presented, _closed;
     private readonly bool _animate;
     private BeatLoop? _loop;
+    private Action? _revealed;
     internal bool IsAnimating => _loop != null;
     internal Func<Window, PixelRect[]?, bool, bool> InputRegionWriter { get; set; } =
         (window, rects, sync) => X11Overlay.SetWindowInputRegion(window, rects, sync);
@@ -35,7 +36,7 @@ internal sealed class FloatingVideoReveal
         _holdAudio?.Invoke(true);
     }
 
-    public void Present()
+    public void Present(Action? revealed = null)
     {
         if (_closed || _presented) return;
         _presented = true;
@@ -60,6 +61,9 @@ internal sealed class FloatingVideoReveal
         }
         _window.Show();
         if (!_closed) _holdAudio?.Invoke(false);
+        if (_closed) return;
+        if (_loop == null) revealed?.Invoke();
+        else _revealed = revealed;
     }
 
     // WPF FloatingSpawnLook: reveal the centre without resizing the window or its picture.
@@ -71,7 +75,7 @@ internal sealed class FloatingVideoReveal
         var width = _width * scale;
         var height = _height * scale;
         _clip.Rect = new Rect((_width - width) / 2, (_height - height) / 2, width, height);
-        if (t >= 1) { StopAnimation(); return; }
+        if (t >= 1) { FinishReveal(); return; }
         // X11 and Win32 input regions are physical pixels; the clip is in DIPs. Before Show,
         // use the chosen screen's scale and synchronize the region before the window is mapped.
         var scaling = _window.IsVisible ? _window.RenderScaling
@@ -80,12 +84,12 @@ internal sealed class FloatingVideoReveal
         _inputRegionChanged = true;
         try
         {
-            if (!InputRegionWriter(_window, new[] { rect }, !_window.IsVisible)) StopAnimation();
+            if (!InputRegionWriter(_window, new[] { rect }, !_window.IsVisible)) FinishReveal();
         }
         catch (Exception ex)
         {
             Serilog.Log.Debug(ex, "VideoService: floating input region failed");
-            StopAnimation();
+            FinishReveal();
         }
     }
 
@@ -97,6 +101,14 @@ internal sealed class FloatingVideoReveal
         var right = (int)Math.Floor(clip.Right * scaling);
         var bottom = (int)Math.Floor(clip.Bottom * scaling);
         return new PixelRect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
+    }
+
+    private void FinishReveal()
+    {
+        StopAnimation();
+        var callback = _revealed;
+        _revealed = null;
+        if (!_closed) callback?.Invoke();
     }
 
     private void StopAnimation()
@@ -119,6 +131,7 @@ internal sealed class FloatingVideoReveal
     public void Cancel()
     {
         _closed = true;
+        _revealed = null;
         StopAnimation();
         _holdAudio?.Invoke(true);
     }
@@ -126,6 +139,7 @@ internal sealed class FloatingVideoReveal
     public void Close()
     {
         _closed = true;
+        _revealed = null;
         StopAnimation();
         _holdAudio?.Invoke(true);
         _window.Close();
