@@ -1105,6 +1105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Raise(_boonBar);
             foreach (var toy in _toyButtons) Raise(toy);
             RaiseBubbles();
+            SharedOverlayHost.RaiseLive();
             ChaosGifCascadeOverlay.RaiseActive();
             ChaosFlashOverlay.RaiseActive(RaiseOverlayWindow);
             FlashOverlay.RaiseAll(RaiseOverlayWindow);
