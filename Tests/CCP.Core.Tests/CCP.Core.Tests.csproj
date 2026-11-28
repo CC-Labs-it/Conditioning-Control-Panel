@@ -41,6 +41,7 @@
     <!-- T&C's pure rules moved to Core (s20-tc-host): their WPF tests run on Linux too. -->
     <Compile Include="..\ConditioningControlPanel.Tests\TcHostRulesTests.cs" Link="TcHostRulesTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\TcHostWindowRulesTests.cs" Link="TcHostWindowRulesTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\TcFeelRulesTests.cs" Link="TcFeelRulesTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\WpfBootstrapWait.cs" Link="WpfBootstrapWait.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessEntitlementWiringTests.cs" Link="AwarenessEntitlementWiringTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\LockdownDoseRecoverySharingTests.cs" Link="LockdownDoseRecoverySharingTests.cs" />
