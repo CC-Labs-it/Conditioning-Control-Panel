@@ -625,4 +625,34 @@ public sealed class ChaosPopTextTests
             return Task.CompletedTask;
         });
     }
+
+    // WPF ChaosPopText.cs:104 + ChaosWindowZ.cs:30-35: an unpinned word is born non-topmost.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Prepare_passes_the_pin_on_top_band_to_the_platform(bool pinned)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var configure = ChaosPopText.Configure;
+            bool pin = CoreSettings.Current.ChaosPinOnTop;
+            var seen = new List<bool>();
+            try
+            {
+                CoreSettings.Current.ChaosPinOnTop = pinned;
+                var w = new ChaosPopText();
+                ChaosPopText.Configure = (_, _, topmost) => { seen.Add(topmost); return true; };
+                Assert.True(ChaosPopText.Prepare(w, new PixelRect(0, 0, 10, 10)));
+                Assert.Equal(new[] { pinned }, seen);
+                w.Close();
+            }
+            finally
+            {
+                ChaosPopText.Configure = configure;
+                CoreSettings.Current.ChaosPinOnTop = pin;
+            }
+            return Task.CompletedTask;
+        });
+    }
 }
