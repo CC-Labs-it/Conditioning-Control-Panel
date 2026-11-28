@@ -438,7 +438,7 @@ public sealed class BrainDrainIntegrationTests
     {
         var notices = ((StackPanel)owner.Tag!).Children;
         BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
-        BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(() => null, TimeSpan.FromMilliseconds(20));
+        BrainDrainOverlay.CreatePump = (_, _) => new BrainDrainCapturePump(() => null, TimeSpan.FromMilliseconds(20));
         BrainDrainOverlay.Start(owner);
         for (int i = 0; i < 250 && notices.Count == 0; i++) await Task.Delay(20);
         Assert.Single(notices);
@@ -465,7 +465,7 @@ public sealed class BrainDrainIntegrationTests
     {
         var notices = ((StackPanel)owner.Tag!).Children;
         BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
-        BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(
+        BrainDrainOverlay.CreatePump = (_, _) => new BrainDrainCapturePump(
             () => new BrainDrainCapturePump.Frame(2, 2, new byte[16]), TimeSpan.FromMilliseconds(20));
         BrainDrainOverlay.Start(owner);
         await Task.Delay(3500);
