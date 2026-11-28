@@ -114,7 +114,9 @@ namespace ConditioningControlPanel.Services
 
         private readonly HttpClient _httpClient;
 
-        public BugReportService() : this(new HttpClient()) { }
+        // ServerClockHandler learns the proxy's clock from every answer, so a retry after a
+        // stale_timestamp 401 signs with the corrected time (ccp-bugs#1654).
+        public BugReportService() : this(new HttpClient(new ServerClockHandler())) { }
 
         /// <summary>
         /// Test seam that keeps the production client owned by this service while allowing an
@@ -122,7 +124,7 @@ namespace ConditioningControlPanel.Services
         /// signing path remain the same as the parameterless constructor.
         /// </summary>
         public BugReportService(HttpMessageHandler handler)
-            : this(new HttpClient(handler ?? throw new ArgumentNullException(nameof(handler)))) { }
+            : this(new HttpClient(new ServerClockHandler(handler ?? throw new ArgumentNullException(nameof(handler))))) { }
 
         private BugReportService(HttpClient httpClient)
         {
@@ -315,18 +317,16 @@ namespace ConditioningControlPanel.Services
                 var payload = BuildPayload(draft);
                 var body = JsonConvert.SerializeObject(payload);
 
-                var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
-                var signature = ComputeSignature(timestamp, body);
-
-                using var req = new HttpRequestMessage(HttpMethod.Post, ProxyBaseUrl + BugUploadPath)
+                var (res, responseText) = await SendSignedAsync(body).ConfigureAwait(false);
+                if (IsStaleTimestamp(res, responseText))
                 {
-                    Content = new StringContent(body, Encoding.UTF8, "application/json"),
-                };
-                req.Headers.Add("X-Bug-Timestamp", timestamp);
-                req.Headers.Add("X-Bug-Signature", signature);
-
-                using var res = await _httpClient.SendAsync(req).ConfigureAwait(false);
-                var responseText = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    // The 401 carried the proxy's Date, so ServerClock is corrected now: sign again once.
+                    Log.Warning("[BugReport] stale_timestamp, retrying with server clock offset {Seconds:F0}s",
+                        ServerClock.Offset.TotalSeconds);
+                    res.Dispose();
+                    (res, responseText) = await SendSignedAsync(body).ConfigureAwait(false);
+                }
+                using var resOwner = res;
 
                 // 202 = accepted but bot unreachable (payload saved pending retry).
                 if ((int)res.StatusCode == 202)
@@ -349,7 +349,9 @@ namespace ConditioningControlPanel.Services
                     return new SubmitResult
                     {
                         Outcome = SubmitOutcome.ValidationFailed,
-                        ErrorMessage = $"HTTP {(int)res.StatusCode}",
+                        ErrorMessage = IsStaleTimestamp(res, responseText)
+                            ? Loc.Get("bug_report_clock_off")
+                            : $"HTTP {(int)res.StatusCode}",
                     };
                 }
 
@@ -507,6 +509,22 @@ namespace ConditioningControlPanel.Services
             var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes($"{timestamp}.{body}"));
             return Convert.ToHexString(hash).ToLowerInvariant();
         }
+
+        private async Task<(HttpResponseMessage, string)> SendSignedAsync(string body)
+        {
+            var timestamp = ServerClock.UtcNow.ToUnixTimeSeconds().ToString();
+            using var req = new HttpRequestMessage(HttpMethod.Post, ProxyBaseUrl + BugUploadPath)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            };
+            req.Headers.Add("X-Bug-Timestamp", timestamp);
+            req.Headers.Add("X-Bug-Signature", ComputeSignature(timestamp, body));
+            var res = await _httpClient.SendAsync(req).ConfigureAwait(false);
+            return (res, await res.Content.ReadAsStringAsync().ConfigureAwait(false));
+        }
+
+        private static bool IsStaleTimestamp(HttpResponseMessage res, string responseText) =>
+            (int)res.StatusCode == 401 && responseText.Contains("stale_timestamp", StringComparison.OrdinalIgnoreCase);
 
         private static string? TryExtractToken(string responseText)
         {

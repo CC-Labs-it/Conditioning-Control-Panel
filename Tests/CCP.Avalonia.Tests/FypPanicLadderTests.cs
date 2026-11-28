@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using Avalonia.Skia;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -166,6 +168,93 @@ public sealed class FypPanicLadderTests
     });
 
     private sealed class Disposer(Action dispose) : IDisposable { public void Dispose() => dispose(); }
+
+    /// <summary>WPF FypHostService.cs:779 (5 s tick on the mirror path), :797-803 (colour key lost = drop ghost,
+    /// ghost-unavailable colorkey-lost), :828 (re-assert topmost), :695/:748 (veto SC_MINIMIZE and the cascade
+    /// hide, heal a minimized parked source). Panic stops the tick.</summary>
+    [Fact]
+    public void WindowsGhostTickWatchesColourKeyAndSurvivesShowDesktop() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror, GameWindow.FypGhostNow,
+            GameWindow.FypGhostStartTick, GameWindow.FypGhostMirrorTick, GameWindow.FypGhostMirrorRefresh, GameWindow.FypGhostRaise);
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        (service.Current.PanicKeyEnabled, service.Current.PanicKey, service.Current.PanicOverridesAll) = (true, "F8", false);
+        Action? tick = null;
+        int ticksStopped = 0, refreshes = 0, raises = 0;
+        bool keyOk = true;
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        GameWindow.FypGhostNow = () => now;
+        GameWindow.FypGhostSupport = () => GameWindow.FypGhostRefusal(true, false, false);
+        GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive;
+        GameWindow.FypGhostMirror = (_, _, _) => (new Disposer(() => { }), null);
+        GameWindow.FypGhostStartTick = a => { tick = a; return new Disposer(() => { ticksStopped++; tick = null; }); };
+        GameWindow.FypGhostMirrorTick = _ => keyOk;
+        GameWindow.FypGhostMirrorRefresh = _ => refreshes++;
+        GameWindow.FypGhostRaise = _ => { raises++; return true; };
+        var shell = new MainShellWindow();
+        var feed = new GameWindow(GameWindow.Games[GameWindow.FypId]);
+        var sent = new List<JObject>();
+        feed.Posted += json => sent.Add(JObject.Parse(json));
+        void Ghost() => feed.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"clickThrough\",\"value\":true}");
+        try
+        {
+            feed.Show();
+            Ghost();
+            Assert.True(feed.IsFypGhosted);
+            Assert.NotNull(tick);   // the mirror path runs the 5 s tick
+            var park = feed.Position;
+            tick!();
+            Assert.True(feed.IsFypGhosted);
+            Assert.Equal(2, raises);   // gear and speaker back on top
+
+            bool handled = false;
+            feed.FypGhostWndProc(IntPtr.Zero, 0x0112, new IntPtr(0xF020), IntPtr.Zero, ref handled);
+            Assert.True(handled);   // SC_MINIMIZE vetoed
+            handled = false;
+            feed.FypGhostWndProc(IntPtr.Zero, 0x0018, IntPtr.Zero, new IntPtr(1), ref handled);
+            Assert.True(handled);   // cascade hide vetoed
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, refreshes);
+
+            feed.WindowState = WindowState.Minimized;   // a minimize that got through anyway
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(feed.IsFypGhosted);
+            Assert.Equal(WindowState.Normal, feed.WindowState);
+            Assert.Equal(park, feed.Position);
+            Assert.Equal(2, refreshes);
+
+            keyOk = false;   // the mirror lost its colour key: no black sheet
+            tick!();
+            Assert.False(feed.IsFypGhosted);
+            Assert.Equal(1, ticksStopped);
+            Assert.Equal("colorkey-lost", (string?)sent.Last()["reason"]);
+
+            keyOk = true;
+            Ghost();
+            Assert.NotNull(tick);
+            shell.HandlePanicKeyPress(now.ToLocalTime());   // panic rung 1 stops the tick
+            Assert.False(feed.IsFypGhosted);
+            Assert.Equal(2, ticksStopped);
+            handled = false;
+            feed.FypGhostWndProc(IntPtr.Zero, 0x0112, new IntPtr(0xF020), IntPtr.Zero, ref handled);
+            Assert.False(handled);   // never swallows when not ghosted
+        }
+        finally
+        {
+            feed.Close();
+            shell.Close();
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror, GameWindow.FypGhostNow,
+                GameWindow.FypGhostStartTick, GameWindow.FypGhostMirrorTick, GameWindow.FypGhostMirrorRefresh, GameWindow.FypGhostRaise) = old;
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
 
     /// <summary>WPF EnterGhost/ExitGhost (FypHostService.cs:458, :630), the ghost buttons (:604, :618) and the
     /// two-rung panic ladder (MainWindow.xaml.cs:1776-1795): every rung leaves no button, no click-through and
