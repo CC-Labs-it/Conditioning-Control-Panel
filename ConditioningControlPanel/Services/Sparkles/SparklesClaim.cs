@@ -5,8 +5,18 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.Sparkles;
 
 /// <summary>How a game ended, in the one shape the claim wire takes (B1 wire contract, section 5).</summary>
-public sealed record SparklesResult(string Kind, int Place = 0, int Of = 0, string? Outcome = null, string? Medal = null)
+public sealed record SparklesResult(string Kind, int Place = 0, int Of = 0, string? Outcome = null, string? Medal = null,
+    string? Id = null)
 {
+    // \z, not $: a .NET $ also matches before a trailing newline.
+    private static readonly Regex StickerIdShape = new(@"^[a-z0-9_-]{1,40}\z", RegexOptions.CultureInvariant);
+
+    /// <summary>A sticker id as the wire takes it (lower-case letters, digits, '_' and '-', at most 40).</summary>
+    public static bool IsStickerId(string? id) => id != null && StickerIdShape.IsMatch(id);
+
+    /// <summary>A Sticker Book sticker unlocked for the first time (T&amp;C <c>achievement {id}</c>; mode <c>sticker</c>).</summary>
+    public static SparklesResult ForSticker(string id) => new("sticker", Id: id);
+
     /// <summary>A finishing place, 1-based, out of <paramref name="of"/> racers or players.</summary>
     public static SparklesResult ForPlace(int place, int of) => new("place", Place: place, Of: of);
 
@@ -21,6 +31,7 @@ public sealed record SparklesResult(string Kind, int Place = 0, int Of = 0, stri
         "place" => new JObject { ["kind"] = "place", ["place"] = Place, ["of"] = Of },
         "duel" => new JObject { ["kind"] = "duel", ["outcome"] = Outcome },
         "medal" => new JObject { ["kind"] = "medal", ["medal"] = Medal },
+        "sticker" => new JObject { ["kind"] = "sticker", ["id"] = Id },
         _ => new JObject { ["kind"] = Kind },
     };
 }
@@ -43,9 +54,9 @@ public sealed record SparklesClaim(
     private static readonly Regex ClaimIdShape = new("^[A-Za-z0-9_-]{16,64}$", RegexOptions.CultureInvariant);
 
     public static bool IsGame(string? g) =>
-        g is "rt3d" or "chess" or "goon" or "arcademy" or "breakout" or "dtrh" or "caucus" or "intake";
+        g is "rt3d" or "chess" or "goon" or "arcademy" or "breakout" or "dtrh" or "caucus" or "intake" or "tc";
 
-    public static bool IsMode(string? m) => m is "solo" or "trial" or "ghost" or "online" or "practice";
+    public static bool IsMode(string? m) => m is "solo" or "trial" or "ghost" or "online" or "practice" or "sticker";
 
     public static bool IsClaimId(string? id) => id != null && ClaimIdShape.IsMatch(id);
 
@@ -59,8 +70,13 @@ public sealed record SparklesClaim(
             ServerClock.UtcNow.ToUnixTimeMilliseconds());
 
     /// <summary>Shaped well enough to send. The server checks everything again.</summary>
+    /// <remarks>A sticker is only ever T&amp;C's: mode <c>sticker</c> and result kind <c>sticker</c> go together, with a
+    /// well-shaped id (SPARKLES-WIRE.md, 2026-11-25); every other game keeps its place / duel / medal.</remarks>
     public bool IsWellFormed =>
-        IsClaimId(ClaimId) && IsGame(Game) && IsMode(Mode) && Result.Kind is "place" or "duel" or "medal";
+        IsClaimId(ClaimId) && IsGame(Game) && IsMode(Mode) && Result != null
+        && (Mode == "sticker"
+            ? Game == "tc" && Result.Kind == "sticker" && SparklesResult.IsStickerId(Result.Id)
+            : Result.Kind is "place" or "duel" or "medal");
 
     /// <summary>The request body, camelCase names exactly as the wire contract spells them.</summary>
     public JObject ToJson(string unifiedId)

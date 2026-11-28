@@ -96,7 +96,9 @@ public static class UiHangWatchdog
         {
             IsBackground = true,
             Name = "UiHangWatchdog",
-            Priority = ThreadPriority.BelowNormal
+            // AboveNormal (7.4.2 freeze hunt): it sleeps almost all the time, and at BelowNormal it was
+            // starved through the process-wide stalls it exists to report (hunt.md section 0).
+            Priority = ThreadPriority.AboveNormal
         };
         _thread.Start();
     }
@@ -121,6 +123,8 @@ public static class UiHangWatchdog
     private static void Loop(Dispatcher dispatcher)
     {
         CleanupOldDumps();
+        // GC work is measured from the last beat that landed in time (7.4.2 freeze hunt).
+        var lastGoodGc = Diagnostics.GcMark.Now();
 
         while (true)
         {
@@ -143,6 +147,7 @@ public static class UiHangWatchdog
                 bool started = Volatile.Read(ref _firstBeatSeen) == 1;
                 long threshold = ThresholdFor(started);
                 long silence = Environment.TickCount64 - Volatile.Read(ref _lastBeatTick);
+                if (silence < 2 * HEARTBEAT_MS) lastGoodGc = Diagnostics.GcMark.Now();
                 if (IsHung(silence, started))
                 {
                     // Re-check once after a short grace period: a sleep/resume gap or a debugger
@@ -163,16 +168,20 @@ public static class UiHangWatchdog
                         // ...and HangContext names WHICH FEATURE was live when it happened, which the
                         // stack alone does not (the program-freeze wave all reported mark="(idle)").
                         string state = HangContext.DescribeCompact();
-                        App.Logger?.Error("[WATCHDOG] UI thread unresponsive for {Sec:F0}s{Phase} — likely render-thread deadlock; last UI mark: {Mark}; {State}",
-                            silence / 1000.0, started ? "" : " (never pumped — wedged during startup)", mark, state);
-                        // Mirror into the video trace. These lines only ever went to the ROLLING
+                        // The stuck op, GC work since the last good beat, private MB and machine commit
+                        // (7.4.2 freeze hunt: the stall was process-wide, not one blocked call).
+                        string facts = Diagnostics.StallFacts.Now(lastGoodGc);
+                        // Mirror into the video trace FIRST. These lines only ever went to the ROLLING
                         // Serilog file, which a post-freeze relaunch scrolls straight out of the
                         // 100-line tail a bug report attaches — the exact evidence loss VideoDiag
-                        // exists to prevent (#750-#753). Log() is a no-op until VideoDiag.Start ran.
+                        // exists to prevent (#750-#753); and the enqueue cannot block, while a starved
+                        // file sink can swallow the line (7.4.2). Log() is a no-op until VideoDiag.Start ran.
                         VideoDiag.Log("WATCHDOG", string.Format(
                             System.Globalization.CultureInfo.InvariantCulture,
-                            "UI thread unresponsive for {0:F0}s{1} - last UI mark: {2}; {3}",
-                            silence / 1000.0, started ? "" : " (never pumped - wedged during startup)", mark, state));
+                            "UI thread unresponsive for {0:F0}s{1} - last UI mark: {2}; {3}{4}",
+                            silence / 1000.0, started ? "" : " (never pumped - wedged during startup)", mark, state, facts));
+                        App.Logger?.Error("[WATCHDOG] UI thread unresponsive for {Sec:F0}s{Phase} — likely render-thread deadlock; last UI mark: {Mark}; {State}{Facts}",
+                            silence / 1000.0, started ? "" : " (never pumped — wedged during startup)", mark, state, facts);
 
                         // Durable, human-readable report + the cross-session sentinel. Written
                         // BEFORE the minidump because the dump can take up to 60s (or never finish)

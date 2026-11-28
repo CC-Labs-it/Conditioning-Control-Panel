@@ -1351,11 +1351,20 @@ namespace ConditioningControlPanel.Services
             {
                 if (_disposed) return;
 
-                if (!_isDucked)
+                // ccp-bugs #1762: a floating video run outlives the 5 minute net. While a playing
+                // video still holds its duck ref the timer (periodic) simply waits another period;
+                // a duck whose owner is gone still gets the force restore below.
+                var step = Audio.DuckWatchdogRule.Decide(_isDucked, DuckOwnerAlive());
+                if (step == Audio.DuckWatchdogStep.Retire)
                 {
                     // Nothing pinned — retire until the next Duck() arms a fresh net.
                     _duckWatchdog?.Dispose();
                     _duckWatchdog = null;
+                    return;
+                }
+                if (step == Audio.DuckWatchdogStep.Rearm)
+                {
+                    App.Logger?.Debug("[Ducking] Watchdog period passed with a video still playing - duck kept");
                     return;
                 }
 
@@ -1372,6 +1381,14 @@ namespace ConditioningControlPanel.Services
 
             try { App.LayeredAudio?.ReleaseDuck(); } catch (Exception ex) { Diag.Swallowed(ex); }
             if (restore) EnqueueDuckWork("watchdog-restore", RestoreDuckedVolumes, trace: true);
+        }
+
+        /// <summary>True while a playing video still holds its duck ref (VideoService.HoldsAudioDuck).
+        /// Two volatile reads, no lock taken, so it is safe under _lockObj on the timer thread.</summary>
+        private static bool DuckOwnerAlive()
+        {
+            try { return App.Video?.HoldsAudioDuck == true; }
+            catch (Exception ex) { Diag.Swallowed(ex); return false; }
         }
 
         /// <summary>

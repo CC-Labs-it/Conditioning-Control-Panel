@@ -154,7 +154,7 @@ public class SessionClockRulesTests
     public void A_throwing_teardown_step_cannot_skip_SessionStopped()
     {
         var stop = Body(Source("Services", "Session", "SessionEngine.cs"), "public void StopSession(");
-        int fired = stop.IndexOf("SessionStopped?.Invoke", StringComparison.Ordinal);
+        int fired = stop.IndexOf("trace.Each(SessionStopped,", StringComparison.Ordinal);   // raised handler by handler, timed (StopTrace)
         Assert.True(fired > 0);
         var before = stop.Substring(0, fired);
         Assert.Contains("Step(\"corner-gif\", CloseCornerGif);", before);

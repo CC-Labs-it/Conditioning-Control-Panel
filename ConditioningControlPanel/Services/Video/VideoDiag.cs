@@ -128,11 +128,13 @@ namespace ConditioningControlPanel.Services
             };
             writer.Start();
 
+            // AboveNormal (7.4.2 freeze hunt): it sleeps almost all the time, so it costs nothing, and at
+            // BelowNormal it was starved through the very stalls it exists to report (hunt.md section 0).
             var beat = new Thread(() => HeartbeatLoop(dispatcher))
             {
                 IsBackground = true,
                 Name = "VideoDiagHeartbeat",
-                Priority = ThreadPriority.BelowNormal,
+                Priority = ThreadPriority.AboveNormal,
             };
             beat.Start();
 
@@ -354,12 +356,21 @@ namespace ConditioningControlPanel.Services
             Interlocked.Exchange(ref _lastUiBeatTicks, DateTime.UtcNow.Ticks);
             Interlocked.Exchange(ref _lastUiInputBeatTicks, DateTime.UtcNow.Ticks);
 
+            // GC work is measured from the last good beat, so a stall line says how much of it was GC.
+            var lastGoodGc = Diagnostics.GcMark.Now();
+            var sleepClock = new System.Diagnostics.Stopwatch();
+
             while (true)
             {
                 try
                 {
+                    sleepClock.Restart();
                     Thread.Sleep(1000);
                     if (dispatcher.HasShutdownStarted) return;
+                    // An oversleep means this thread did not run either: the whole process stalled.
+                    long slept = sleepClock.ElapsedMilliseconds;
+                    if (Diagnostics.StallFacts.IsLate(slept))
+                        Log("UI", Diagnostics.StallFacts.LateLine(slept, 1000) + Diagnostics.StallFacts.Now(lastGoodGc));
 
                     dispatcher.BeginInvoke(DispatcherPriority.Normal, normalBeat);
                     dispatcher.BeginInvoke(DispatcherPriority.Input, inputBeat);
@@ -379,7 +390,7 @@ namespace ConditioningControlPanel.Services
                             if (inputStall >= t && inputLastReported < t)
                             {
                                 inputLastReported = t;
-                                Log("UI", $"dispatcher STARVED at INPUT priority for {inputStall}ms while Normal still runs (ui+{stall}ms) - something above Input is re-posting itself; the window will repaint but ignore clicks - last UI mark: {UiMarkDescription}");
+                                Log("UI", $"dispatcher STARVED at INPUT priority for {inputStall}ms while Normal still runs (ui+{stall}ms) - something above Input is re-posting itself; the window will repaint but ignore clicks - last UI mark: {UiMarkDescription}{Diagnostics.StallFacts.Now(lastGoodGc)}");
                                 break;
                             }
                         }
@@ -392,6 +403,7 @@ namespace ConditioningControlPanel.Services
 
                     if (stall < 2000)
                     {
+                        lastGoodGc = Diagnostics.GcMark.Now();
                         if (lastReported > 0)
                         {
                             Log("UI", $"dispatcher RECOVERED after {lastReported}ms+ of silence");
@@ -424,7 +436,7 @@ namespace ConditioningControlPanel.Services
                             // MEASURABLY LONGER than Normal says the thread was being outranked
                             // before it went quiet (a priority-inversion freeze), while the two
                             // ages moving together says it is simply blocked inside a call.
-                            Log("UI", $"dispatcher UNRESPONSIVE for {stall}ms (input+{inputStall}ms, no posted callback has run) - last UI mark: {UiMarkDescription}");
+                            Log("UI", $"dispatcher UNRESPONSIVE for {stall}ms (input+{inputStall}ms, no posted callback has run) - last UI mark: {UiMarkDescription}{Diagnostics.StallFacts.Now(lastGoodGc)}");
                             break;
                         }
                     }

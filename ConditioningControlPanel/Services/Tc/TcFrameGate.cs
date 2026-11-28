@@ -17,6 +17,8 @@ internal sealed record TcPageFrame(string Type)
     public string? Reason { get; init; }
     public string? Ending { get; init; }
     public string? Tag { get; init; }
+    /// <summary><c>achievement</c>: the sticker id (a fixed id, checked).</summary>
+    public string? Id { get; init; }
     public IReadOnlyList<string>? Niches { get; init; }
     public double Level { get; init; }
     /// <summary><c>haptic</c>: pulse length in milliseconds.</summary>
@@ -83,8 +85,9 @@ internal static class TcFrameGate
         "own-media-list",
     };
 
-    /// <summary>A fixed id: lower-case letters, digits, '_' and '-', at most 40.</summary>
-    private static readonly Regex Id = new("^[a-z0-9_-]{1,40}$", RegexOptions.CultureInvariant);
+    /// <summary>A fixed id: lower-case letters, digits, '_' and '-', at most 40. <c>\z</c>, not <c>$</c>: a .NET
+    /// <c>$</c> also matches before a trailing newline.</summary>
+    private static readonly Regex Id = new(@"^[a-z0-9_-]{1,40}\z", RegexOptions.CultureInvariant);
 
     public const double MaxHapticLevel = 1.0;
     public const int MaxHapticMs = 3000;
@@ -181,6 +184,13 @@ internal static class TcFrameGate
                 if (ending == null || !Id.IsMatch(ending)) return TcGateResult.No(RefuseField);
                 if (!TryNumber(o["minutes"], out var minutes)) return TcGateResult.No(RefuseField);
                 return TcGateResult.Ok(new TcPageFrame(type) { Ending = ending, Minutes = (int)Math.Clamp(minutes, 0, 24 * 60) });
+            }
+            case "achievement":
+            {
+                // CONTRACT.md section 1: a sticker went in the book for the first time. Only the id is read.
+                var id = Str(o, "id");
+                if (id == null || !Id.IsMatch(id)) return TcGateResult.No(RefuseField);
+                return TcGateResult.Ok(new TcPageFrame(type) { Id = id });
             }
             default:
                 return TcGateResult.No(RefuseType);

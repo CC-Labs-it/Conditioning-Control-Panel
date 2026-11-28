@@ -69,11 +69,37 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// The one-line dynamic-tail constraint, or null when there is nothing to exclude (so the
         /// caller emits no empty line and the tail stays as small as possible).
         /// </summary>
-        public string? BuildExclusionLine()
+        /// <param name="listedTitles">The video titles the prompt lists (the user's pool). When
+        /// every one of them is banned, the one suggested longest ago is allowed again and the line
+        /// says so. Without that, a small pool (one video left) ended with nothing the model was
+        /// allowed to name, and it reached for an off-pool built-in title instead (ccp-bugs #1757).</param>
+        public string? BuildExclusionLine(IReadOnlyCollection<string>? listedTitles = null)
         {
-            var titles = Current();
+            var titles = Current().ToList();
             if (titles.Count == 0) return null;
-            return "Already suggested recently (pick something else): " + string.Join(", ", titles);
+
+            string? freed = null;
+            if (listedTitles != null && listedTitles.Count > 0)
+            {
+                var listed = new HashSet<string>(
+                    listedTitles.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()),
+                    StringComparer.OrdinalIgnoreCase);
+                if (listed.Count > 0 && listed.All(t => titles.Contains(t, StringComparer.OrdinalIgnoreCase)))
+                {
+                    // Newest first, so the last listed title in the ban is the oldest pick.
+                    freed = titles.Last(t => listed.Contains(t));
+                    titles.RemoveAll(t => string.Equals(t, freed, StringComparison.OrdinalIgnoreCase));
+                }
+            }
+
+            var line = titles.Count > 0
+                ? "Already suggested recently (pick something else): " + string.Join(", ", titles)
+                : null;
+            if (freed == null) return line;
+
+            var again = $"Every video in your list was suggested recently, so \"{freed}\" may be suggested again; " +
+                        "never name a video that is not in your list.";
+            return line == null ? again : line + ". " + again;
         }
 
         /// <summary>Drops everything. Part of "forget everything".</summary>

@@ -633,6 +633,9 @@ namespace ConditioningControlPanel
                 // Nav rework (2026-10-06): the one-time "What moved" card, upgrades only.
                 OfferWhatMovedIfNeeded(freshInstall: false);
 
+                // The assets nudge (2026-11-25), upgrades only when the library is still empty.
+                OfferAssetsNudgeIfNeeded(freshInstall: false);
+
                 // Not first launch - check if we need to show "What's New" after an update.
                 // Both of these now END in an EnqueueStartupModal (priorities 30 and 40); their
                 // own predicates still decide synchronously, right here, whether there is anything
@@ -2092,7 +2095,9 @@ namespace ConditioningControlPanel
         /// </summary>
         private void PanicStopEverySurface()
         {
-            static void Step(string name, Action action)
+            // Freeze hunt (#1747 #1748 #1760 #1721): one line with each step's ms when the pass is slow.
+            var trace = Services.Diagnostics.StopTrace.Begin("panic stop-all");
+            void Step(string name, Action action)
             {
                 try { action(); }
                 catch (Exception ex)
@@ -2100,6 +2105,7 @@ namespace ConditioningControlPanel
                     try { App.Logger?.Warning("PANIC stop-all: {Step} failed: {Error}", name, ex.Message); } catch { }
                     VideoDiag.Log("PANIC", $"stop-all step '{name}' failed: {ex.Message}");
                 }
+                trace.Mark(name);
             }
 
             // --- media ---
@@ -2181,6 +2187,7 @@ namespace ConditioningControlPanel
 
             Step("interaction queue", () => App.InteractionQueue?.ForceReset());
 
+            trace.Finish();
             VideoDiag.Log("PANIC", "stop-all pass complete");
         }
 

@@ -238,10 +238,11 @@ namespace ConditioningControlPanel
 
         /// <summary>
         /// True only when the media pool really is the local folder. With Reddit media on
-        /// ("online" or "mixed") an empty folder is not a problem to report.
+        /// ("online" or "mixed") an empty folder is not a problem to report. "Mixed" without
+        /// consent (a fresh install before the yes) draws local only, so it still counts here.
         /// </summary>
         private static bool IsLocalOnlyMediaSource(AppSettings? s) =>
-            s != null && string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase);
+            s != null && !s.UsesRemoteMedia;
 
         /// <summary>The toast's one-tap way out: straight to the pack catalogue on Discord.</summary>
         private static void OpenPackCatalogue()
@@ -500,50 +501,67 @@ namespace ConditioningControlPanel
 
         private void StopEngineCore()
         {
+            // Freeze hunt (#1747 #1748 #1760 #1721): one line with each step's ms when the stop is slow.
+            var trace = Services.Diagnostics.StopTrace.Begin("engine stop");
+
             // Stop flash first (safe, no complex cleanup)
             App.Flash.Stop();
+            trace.Mark("flash");
 
             // Collage wallpaper: stop composing and put the user's real wallpaper back, unless
             // "Run with CCP" keeps it up while CCP is open. Panic never gets here first (KillAllAudio).
             // engineRunning: false = "after this stop"; App.IsEngineRunning is still true here.
             if (!Services.WallpaperService.ShouldBeUp(App.Settings?.Current, engineRunning: false))
                 App.Wallpaper?.StopCollage();
+            trace.Mark("wallpaper");
 
             // Stop stops everything (owner, 7.1.8): the audio player with a playlist goes quiet
             // with the engine. The list stays. StartEngine never touches the player.
             App.StopAudioPlaylist();
+            trace.Mark("audio playlist");
 
             // Tear down any Deeper enhancement engine bound to the playing video.
             // App.Video.Stop() below closes windows via CloseAll, which does NOT
             // raise VideoEnded, so the bridge's normal unbind never fires and its
             // text overlays ("Don't blink") would keep flashing after panic. (#364)
             App.VideoEnhanceBridge?.ForceUnbind();
+            trace.Mark("enhance bridge");
 
             // Stop bubbles BEFORE video to avoid UI thread contention
             // Bubbles use high-priority animation timers that can interfere with video cleanup
             App.Bubbles.Stop();
+            trace.Mark("bubbles");
             App.BouncingText.Stop();
+            trace.Mark("bouncing text");
 
             // Now stop video (complex LibVLC cleanup)
             App.Video.Stop();
+            trace.Mark("video");
 
             // Stop other services
             App.Subliminal.Stop();
+            trace.Mark("subliminals");
             // Before the overlay service goes down: hand back anything a TAKEOVER pulse borrowed
             // (#1180). Takeover itself may legitimately outlive the engine (see the block below), but
             // an in-flight pink/spiral pulse must not - it had boosted the user's opacity and taken
             // ownership of the overlay service, and its own restore is 30 s away.
             App.Autonomy?.CancelActivePulses();
+            trace.Mark("autonomy pulses");
             App.Overlay.Stop();
+            trace.Mark("overlays");
             App.LockCard.Stop();   // scheduler only — the visible card is dropped by ForceCloseAll below
             App.BubbleCount.Stop();
+            trace.Mark("lock card + bubble count");
             App.MindWipe.Stop();
+            trace.Mark("mind wipe");
             App.BrainDrain.Stop();
+            trace.Mark("brain drain");
             App.PopQuiz?.Stop();
             // #668: an audio-only session force-started the layered bed. Stop it on session end,
             // unless the user also has the standalone Audio Layers master on (then it keeps playing).
             if (App.Settings?.Current?.AudioLayersEnabled != true)
                 App.LayeredAudio?.Stop();
+            trace.Mark("pop quiz + audio layers");
             // Only stop autonomy if it was started by the session engine (i.e., user didn't enable it independently).
             // If the user has autonomy enabled in settings, let it keep running after session ends.
             var s = App.Settings?.Current;
@@ -554,7 +572,9 @@ namespace ConditioningControlPanel
                 App.Autonomy?.Stop();
             }
             App.SkillTree?.Stop();
+            trace.Mark("autonomy + skill tree");
             App.Audio.ForceUnduck();
+            trace.Mark("unduck");
 
             // The engine is stopping: nothing queued should fire afterwards, and the current
             // interaction slot must not stay claimed by a video we just tore down — Video.Stop's
@@ -562,6 +582,7 @@ namespace ConditioningControlPanel
             // slot for 5 minutes (#462). Reset BEFORE the ForceCloseAll calls below so a genuine
             // lock-card Complete can't dequeue a stale interaction either.
             App.InteractionQueue?.ForceReset();
+            trace.Mark("interaction queue");
 
             // Force close any open lock card / quiz windows (panic button should close them immediately)
             LockCardWindow.ForceCloseAll();
@@ -574,6 +595,7 @@ namespace ConditioningControlPanel
             // the bloom starts — so panicking out of it costs a keepsake at worst and never a
             // choice, a level or an XP total.
             DescentFuseWindow.ForceCloseAll();
+            trace.Mark("card windows");
             // #952: the built-in browser's forced fullscreen belongs on this list too. It is a
             // topmost, chrome-less, taskbar-less window, so a session that ends behind one leaves
             // the completion dialog modal and invisible - the reporter had to reboot the machine.
@@ -583,9 +605,11 @@ namespace ConditioningControlPanel
             // window with no title bar to drag, no resize grip, and nothing in it
             // once the video is over (Discord report BUG-J9PPPJT274).
             Views.Deeper.EnhancementPlayerWindow.ForceExitFullscreenAll();
+            trace.Mark("fullscreen hosts");
 
             // Stop ramp timer and reset sliders
             StopRampTimer();
+            trace.Mark("ramp");
 
             // Stop conditioning time tracker
             StopConditioningTimeTracker();
@@ -593,9 +617,11 @@ namespace ConditioningControlPanel
             _isRunning = false;
             App.IsEngineRunning = false;
             UpdateStartButton();
+            trace.Mark("time tracker + start button");
 
             // ccp-bugs #1399: ...and stop with it. StopAll also cancels queued realizations.
             try { App.CornerGif?.StopAll(); } catch (Exception ex) { App.Logger?.Debug("Corner GIF stop: {E}", ex.Message); }
+            trace.Mark("corner GIFs");
 
             // EMI Desk (MOMENTS 4.B): how long the run lasted. Zero when nothing was running, and
             // the stamp is cleared so a second stop cannot invent a duration.
@@ -613,17 +639,29 @@ namespace ConditioningControlPanel
             // Clean stop — disarm the dirty-shutdown sentinel.
             Services.EngineCrashSentinel.Clear();
 
-            // Fire event for avatar reaction
-            EngineStopped?.Invoke(this, EventArgs.Empty);
+            // Fire event for avatar reaction. Each handler is timed by name (webcam, haptics and the
+            // companion listen here); Each is exactly a plain Invoke, a throw still propagates.
+            trace.Mark("emi + sentinel");
+            trace.Each(EngineStopped, d => ((EventHandler)d)(this, EventArgs.Empty));
 
             // Release cached images and compact the Large Object Heap.
             // Flash/overlay BitmapSources are large allocations (>85 KB) that fragment
             // the LOH during sessions. Compacting here returns memory to the OS.
             App.Flash.ClearImageCache();
+            var gcBefore = Services.Diagnostics.GcMark.Now();
+            var lohBefore = Services.Diagnostics.StopTrace.LohMb();
             System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(2, GCCollectionMode.Optimized, blocking: false);
+            try
+            {
+                VideoDiag.Log("STOP", Services.Diagnostics.StopTrace.GcLine("engine stop", gcBefore,
+                    Services.Diagnostics.GcMark.Now(), lohBefore, Services.Diagnostics.StopTrace.LohMb()));
+            }
+            catch { }
+            trace.Mark("image cache + GC");
 
             App.Logger?.Information("Engine stopped");
+            trace.Finish();
         }
 
         private void StartRampTimer()

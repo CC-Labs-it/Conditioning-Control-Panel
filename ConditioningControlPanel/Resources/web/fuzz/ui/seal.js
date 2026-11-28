@@ -17,6 +17,9 @@ const LOCAL = new Set(['127.0.0.1', 'localhost']);
 export function sealedFor(init, nowMs, hostname = '', force = false, ed = null) {
   if (!(nowMs < SEAL_OPEN_AT_MS)) return false;
   if (LOCAL.has(hostname)) return force === true;
+  /* A host that opens its small edition now, like the website, says so (`caps.unsealed`, the standalone program,
+   * 2026-11-25). The CCP app never sends it, so the app keeps the rule below. */
+  if (init?.caps?.unsealed === true) return false;
   /* The desktop app checks the account itself and picks the edition (`ed`, the reading from ui/edition.js). There any
    * subscriber plays the full game now; a free account gets the small edition, and that one opens with everyone else
    * on the anniversary (owner 2026-11-22). No reading = sealed. */

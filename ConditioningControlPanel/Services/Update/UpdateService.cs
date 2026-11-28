@@ -20,74 +20,41 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.4.1";
+        public const string AppVersion = "7.4.2";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.4.1 - Terms & Conditioning
+        public const string CurrentPatchNotes = @"v7.4.2 - Terms & Conditioning
 
-everything since 7.3.8, in one place.
+a round of fixes on top of 7.4.1.
 
 TERMS & CONDITIONING
-just your ordinary clicker game about accepting stuff - nothing sus about it :3
+- playing it in the app now pays Sparkles, for reaching an end and for stickers. it never did before, which was not in the contract either way.
+- a new sticker shows up as a small card in the corner instead of a pile of them at once.
+- saving your card as a GIF or a video is about three times faster and no longer hangs at the end, and the card says where the file went.
+- saying yes to Scrolller pictures inside the game now gives you pictures, even when your Library is set to My own assets. your Library setting stays as it was.
 
-- it has its own tile in the launcher now. there is a button, you press it, and sometimes it asks you to agree to something small. you can stop any time, probably.
-- free for everyone. subscribers get the full version, which is the same harmless clicker, only with more of it.
-- it can borrow your pictures and your toy if you say yes, and your save follows your account between the app and the website.
-- at some point the game may ask to download something, about 135 MB. it is not a virus. it is, at most, a commitment.
-- that is all there is to say about it. really.
-
-PRESETS AND SESSIONS
-- the Presets tab is now Presets and sessions. presets are pink and sessions are blue, and a line under Sessions says what starting one does: it turns on only its own effects and hands yours back when it ends.
-- an Import button sits beside Export, so a preset file someone sent you no longer has to be dragged onto the window to get in.
-
-READABLE ROWS
-- every option row in Studio and Settings got bigger text, a small picture that says what the option is about (a stopwatch for how often, dice for random, a stack for how many) and a number you can read from across the desk. the same meaning wears the same picture everywhere.
-- a switch that is off greys its picture, so a page shows at a glance what is on.
-- the Studio rack and the Settings list wear the same big tinted names, and the little row pictures got a dark outline so they stop melting into the panel.
-
-LIVE PREVIEW
-- each of the twelve effect pages now has a slice of a pretend desktop beside its options, where the effect plays as you change them. it wakes when you touch an option and settles again after a few seconds. it uses drawn stand-in pictures, never yours, and it changes nothing.
-- Takeover, Haptics and Voice swapped their side picture for a live preview of their own. the Haptics one never reaches your toy and the Voice one never opens your microphone.
-
-SUPER EFFECTS
-- Deck: Fewest flips and Most flips, so each card breaks after a random number of flips between the two.
-- Whirlpool: Smallest size sets how far the pool can shrink, and Restless pool turns it around so it grows while you move and calms when you rest.
-- the Whirlpool box shows four rows and keeps the rest behind More options.
-- Brain Drain started from a bubble follows your Super switch, and the first picture of a bubble flash moves when flash motion is on.
-
-FRIENDS
-- the drawer folds. the leash, What happened and Dares each sit under a header: folded you see the newest two lines and a bubble for what you have not read, opened you see everything. a leash offer opens its fold by itself.
-- a settled dare can be dismissed, and corner notices come two at a time at most.
-
-COMFORT
-- Settings > Performance has a pink filter limit for light-sensitive eyes. switched on, the pink filter and the Super fog never get stronger than the limit you set, whatever a preset, session or mod asks for.
-
-SMALL THINGS
-- a bell with your recent notifications, newest first.
-- Racing Thoughts 3D can play the pictures you ticked in your own library.
-- dropping a pack shows its progress while it unpacks.
-- the video quest says which videos count: the ones the app plays, not the browser.
-- the Mod Creator keeps a draft on this PC and offers it back when you open it again.
-- a video you put fullscreen by hand goes to your content screen, like Takeover does.
-- your own AI (Ollama or another endpoint) keeps more of the chat in mind.
+GETTING STARTED
+- three short cards show where pictures come from, how to add your own and how to switch things on. they are in the Inbox and in Help.
 
 FIXES
-- videos play through a newer LibVLC, which closes a security hole in the way some video files were read.
-- the file box in the Deeper player shows the file's name instead of a line of code.
-- attention checks no longer appear so close to the end of a video that you cannot answer them.
-- a lockdown of 20 minutes or more counts as a session for Daily and Weekly Devotion.
-- the ""prompt too long"" notice only shows when the cloud AI is the one answering.
-- the companion remembers what the avatar said out loud, so you can answer it.
-- keyword sounds play only for words that were just highlighted.
-- closing CCP no longer waits on a camera that is stuck starting.
-- changing the language now reaches the page you have open: its title, its breadcrumb and the haptics status follow at once.
-- the Haptics tab no longer wears a lock for free accounts. toys are free.
-- a failed toy connection keeps its hint on screen until you try again.
-- dates on the invite card follow the app's language.
-- Terms & Conditioning: the spot where you could get stuck, look around and not move is fixed.";
+- Presets and sessions: with many presets the sessions list was squeezed down to one row. the presets now scroll in their own box and the list keeps its room.
+- Mandatory Video: the length values lost their first digit in the new font. they have it back.
+- other apps stay quiet for a whole floating video. the quiet used to lift after five minutes while the video was still playing.
+- opening the Blink Trainer or Settings > Devices no longer freezes the app while it looks for cameras.
+- Companion links: a pool you emptied stays empty, and a pool with one video may play it again.
+- a fresh install starts the Library on Both, so there is something to look at before you add your own files. it still asks first.
+- the question about online pictures says Scrolller, where the pictures come from, and no longer says Reddit.
+- six option rows lost a stray colon, and Bubble Pop's Speed row speaks your language.
+- chess: in a cup replay the losing king waits for the last move to land before it falls.
+- the installer closes a CCP that is running hidden instead of failing on it.
+
+UNDER THE HOOD
+- when stopping takes longer than a second, the log now says which step took the time. if the app froze on you after Stop, a bug report from this version tells us far more than before.
+
+this is a pre-release for testers. tell us what breaks.";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";

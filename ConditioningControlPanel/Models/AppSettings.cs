@@ -5072,6 +5072,14 @@ namespace ConditioningControlPanel.Models
         /// does not silently enable the premium feed.</summary>
         [JsonIgnore]
         public bool HasRemoteMediaConsent => _remoteMediaConsented || _fypOnlineConsented;
+
+        /// <summary>True when remote media is really being drawn: the source is not "local" AND
+        /// the user has said yes. A fresh install starts on "mixed" with no consent yet
+        /// (<c>FirstRunGate.ApplyFreshInstallMediaDefault</c>), so the source alone no longer
+        /// tells the new-user rescues whether the library is empty: read this instead.</summary>
+        [JsonIgnore]
+        public bool UsesRemoteMedia =>
+            !string.Equals(_mediaSource, "local", StringComparison.OrdinalIgnoreCase) && HasRemoteMediaConsent;
         #endregion
 
         #region Lock Card
@@ -9335,6 +9343,18 @@ namespace ConditioningControlPanel.Models
             set { _glassroadPictures = value; OnPropertyChanged(); }
         }
 
+        private bool? _tcPictures;
+        /// <summary>Terms &amp; Conditioning's own Scrolller yes, like <see cref="GlassroadPictures"/>: true once the
+        /// player pressed "Use Scrolller" in the game and the app consent is given, so the game fetches pictures
+        /// although the app-wide source is local. Never false: an off clears it back to null (follow the app).
+        /// The Library's own <see cref="MediaSource"/> is never changed (<c>TcMediaRules.PicturesOn</c>).</summary>
+        [JsonProperty("tcPictures")]
+        public bool? TcPictures
+        {
+            get => _tcPictures;
+            set { _tcPictures = value; OnPropertyChanged(); }
+        }
+
         private string _pbpMediaFlavour = "";
         /// <summary>
         /// Piece by Piece's picture flavour (trance, pink, frills, shiny, censored, mine), or ""
@@ -10107,6 +10127,11 @@ namespace ConditioningControlPanel.Models
         /// <summary>True once the first-run "Start here" card has opened (the ladder offers it
         /// once, after the first-run show; replay lives in Help and does not touch this).</summary>
         public bool StartHereShown { get; set; }
+
+        /// <summary>True once the assets nudge (three cards with an arrow: Library source, adding
+        /// your own, Start on Home) has opened. Offered once per profile; replay lives in Help and
+        /// does not touch this.</summary>
+        public bool AssetsNudgeShown { get; set; }
 
         /// <summary>Old tab keys followed to their new home. The "Moved: Section > Page" toast
         /// shows for the first three hits, then retires itself.</summary>
