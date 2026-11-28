@@ -11,6 +11,27 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed class WallpaperHostTests
 {
+    [Fact]
+    public async Task EmptyPoolOffersRemoteMedia()
+    {
+        var folder = Directory.CreateTempSubdirectory("wallpaper-empty-").FullName;
+        var s = CoreSettings.Current;
+        var saved = (s.WallpaperSourceFolder, s.WallpaperOriginalPath);
+        try
+        {
+            s.WallpaperSourceFolder = folder;
+            s.WallpaperOriginalPath = "";
+            var offers = 0;
+            var host = new WallpaperHost(new Desktop(), () => offers++);
+            Assert.False(await host.ShuffleAsync());
+            Assert.Equal(1, offers);
+        }
+        finally
+        {
+            (s.WallpaperSourceFolder, s.WallpaperOriginalPath) = saved;
+            Directory.Delete(folder, true);
+        }
+    }
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

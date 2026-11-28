@@ -120,6 +120,24 @@
         <Style Selector="MenuItem">
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
         </Style>
+        <!-- WPF DeeperEditorWindow.xaml:155-206 (TimelineCtxMenuItem on File rows, :476-486) replaces
+             the shared Inputs.xaml:476 row: square, no row margin, Deeper hover, grey disabled text. -->
+        <Style Selector="Menu MenuItem MenuItem">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Cursor" Value="Arrow"/>
+        </Style>
+        <Style Selector="Menu MenuItem MenuItem:selected /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource DeeperMenuItemHoverBgBrush}"/>
+        </Style>
+        <Style Selector="Menu MenuItem MenuItem:disabled">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="Menu MenuItem MenuItem:disabled /template/ ContentPresenter#PART_HeaderPresenter">
+            <Setter Property="Foreground" Value="#666666"/>
+        </Style>
         <!-- Fluent icons L6: the items list's Overlay square keeps WPF's violet (🟪). -->
         <Style Selector="fx|IconGlyph.overlay">
             <Setter Property="Foreground" Value="#9B59FF"/>
@@ -181,20 +199,11 @@
                                FontSize="12" FontWeight="SemiBold"
                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 
-                    <!-- Browser zoom cluster: page-zooms the embedded preview in WPF. HIDDEN here,
-                         and not because of a mode. AdjustPreviewZoom is a stub that only logs -
-                         NativeWebView has no zoom factor at all, and CSS zoom through the script
-                         channel is not a substitute (per-document, lost on the next navigation, and
-                         it does not scale a fullscreened video). WPF's binding was
-                         IsVisible="{Binding #BrowserPreview.IsVisible}"; restore that line and this
-                         cluster comes back the moment the buttons do something. Two enabled buttons
-                         that log is a toolbar lying about what it offers, which is why they are not
-                         merely disabled. Same call, same reason, in EnhancementPlayerWindow's
-                         ShowMediaPaneFor. -->
+                    <!-- Page zoom follows browser preview visibility. -->
                     <StackPanel Grid.Row="0" Grid.Column="2" x:Name="PreviewZoomCluster"
                                 Orientation="Horizontal" VerticalAlignment="Center"
                                 Margin="8,0,0,0"
-                                IsVisible="False">
+                                IsVisible="{Binding #BrowserPreview.IsVisible}">
                         <fx:IconGlyph Kind="Search" Size="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
                         <Button x:Name="BtnPreviewZoomOut"
                                 ToolTip.Tip="{loc:Str deeper_zoom_out_tt}"
@@ -547,7 +556,7 @@
                                         <ContextMenu x:Name="TimelineCtxMenu"
                                                      Background="{DynamicResource DarkerBgBrush}"
                                                      BorderBrush="{DynamicResource DeeperAccentBrush}"
-                                                     BorderThickness="2">
+                                                     BorderThickness="2" CornerRadius="8" Padding="4">
                                             <MenuItem Header="Add Effect"
                                                       Foreground="{DynamicResource DeeperAccentBrush}" FontWeight="Bold">
                                                 <MenuItem x:Name="CtxEffectHaptic" Header="Haptic"/>
@@ -578,6 +587,10 @@
                                             </MenuItem>
                                         </ContextMenu>
                                     </Canvas.ContextMenu>
+                                    <Border x:Name="HoverTimeTip" IsVisible="False" IsHitTestVisible="False"
+                                            Background="#DD202020" CornerRadius="3" Padding="4,2" ZIndex="200">
+                                        <TextBlock x:Name="TxtHoverTime" Foreground="White" FontSize="11"/>
+                                    </Border>
                                     <!-- Playhead -->
                                     <Line x:Name="PlayheadLine" StartPoint="0,0" EndPoint="0,0"
                                           Stroke="{DynamicResource DeeperAccentBrush}" StrokeThickness="2"
@@ -1290,6 +1303,22 @@
                     <TextBlock Text="{loc:Str btn_export_media}" FontWeight="SemiBold"
                                Foreground="{DynamicResource DeeperAccentBrush}"/>
                 </Button>
+                <!-- WPF DeeperEditorWindow.xaml:1778: shared, dismissible reference popup. -->
+                <Popup x:Name="EditorHelpPopup" Placement="Bottom" IsLightDismissEnabled="True"
+                       ShouldUseOverlayLayer="True">
+                    <Border Background="{DynamicResource DarkerBgBrush}"
+                            BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1"
+                            CornerRadius="6" Padding="12,10" MaxWidth="460" MaxHeight="420">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <TextBlock x:Name="TxtEditorHelpTitle" FontWeight="SemiBold" FontSize="13"
+                                           Foreground="{DynamicResource DeeperAccentBrush}" Margin="0,0,0,6"/>
+                                <TextBlock x:Name="TxtEditorHelpBody" TextWrapping="Wrap" FontSize="12"
+                                           Foreground="{DynamicResource TextLightBrush}"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Popup>
                 <!-- Fluent icons L6: the clean state is the Core string "✓ All clear." drawn as icon + text. -->
                 <fx:IconLabel x:Name="TxtValidationClean" Key="deeper_editor_validation_clean" IsVisible="False"
                               TextElement.Foreground="{DynamicResource TextLightBrush}" TextElement.FontSize="12"

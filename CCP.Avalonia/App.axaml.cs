@@ -17,6 +17,44 @@ namespace ConditioningControlPanel.Avalonia
     {
         internal static Action? PostCodeInputsChanged;
 
+        private static bool _shutdownAfterGazePending;
+        private static bool _shutdownAfterGazeReady;
+
+        // The pending teardown retains its player, media and sink if native Stop wedges.
+        internal static Task ShutdownAfterGazeCleanupAsync(Action shutdown) =>
+            ShutdownAfterGazeCleanupAsync(StopHapticsBeforeGazeWait,
+                Views.Lab.GazeMinigame.GazeMinigameWindow.PrepareForShutdownAsync, shutdown,
+                TimeSpan.FromMilliseconds(500));
+
+        internal static async Task ShutdownAfterGazeCleanupAsync(Action safety, Func<Task> prepare, Action shutdown, TimeSpan budget)
+        {
+            safety();
+            var cleanup = prepare();
+            await Task.WhenAny(cleanup, Task.Delay(budget));
+            shutdown();
+        }
+
+        internal static void StopHapticsBeforeGazeWait()
+        {
+            try { CoreHaptics.Service?.PanicStop(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics early stop failed"); }
+        }
+
+        internal static void StopHapticsForExit()
+        {
+            try { CoreHaptics.Service?.ShutdownStop(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
+        }
+
+        internal static async void RequestDesktopShutdown(IClassicDesktopStyleApplicationLifetime desktop, int exitCode = 0)
+        {
+            if (_shutdownAfterGazePending) return;
+            _shutdownAfterGazePending = true;
+            try { await ShutdownAfterGazeCleanupAsync(() => { _shutdownAfterGazeReady = true; desktop.Shutdown(exitCode); }); }
+            catch (Exception ex) { Serilog.Log.Error(ex, "Desktop shutdown failed"); }
+            finally { _shutdownAfterGazeReady = false; _shutdownAfterGazePending = false; }
+        }
+
         // Shared by daily rotation and provider tier changes, as in WPF MainWindow.xaml.cs:465.
         internal static Action WireDailyRepaints(DailyFreeService dailyFree, Views.Windows.MainShellWindow shell)
         {
@@ -82,9 +120,54 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The lookup resumes off the UI thread (ConfigureAwait(false)); its opener builds a window.</summary>
         internal static Task<bool> OnUiThread(Func<bool> open) => Dispatcher.UIThread.InvokeAsync(open).GetTask();
 
+        /// <summary>The v2 observer (WPF App.Awareness, App.xaml.cs:3093). Null without one.</summary>
+        internal static ConditioningControlPanel.Services.Awareness.AwarenessObserver? AwarenessObserverHost { get; private set; }
+
+        /// <summary>WPF App.xaml.cs:3062-3099: one memory and one scorer shared by the observer and its arbiter.
+        /// This head has no speaker or line source yet (WPF :3091-3094), so the arbiter stays silent, nothing
+        /// leaves the machine and the legacy mouth is not muted (WPF AwarenessRouting.Attach is not called).</summary>
+        internal static ConditioningControlPanel.Services.Awareness.AwarenessObserver CreateAwarenessObserver(
+            ConditioningControlPanel.Services.Awareness.ActivityLedger ledger,
+            ConditioningControlPanel.Services.Awareness.IForegroundProbe foreground,
+            ConditioningControlPanel.Services.Awareness.IInputProbe input,
+            ConditioningControlPanel.Services.Awareness.IMicrophoneProbe microphone)
+        {
+            var memory = new ConditioningControlPanel.Services.Awareness.StubCompanionMemory();
+            var scorer = new ConditioningControlPanel.Services.Awareness.WorthinessScorer();
+            var arbiter = new ConditioningControlPanel.Services.Awareness.ReactionArbiter(scorer: scorer, memory: memory);
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.Memory = memory;   // WPF :3103, the wipe forgets it
+            return new ConditioningControlPanel.Services.Awareness.AwarenessObserver(ledger, scorer, arbiter, memory, null,
+                foreground, input, microphone, null, new AwarenessAppStateProbe(), null);
+        }
+
+        /// <summary>WPF AppStateProbe (AwarenessProbes.cs:452) without the achievement ring and blocking surfaces.</summary>
+        private sealed class AwarenessAppStateProbe : ConditioningControlPanel.Services.Awareness.IAppStateProbe
+        {
+            public ConditioningControlPanel.Services.Awareness.AppStateSample Read(DateTime at)
+            {
+                try
+                {
+                    var s = CoreSettings.Current;
+                    return new(CoreSession.IsSessionRunning, s.PlayerLevel, s.CurrentStreak, null, false);
+                }
+                catch { return ConditioningControlPanel.Services.Awareness.AppStateSample.Empty; }
+            }
+        }
+
+        /// <summary>Stricter than WPF: a panic stops the v2 poll and flushes the ledger. The dial or a relaunch
+        /// starts it again; the legacy poll is untouched.</summary>
+        internal static void StopAwarenessObserverForPanic()
+        {
+            if (AwarenessObserverHost is not { } observer) return;
+            observer.Stop();
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = false;
+        }
+
         /// <summary>WPF App.xaml.cs:2853/2928: publish the ledger, sweep retention on disk (creates nothing),
-        /// and let the awareness switch start/stop it. Startup calls this; tests drive the same hook.</summary>
-        internal static void InstallPrivacyLedger(ConditioningControlPanel.Services.Awareness.ActivityLedger ledger)
+        /// and let the awareness switch start/stop it (WPF :3087, through the observer when there is one).
+        /// Startup calls this; tests drive the same hook.</summary>
+        internal static void InstallPrivacyLedger(ConditioningControlPanel.Services.Awareness.ActivityLedger ledger,
+            ConditioningControlPanel.Services.Awareness.AwarenessObserver? observer = null)
         {
             // WPF App.xaml.cs:3125: upgraders may never reopen the consent dialog.
             try
@@ -98,16 +181,45 @@ namespace ConditioningControlPanel.Avalonia
             ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = ledger;
             try { ledger.PruneOnDisk(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "ActivityLedger: startup retention sweep failed"); }
+            AwarenessObserverHost = observer;
+            if (observer != null)
+            {
+                // WPF App.xaml.cs:3105-3119: the wipe and forget reach the observer and pacing state too.
+                var arbiter = observer.Arbiter as ConditioningControlPanel.Services.Awareness.ReactionArbiter;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ResetObserverState = observer.ResetTransientState;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ResetPacingState = () => { arbiter?.Cooldowns.Reset(); observer.Scorer.Reset(); };
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ForgetPacingState = id => { arbiter?.Cooldowns.Forget(id); observer.Scorer.Forget(id); };
+            }
             WindowAwarenessService.V2Lifecycle = start =>
             {
-                if (start && System.IO.File.Exists(ledger.LedgerPath)) ledger.Start();
-                else if (!start) ledger.Stop();
+                if (start)
+                {
+                    observer?.Start();
+                    if (observer != null) ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = observer.IsRunning;
+                    if (observer?.IsRunning != true && System.IO.File.Exists(ledger.LedgerPath)) ledger.Start();
+                }
+                else
+                {
+                    observer?.Stop();
+                    if (observer != null) ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = false;
+                    ledger.Stop();
+                }
             };
         }
 
         /// <summary>WPF App.OnExit:6285: dispose the ledger and unpublish it.</summary>
         internal static void ReleasePrivacyLedger()
         {
+            try { AwarenessObserverHost?.Dispose(); } catch { }
+            if (AwarenessObserverHost != null)
+            {
+                AwarenessObserverHost = null;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = false;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.Memory = null;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ResetObserverState = null;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ResetPacingState = null;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ForgetPacingState = null;
+            }
             try { ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger?.Dispose(); } catch { }
             ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = null;
         }
@@ -339,7 +451,9 @@ namespace ConditioningControlPanel.Avalonia
             // Real probes, not the fail-open default (which reads present + resolved). A throw
             // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
             // fails open without spawning it (distro-check F6).
-            CoreQuests.CameraProbe = () => System.IO.Directory.EnumerateFiles("/dev", "video*").Any();
+            CoreQuests.CameraProbe = () => Platform.WindowsCameras.CameraPresent(OperatingSystem.IsWindows(),
+                Platform.WindowsCameras.EnumerateStrict, Platform.WindowsCameras.EnumerateMediaFoundationStrict,
+                () => System.IO.Directory.EnumerateFiles("/dev", "video*").Any());
             CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.MicrophonePresent(
                 Platform.LibVlcAudio.PactlInstalled, () => Platform.LibVlcAudio.Pactl("list short sources"));
 
@@ -451,8 +565,13 @@ namespace ConditioningControlPanel.Avalonia
             var mods = Mods;
             mods.ModChanged += (_, _) =>
             {
-                if (Dispatcher.UIThread.CheckAccess()) Controls.AmbientFxCanvas.Env.ApplyPalette(mods);
-                else Dispatcher.UIThread.Post(() => Controls.AmbientFxCanvas.Env.ApplyPalette(mods));
+                void RefreshModAppearance()
+                {
+                    Controls.AmbientFxCanvas.Env.ApplyPalette(mods);
+                    LocalizationManager.Instance.NotifyVocabChanged();
+                }
+                if (Dispatcher.UIThread.CheckAccess()) RefreshModAppearance();
+                else Dispatcher.UIThread.Post(RefreshModAppearance);
             };
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
@@ -479,10 +598,24 @@ namespace ConditioningControlPanel.Avalonia
 
         // WPF Services/Chaos/EffectPayloadFiring.cs:225-237. Only the global multiplier
         // applies to rain, including on a prism pop (DurationMult is deliberately ignored).
-        internal static Action<Visual, int?, int?, int?, bool> FireChaosFlash = Views.Overlays.FlashOverlay.TriggerOnce;
+        internal static Action<Visual, int?, int?, int?, bool> FireChaosFlash =
+            (host, amount, duration, size, ambient) => Views.Overlays.FlashOverlay.TriggerOnce(host, amount, duration, size, ambient);
         internal static void FireChaosPayload(Services.Chaos.EffectPayload payload)
         {
             var host = Views.Chaos.ChaosRunHost.Overlay;
+            if (payload is Services.Chaos.VideoPayload video)
+            {
+                var scheduler = video.ChaosToken != 0 ? Views.Chaos.ChaosRunHost.RunVideo : CoreEngine.Video;
+                if (scheduler == null) return;
+                try
+                {
+                    if (video.ChaosToken != 0)
+                        scheduler.ArmRandomSegment(video.ChaosToken, (int)Services.Chaos.VideoPayload.SEGMENT_SEC);
+                    scheduler.Trigger(userEarned: true, silentIfEmpty: true, chaosToken: video.ChaosToken);
+                }
+                catch (Exception ex) { Serilog.Log.Information(ex, "Chaos video payload failed"); scheduler.CancelChaosVideo(video.ChaosToken); }
+                return;
+            }
             if (payload is Services.Chaos.FlashPayload flash)
             {
                 if (host != null)
@@ -566,7 +699,9 @@ namespace ConditioningControlPanel.Avalonia
                 || Sessions?.IsRunning == true || Platform.StartupLadder.IsQuiet || Mantra.IsActive
                 || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
                 || Views.Overlays.MandatoryVideoOverlay.Instance.GracePaused
-                || CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen()
+                || CoreEngine.Video?.IsPlaying == true || Views.Deeper.EnhancementPlayerWindow.IsAnyEnhancementRunning
+                || Views.Windows.MainShellWindow.Current?.SettingsPage?.BrowserEnhanceHost.IsRunning == true
+                || Views.Windows.LockCardWindow.IsAnyOpen()
                 || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
                 || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:779-788
             // The window and startup probes touch Avalonia state, and a chat reply can ask from a worker (#4227):
@@ -922,6 +1057,13 @@ namespace ConditioningControlPanel.Avalonia
             settings.PendingPresetReinstalls.Clear();
         }
 
+        internal static void InitializeChaos()
+        {
+            // WPF App.xaml.cs:2427,2827. Settings must be loaded before selecting the save slot.
+            Services.Chaos.ChaosCrashSentinel.ConsumeAndReport(Serilog.Log.Logger);
+            Services.Chaos.ChaosMeta.Init();
+        }
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -935,6 +1077,17 @@ namespace ConditioningControlPanel.Avalonia
                 // while Core's unseeded providers remain the contract for renders and tests.
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
+                desktop.ShutdownRequested += (_, e) =>
+                {
+                    if (_shutdownAfterGazeReady) return;
+                    StopHapticsBeforeGazeWait();
+                    var cleanup = Views.Lab.GazeMinigame.GazeMinigameWindow.PrepareForShutdownAsync();
+                    if (!cleanup.IsCompleted)
+                    {
+                        e.Cancel = true;
+                        RequestDesktopShutdown(desktop);
+                    }
+                };
                 desktop.Exit += OnDesktopExit;
                 RecoverEngineCrash(() => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("crashRecovered", null));
                 Platform.EntitlementRefresh.Install();
@@ -959,11 +1112,21 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                InitializeChaos();
                 Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
-                // the ledger starts when awareness turns on. No observer feeds it on this head yet.
-                InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
+                // the ledger starts when awareness turns on, through the v2 observer when it may run (WPF :3046-3099).
+                ConditioningControlPanel.Services.Awareness.AwarenessObserver.EntitlementProvider = () => WindowAwarenessService.HasEntitlement;
+                ConditioningControlPanel.Services.Awareness.AwarenessObserver.PostToUi = a => Dispatcher.UIThread.Post(a);
+                var awarenessLedger = new ConditioningControlPanel.Services.Awareness.ActivityLedger();
+                InstallPrivacyLedger(awarenessLedger, CreateAwarenessObserver(awarenessLedger,
+                    OperatingSystem.IsWindows() ? new Platform.Win32AwarenessForegroundProbe() : new Platform.X11ForegroundProbe(),
+                    OperatingSystem.IsWindows() ? new Platform.Win32AwarenessInputProbe() : new Platform.X11AwarenessInputProbe(),
+                    OperatingSystem.IsWindows() ? new Platform.Win32AwarenessMicrophoneProbe() : new Platform.AwarenessMicrophoneProbe()));
 
+                // WPF App.xaml.cs:2582-2624: scaffold and the Flash decoupling migration run before the heal
+                // below (2630), so the migration reads the profile's saved FlashClickable, not the journal's.
+                RunLaunchMigrations(Settings, DefaultAssetsRoot, CorePaths.UserData);
                 // Main 8a89eaeb0 / 36370021a: a session or intensity ramp that crashed or was killed before
                 // it handed the user's settings back gets them back now, before anything reads them.
                 try
@@ -1017,6 +1180,7 @@ namespace ConditioningControlPanel.Avalonia
                 // No event skin on this head yet (nothing arms LiveEventService on either head).
                 CoreModArt.OverridePathProvider = p => CoreModArt.ResolveOverride(p, null, CoreMods.ActiveModPackage?.InstalledPath);
                 CoreModArt.AudioOverridePathProvider = p => CoreModArt.ModAudioFile(p, CoreMods.ActiveModPackage?.InstalledPath);
+                SeedPortraitProbe();
 
                 // The lock-card surface seam. The schedule and the no-repeat phrase rotation are in
                 // Core now (LockCardScheduler); this is the half that draws, and on this head that
@@ -1036,6 +1200,9 @@ namespace ConditioningControlPanel.Avalonia
                 // Mandatory video: Core schedules, the overlay plays (WPF App.Video).
                 CoreEngine.Video = Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler;
                 CoreEngine.Video.DeferTrigger = Views.Windows.LockCardWindow.DeferVideo;
+                // WPF BrowserMediaService.ForceEndCore -> MainWindow.EndWebVideoTakeover; the session's tick is off-thread.
+                ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.TearDownTakeover = () =>
+                    global::Avalonia.Threading.Dispatcher.UIThread.Post(() => Views.Windows.MainShellWindow.Current?.EndWebVideoTakeover());
                 CoreEngine.BubbleCount = Views.Windows.BubbleCountHost.Instance.Scheduler;
 
                 await step(0.4, "Initializing flash service...");
@@ -1050,17 +1217,14 @@ namespace ConditioningControlPanel.Avalonia
                 SeedSubliminalFeatureUse();
                 CoreSubliminal.CustomShowProvider = text => Views.Overlays.SubliminalWhisperShow.Custom(text);
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
-                CoreSubliminal.RunStateChanged = running =>
-                {
-                    if (running) return;
-                    Views.Overlays.SubliminalWhisperShow.StopAll();
-                    global::Avalonia.Threading.Dispatcher.UIThread.Post(Views.Overlays.SubliminalOverlay.CloseAll);
-                };
+                CoreSubliminal.RunStateChanged = Views.Overlays.SubliminalWhisperShow.RunStateChanged;
                 CoreBouncingText.StartAction = () =>
                 {
                     if (desktop.MainWindow is { } host) Views.Overlays.BouncingTextOverlay.Start(host);
                 };
                 CoreBouncingText.StopAction = Views.Overlays.BouncingTextOverlay.Stop;
+                CoreBouncingText.IsRunningProvider = () => Views.Overlays.BouncingTextOverlay.IsRunning;
+                CoreBubbles.IsRunningProvider = () => Views.Overlays.BubbleOverlay.IsRunning;
                 Views.Overlays.CornerGifOverlay.Seed(() => desktop.MainWindow);   // the corner-GIF surface seam
                 CoreBouncingText.RefreshAction = Views.Overlays.BouncingTextOverlay.Refresh;
                 CoreBouncingText.RestartAction = Views.Overlays.BouncingTextOverlay.Restart;
@@ -1106,7 +1270,7 @@ namespace ConditioningControlPanel.Avalonia
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
                 // WPF App.xaml.cs:3218: seed the clock before constructing the haptic service.
                 SeedHapticPlaybackTime();
-                // Part B: EMI Desk hapticsConnected needs the moment director (WPF :3225).
+                // EMI Desk wires the haptics moment with its app events after the shell opens.
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 Platform.AudioSyncHost.Start(CoreHaptics.Service, Settings.Current.Haptics.AudioSync);
@@ -1476,9 +1640,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF decides with `Welcomed && !FirstRunClaimedThisLaunch`: the shell's constructor
                 // claims Welcomed on a fresh install, so read it before the shell exists.
                 bool welcomed = Settings.Current.Welcomed;
-                desktop.MainWindow = sessions is null
-                    ? new Views.Windows.MainShellWindow()
-                    : new Views.Windows.MainShellWindow(sessions);
+                desktop.MainWindow = Views.Windows.MainShellWindow.CreateForLaunch(sessions);
                 // WPF CenterOnPrimaryScreen, with the Linux default size (Views/Windows/MainShellWindow.WorkAreaFit.cs).
                 (desktop.MainWindow as Views.Windows.MainShellWindow)?.PlaceForFirstShow();
                 if (global::Avalonia.Controls.ControlExtensions.FindControl<global::Avalonia.Controls.Panel>(desktop.MainWindow, "NotificationHost") is { } toastHost)
@@ -1501,7 +1663,8 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:529 (main fbe161de2): "See tiers" opens the vault gate card at the tier this door needs.
                 CoreEntitlement.ShowDeniedHandler = verdict => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     shell.ShowTierDenied(verdict, Notifications));
-                // WPF App.xaml.cs:509-511 (main 2e9080399). No Arcademy host here: unseeded, so its card stays hidden.
+                // WPF App.xaml.cs:618 (ArcademyHostService.DoorAvailable): the card shows once the Arcademy host is registered.
+                Models.ExclusiveFeature.ArcademyDoorProvider = () => Views.Games.GameWindow.Games.ContainsKey("arcademy");
                 // WPF App.xaml.cs:289: the palette row and the Premium card read the server door flag.
                 SettingsPaletteIndex.JustDropDoorAvailableProvider = () => Services.JustDrop.JustDropService.DoorAvailable;
                 Models.ExclusiveFeature.JustDropDoorProvider = SettingsPaletteIndex.JustDropDoorAvailable;
@@ -1584,8 +1747,9 @@ namespace ConditioningControlPanel.Avalonia
                 shell.StartPanicKey();
                 shell.StartSchedulerClock();
                 shell.Opened += (_, _) => shell.StartQuickRecalHotkey();
+                shell.Opened += (_, _) => shell.StartPauseKeyPortal();
                 // EMI Desk summon chord (WPF MainWindow.xaml.cs:246 arms it from the shell's Loaded).
-                Views.Windows.EmiDesk.EmiDeskService.Instance.ApplyHotkey();
+                shell.Opened += (_, _) => Views.Windows.EmiDesk.EmiDeskService.Instance.ApplyHotkey();
                 Views.Windows.EmiDesk.EmiDeskService.Instance.WireAppEvents(shell.Autonomy, Platform.PulseMicSource.Speech, dailyFree);
                 // Do-not-disturb reads the foreground app: user32 on Windows (as WPF DoNotDisturbGuard), X elsewhere.
                 ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = Platform.Win32Windows.ForegroundSource;
@@ -1858,7 +2022,72 @@ namespace ConditioningControlPanel.Avalonia
                 try { fire(); } catch (Exception ex) { Serilog.Log.Debug(ex, "EMI crash recovery failed"); }
         }
 
+        /// <summary>
+        /// WPF App.xaml.cs:2582-2589 (default assets scaffold), 2612-2624 (FlashClickable/gaze decoupling)
+        /// and 2787 (CompanionService.MigrateFromLegacy: an empty progress map starts OG Bambi Sprite at
+        /// min(50, PlayerLevel/2), made active). Runs before anything reads ActiveCompanionProgress,
+        /// which would otherwise create level-1 progress and skip the migration for good.
+        /// </summary>
+        internal static void RunLaunchMigrations(SettingsService settings, string assetsRoot, string userData)
+        {
+            try
+            {
+                foreach (var sub in new[] { "images", "videos", "audio", "wallpapers", "mindwipe" })
+                    Directory.CreateDirectory(Path.Combine(assetsRoot, sub));
+                Directory.CreateDirectory(Path.Combine(userData, "Spirals"));
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Default assets scaffold failed (non-fatal)"); }
+            try
+            {
+                var s = settings.Current;
+                // WPF saves on every launch; here only a real migration writes, so a returning profile's
+                // startup leaves settings.json alone (LanguageSelectorTests' no-startup-save check).
+                bool changed = !s.MigratedFlashClickableDecoupling || s.CompanionProgressData.Count == 0;
+                s.RunFlashClickableDecouplingMigration();
+                if (s.CompanionProgressData.Count == 0)
+                {
+                    var og = ConditioningControlPanel.Models.CompanionProgress.CreateNew(ConditioningControlPanel.Models.CompanionId.OGBambiSprite);
+                    og.Level = Math.Max(1, Math.Min(50, s.PlayerLevel / 2));
+                    og.FirstActivated = DateTime.Now;
+                    s.CompanionProgressData[(int)og.CompanionId] = og;
+                    s.ActiveCompanionId = (int)og.CompanionId;
+                }
+                if (changed) settings.Save();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Settings migration failed (non-fatal, defaults apply)"); }
+        }
+
+        /// <summary>WPF App.xaml.cs:333: TubeFitDialog's portrait mode asks whether the active mod's portraits are on disk.</summary>
+        internal static void SeedPortraitProbe() =>
+            CoreModArt.HasAvatarPortraitsProvider = () => Platform.AvatarPortraitLoader.Load() != null;
+
+        /// <summary>WPF App.OnExit:6480 fires the wordless appClosing flinch, then :6515 EmiDesk.Dispose
+        /// (EmiDeskService.cs:2121) writes emi-desk.json now so a pending debounced save is not lost.</summary>
+        internal static void FlushEmiDeskOnExit()
+        {
+            try { Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("appClosing", null); } catch { }
+            try { Views.Windows.EmiDesk.EmiDeskService.Instance.UnwireAppEvents(); } catch { }
+            try { ConditioningControlPanel.Services.EmiDesk.EmiState.SaveNow(); } catch { }
+        }
+
         internal static void ClearEngineCrashOnExit() => Services.EngineCrashSentinel.Clear();
+
+        private static volatile string _exitStep = "start";
+        /// <summary>ccp-bugs #1704: what the exit is doing now, for the backstop's log line.</summary>
+        internal static void ExitStep(string step) => _exitStep = step;
+
+        /// <summary>Covers the bounded waits below (about 10 s worst case) with margin.</summary>
+        internal const int ExitBackstopMs = 15000;
+
+        /// <summary>ccp-bugs #1704 (WPF App.xaml.cs:6740-6751 ends OnExit with TerminateProcess): a teardown step
+        /// or ProcessExit handler that hangs froze the app for good. Armed only after the toys are stopped; a
+        /// background thread, so a normal exit simply ends it.</summary>
+        internal static void ArmExitBackstop(Action<int>? terminate = null, int graceMs = ExitBackstopMs)
+            => global::ConditioningControlPanel.Services.Reset.UiThreadExit.Begin(0,
+                () => Serilog.Log.Warning("Exit still running after {Ms} ms at step {Step}; killing the process", graceMs, _exitStep),
+                exit: _ => { },   // the lifetime is already exiting; only the backstop is wanted
+                terminate: terminate ?? (_ => { Serilog.Log.CloseAndFlush(); System.Diagnostics.Process.GetCurrentProcess().Kill(); }),
+                graceMs: graceMs);
 
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
         {
@@ -1871,12 +2100,22 @@ namespace ConditioningControlPanel.Avalonia
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.
             Services.Haptics.Core.MockProviderV2.Toast = null;
-            try { CoreHaptics.Service?.ShutdownStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
+            StopHapticsForExit();
             try { Views.Overlays.HapticMockToast.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Mock haptics feedback close failed"); }
 
-            try { Views.Windows.EmiDesk.EmiDeskService.Instance.UnwireAppEvents(); } catch { }
+            // #1704: save now, so a teardown step that hangs below cannot lose the session; the saves further
+            // down stay for what teardown still changes (quest minutes, a late achievement).
+            var shell = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as Views.Windows.MainShellWindow;
+            SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
+            try { SaveAchievementsOnExit(_achievementSaveTimer, Achievements); } catch { /* the store logs write failures */ }
+            ArmExitBackstop();
+            ExitStep("media and libvlc teardown");
+
+            FlushEmiDeskOnExit();   // #5632: appClosing flinch, unwire, then save emi-desk.json now
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
 
+            // Gaze round players still stopping off-thread finish before exit continues (bounded).
+            Views.Lab.GazeMinigame.GazeMinigameWindow.WaitForRoundCleanupOnExit(TimeSpan.FromSeconds(2));
             // Before libvlc goes: close the Mantra Lab (stops and disposes its drone), then its temp WAVs.
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
 
@@ -1899,6 +2138,7 @@ namespace ConditioningControlPanel.Avalonia
             try { ReleaseContent?.Dispose(); } catch { }
             try { Platform.ChasterHead.Service?.Dispose(); } catch { }
 
+            ExitStep("final sync push and saves");
             // WPF App.OnExit: a best-effort final push, capped at 2 s (off the UI thread, as WPF's Task.Run).
             try { if (Platform.AccountSeed.Sync is { Loaded: true } sync) System.Threading.Tasks.Task.Run(() => sync.PushAsync("shutdown")).Wait(TimeSpan.FromSeconds(2)); }
             catch { /* never block exit */ }
@@ -1906,7 +2146,6 @@ namespace ConditioningControlPanel.Avalonia
 
             // Flush while the dispatcher is still usable. In particular, a serialize retry from a
             // background save must not see the shutdown-safe drop provider below.
-            var shell = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as Views.Windows.MainShellWindow;
             SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
 
             // WPF AchievementService.Dispose always saves synchronously, including a queued autosave.
@@ -1916,6 +2155,7 @@ namespace ConditioningControlPanel.Avalonia
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            ExitStep("service shutdown");
             try { StopDeeperLibrary(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Deeper library shutdown failed"); } // WPF App.OnExit:6035
             Platform.ScrolllerHead.Stop();   // WPF App.OnExit:6284-6285: the share's ledger and the cache index
             try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
@@ -1926,16 +2166,21 @@ namespace ConditioningControlPanel.Avalonia
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
             ReleasePrivacyLedger();
+            ExitStep("companion, AI and Ollama");
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
             // WPF App.OnExit:6336: only the `ollama serve` this app spawned; a user's own server is untouched.
             try { ConditioningControlPanel.Services.AIService.OllamaSetupService.StopSpawnedServer(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to stop spawned Ollama server"); }
+            ExitStep("haptics, overlays, games and webcam");
             // WPF App.OnExit:6013/6173: zero the toys first (a Lovense level has no timeout), then dispose.
             try { CoreHaptics.Service?.Dispose(); } catch { }
+            try { Views.Overlays.KeywordHighlightOverlay.CloseAll(); } catch { }
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
             try { Views.Games.GameWindow.CloseCounterForExit(); } catch { /* WPF App.OnExit:6433 CloseFor(CloseAppExit) */ }
+            try { Views.Games.GameWindow.DrainGoonInboxForExit(TimeSpan.FromSeconds(3)); } catch { /* partner media never outlives the app */ }
+            try { global::ConditioningControlPanel.Avalonia.Possession.PossessionAvaloniaHead.Warden?.Dispose(); } catch { }
             try { Possession?.Dispose(); } catch { /* WPF App.OnExit:6527: every haunted control back, ember stripped */ }
             // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
@@ -1954,6 +2199,7 @@ namespace ConditioningControlPanel.Avalonia
             DescentCountdown?.Dispose();   // its pool timer outlives the dispatcher otherwise
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.Stop();   // same
             _desktopDispatch?.Stop();
+            ExitStep("after OnDesktopExit (Program end, ProcessExit handlers)");
         }
     }
 }

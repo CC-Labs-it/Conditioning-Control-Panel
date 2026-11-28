@@ -297,6 +297,33 @@ public sealed class ChasterBillTests
         await Task.CompletedTask;
     }));
 
+    [Fact]
+    public Task LeashCutRefreshesBalanceRunAndOpenReceipt() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _) =>
+    {
+        CoreSettings.Current.ChasterPrices.Add("leash");
+        var tab = new ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView();
+        var w = new Window { Width = 1200, Height = 900, Content = tab };
+        w.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(chaster.Note("leash").Booked);
+            Dispatcher.UIThread.RunJobs();
+            Click(w, tab.FindControl<Border>("StatRun")!);
+            var balance = tab.FindControl<TextBlock>("TxtBalance")!;
+            var run = tab.FindControl<TextBlock>("TxtRun")!;
+            var receipt = tab.FindControl<ChasterReceiptView>("Receipt")!;
+            Assert.NotEqual(CircesTab.Format(0, signed: false), balance.Text);
+            Assert.True(chaster.DropUnpushedLeash() > 0);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(CircesTab.Format(0, signed: false), balance.Text);
+            Assert.Equal(CircesTab.Format(chaster.Bill().NetSeconds), run.Text);
+            Assert.Equal("NET " + CircesTab.Format(chaster.Bill().NetSeconds), receipt.StampText);
+        }
+        finally { w.Close(); }
+        await Task.CompletedTask;
+    }));
+
     private static double Angle(Control c) => ((RotateTransform)c.RenderTransform!).Angle;
 
     private static async Task WaitFor(Func<bool> condition)

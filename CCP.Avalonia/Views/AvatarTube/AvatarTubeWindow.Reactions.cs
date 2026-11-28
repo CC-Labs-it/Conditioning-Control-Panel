@@ -1,5 +1,9 @@
 using System;
 using System.Threading.Tasks;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Awareness;
@@ -23,6 +27,26 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// </summary>
     public partial class AvatarTubeWindow
     {
+        // WPF Reactions.cs:397-417. A generation invalidates late replies on panic and close.
+        internal int LockReactionGeneration;
+        internal Func<string, int, int, Task<string?>>? LockReactionRequest;
+        internal Action<string>? LockReactionSpeech;
+
+        internal async Task<bool> PlayLockCardAiReactionAsync(string phrase, int mistakes, int repeats, int generation)
+        {
+            if (!CoreSettings.Current.AiChatEnabled || (LockReactionRequest == null && App.Ai?.IsAvailable != true)) return false;
+            try
+            {
+                var line = await (LockReactionRequest != null ? LockReactionRequest(phrase, mistakes, repeats)
+                    : App.Ai!.GetLockScreenReaction(phrase, mistakes, repeats));
+                if (generation != LockReactionGeneration || _avatarSetsClosed || string.IsNullOrWhiteSpace(line)) return false;
+                if (LockReactionSpeech is { } sink) sink(line);
+                else GigglePriority(line);
+                return true;
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to get AI lock-screen reaction"); return false; }
+        }
+
         private const double StartupCooldownSeconds = 3.0;   // WPF Speech.cs:68
         internal DateTime _startupTime = DateTime.Now;   // settable by tests
         private bool _activityAiInFlight, _stillOnAiInFlight;   // WPF: don't stack requests
@@ -40,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         {
             // OnOpened runs on every Hide/Show, OnClosed once: a second += outlived the window.
             DetachAwareness();
+            FlashOverlay.Clicked += OnFlashClicked;
             App.WindowAwareness.ActivityChanged += OnActivityChanged;
             App.WindowAwareness.StillOnActivity += OnStillOnActivity;
             App.WindowAwareness.Start();
@@ -47,8 +72,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private void DetachAwareness()
         {
+            FlashOverlay.Clicked -= OnFlashClicked;
             App.WindowAwareness.ActivityChanged -= OnActivityChanged;
             App.WindowAwareness.StillOnActivity -= OnStillOnActivity;
+        }
+
+        // WPF AvatarTubeWindow.Reactions.cs:515-523: one in three clicks.
+        private void OnFlashClicked() => ReactToFlashClick(_random.Next(3));
+
+        internal void ReactToFlashClick(int roll)
+        {
+            if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced() || roll != 0) return;
+            var phrases = CompanionPhraseEditorDialog.LoadPhrases()
+                .Where(p => p.Category == "FlashClicked" && p.IsEnabled).ToArray();
+            if (phrases.Length == 0) return;
+            var phrase = phrases[_random.Next(phrases.Length)];
+            Giggle(phrase.Text, phraseAudioPath: phrase.AudioFilePath ?? CompanionEventAudio.Resolve(phrase.Text));
         }
 
         /// <summary>WPF gates shared by both handlers: startup cooldown, bubble up, category.</summary>
@@ -127,6 +166,23 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 else Giggle(reaction!, unprompted: true);
             }
             catch (Exception ex) { Log.Warning(ex, "OnStillOnActivity handler failed"); }
+        }
+
+        /// <summary>WPF Reactions.cs:287 SpeakAwarenessLine: Awareness v2's delivery, called by the arbiter through
+        /// <c>AvatarAwarenessSpeaker</c> after every gate said yes, so it holds none. Rare and up double bounce.</summary>
+        public void SpeakAwarenessLine(string text, bool doubleBounce)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            RunOnAvatar(() =>
+            {
+                try
+                {
+                    if (doubleBounce) PlayDoubleBounce();
+                    GigglePriority(text, aiGenerated: true, unprompted: true);
+                    Log.Debug("Awareness v2 line delivered (rare={Rare}, {Chars} chars)", doubleBounce, text.Length);
+                }
+                catch (Exception ex) { Log.Warning(ex, "SpeakAwarenessLine failed"); }
+            });
         }
     }
 }

@@ -14,9 +14,11 @@ namespace ConditioningControlPanel.Avalonia.Platform.Deeper;
 // WPF RealActionDispatcher: the head supplies the actual effects and playback commands.
 internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhancementRunCleanup
 {
+    internal readonly CancellationTokenSource FlashOwner = new();
     private readonly object _audioGate = new();
     private readonly HashSet<Action> _audioStops = new();
     private volatile bool _retired;
+    private readonly Dictionary<string, string> _overlayBands = new(); // WPF RealActionDispatcher.cs:27
 
     // EnhancementEngine.Stop calls this on unbind and panic.
     public void ResetOverlayBands()
@@ -24,11 +26,24 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
         Action[] stops;
         lock (_audioGate) { _retired = true; stops = _audioStops.ToArray(); _audioStops.Clear(); }
         foreach (var stop in stops) { try { stop(); } catch { } }
+        // A band whose Stop was dropped must not keep its overlay hold (WPF OverlayService.cs:95 safety belt).
+        OnUi(() =>
+        {
+            string[] kinds;
+            lock (_overlayBands) { kinds = _overlayBands.Values.Distinct().ToArray(); _overlayBands.Clear(); }
+            foreach (var kind in kinds) if (Host is { } h) Sustain(h, kind, null);
+        });
     }
-    public void StopOneShotFlashes() { }
+    public void StopOneShotFlashes() => Views.Overlays.FlashOverlay.StopOwned(FlashOwner);
     public void StopOneShotSubliminals() => Views.Overlays.SubliminalWhisperShow.StopOneShots();
 
-    private void PlayAudio(string path, float volume, bool duckOtherAudio)
+    // WPF AudioService.PlaySound (:856): a live clip whose gain follows the master dial (:897). Null without
+    // the LibVLC player (tests, probes): the plain stoppable one-shot then plays at the start gain.
+    internal static Func<Func<string, float, Action, MindWipePlayer.IVoice?>?> LiveClipPlayer = () =>
+        LibVlcAudio.Instance is { } vlc ? (path, gain, finished) => vlc.PlaySound(path, gain,
+            _ => ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("sound", path, CoreEngine.IsRunning, false, DateTime.Now), finished) : null;
+
+    private void PlayAudio(string path, int volumePercent, bool duckOtherAudio)
     {
         lock (_audioGate)
         {
@@ -39,17 +54,33 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
             var generation = CoreAudio.DuckGeneration;
             Action? stop = null;
             bool finished = false;
+            var settings = CoreSettings.Current;
+            MindWipePlayer.IVoice? voice = null;
+            void Follow(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+            {
+                if (e.PropertyName == nameof(settings.MasterVolume) && voice is { } v) v.Volume = CoreAudio.SoundGain(volumePercent, settings.MasterVolume);
+            }
             void Finish()
             {
                 lock (_audioGate)
                 {
                     if (finished) return;
                     finished = true;
+                    settings.PropertyChanged -= Follow;
                     if (stop != null) _audioStops.Remove(stop);
                     if (ducked) CoreAudio.Unduck(generation);
                 }
             }
-            var stopPlayer = CoreAudio.PlayStoppable(path, volume, "deeper", onFinished: Finish);
+            var gain = CoreAudio.SoundGain(volumePercent, settings.MasterVolume);
+            Action stopPlayer;
+            if (LiveClipPlayer() is { } live)
+            {
+                voice = live(path, gain, Finish);
+                if (voice != null && !finished) settings.PropertyChanged += Follow;
+                stopPlayer = voice == null ? () => { } : voice.Dispose;
+                if (voice == null) Finish(); // a clip that never started must not hold the duck
+            }
+            else stopPlayer = CoreAudio.PlayStoppable(path, gain, "deeper", onFinished: Finish);
             stop = () => { try { stopPlayer(); } finally { Finish(); } };
             if (!finished) _audioStops.Add(stop);
         }
@@ -58,10 +89,12 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
     // Do not claim a match is active when this head cannot run its effects.
     internal static bool Supports(Enhancement enhancement)
     {
-        static bool EffectSupported(string? type) => type is EffectTypes.Haptic or EffectTypes.Flash or EffectTypes.Subliminal or EffectTypes.Bubble;
-        static bool ActionSupported(EnhancementAction? action) => action is not TriggerEffectAction effect || EffectSupported(effect.EffectType);
+        // Brain drain kinds need a desktop blur this head does not have yet.
+        static bool EffectSupported(string? type, string? overlay) => type is EffectTypes.Haptic or EffectTypes.Flash or EffectTypes.Subliminal or EffectTypes.Bubble or EffectTypes.Speak
+            || (type == EffectTypes.Overlay && overlay is null or OverlayKinds.PinkFilter or OverlayKinds.Spiral);
+        static bool ActionSupported(EnhancementAction? action) => action is not TriggerEffectAction effect || EffectSupported(effect.EffectType, effect.OverlayKind);
         return enhancement.Rules.All(r => !r.Enabled || ActionSupported(r.Action))
-            && enhancement.TimelineItems.All(i => !i.Enabled || (i.Kind == TimelineItemKind.Effect ? EffectSupported(i.EffectType) : ActionSupported(i.Action)));
+            && enhancement.TimelineItems.All(i => !i.Enabled || (i.Kind == TimelineItemKind.Effect ? EffectSupported(i.EffectType, i.EffectOverlayKind) : ActionSupported(i.Action)));
     }
     public async Task DispatchAsync(EnhancementAction action, EnhancementDispatchContext ctx, CancellationToken ct = default)
     {
@@ -80,7 +113,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 break;
             case PlayAudioAction audio when !string.IsNullOrEmpty(audio.Path):
                 var path = Path.IsPathRooted(audio.Path) ? audio.Path : Path.Combine(CorePaths.EffectiveAssets, audio.Path);
-                if (File.Exists(path)) PlayAudio(path, CoreAudio.SoundGain(audio.Volume, CoreSettings.Current.MasterVolume), audio.DuckOtherAudio);
+                if (File.Exists(path)) PlayAudio(path, audio.Volume, audio.DuckOtherAudio);
                 break;
             case ScreenShakeAction shake: Views.Deeper.ScreenShake.Shake(shake.Intensity, shake.DurationMs); break;
             case TriggerHapticAction haptic: await Haptic(haptic); break;
@@ -89,10 +122,50 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Flash && effect.Phase != EffectPhase.Stop:
                 // WPF RealActionDispatcher.cs:188-194 -> FlashService.cs:793: one picture for the authored duration.
-                Dispatcher.UIThread.Post(() => { if (!ct.IsCancellationRequested && !_retired && Host is { } h) Views.Overlays.FlashOverlay.TriggerOnce(h, amount: 1, durationMs: effect.DurationMs); }); break;
+                Dispatcher.UIThread.Post(() => { if (!ct.IsCancellationRequested && !_retired && Host is { } h) Views.Overlays.FlashOverlay.TriggerOwned(h, 1, effect.DurationMs, null, false, FlashOwner, effect.SuppressHaptic); }); break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Bubble: BubbleBurst(effect.DurationMs, ct); break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Subliminal && effect.Phase != EffectPhase.Stop && !string.IsNullOrWhiteSpace(effect.Text):
                 Views.Overlays.SubliminalWhisperShow.Custom(effect.Text, durationMs: effect.DurationMs, suppressHaptic: effect.SuppressHaptic); break;
+            case TriggerEffectAction effect when effect.EffectType == EffectTypes.Overlay: OnUi(() => Overlay(effect, ct)); break;
+        }
+    }
+
+    private static void OnUi(Action action) { if (Dispatcher.UIThread.CheckAccess()) action(); else Dispatcher.UIThread.Post(action); }
+    private static void Sustain(global::Avalonia.Visual host, string kind, double? opacity)
+    {
+        if (kind == OverlayKinds.PinkFilter) Views.Overlays.PinkFilterOverlay.SetSustained(host, opacity);
+        else if (kind == OverlayKinds.Spiral) Views.Overlays.SpiralOverlay.SetSustained(host, opacity);
+    }
+
+    // WPF RealActionDispatcher.cs:222-273 -> OverlayService.cs:924 (timed), :1129 (show), :1189 (hide), :1247 (ramp).
+    private void Overlay(TriggerEffectAction effect, CancellationToken ct)
+    {
+        var kind = effect.OverlayKind ?? OverlayKinds.PinkFilter;
+        var key = effect.EffectId ?? kind;
+        if (Host is not { } host) return;
+        if (effect.Phase == EffectPhase.Stop)
+        {
+            lock (_overlayBands) { if (_overlayBands.Remove(key, out var remembered)) kind = remembered; }
+            Sustain(host, kind, null);
+            return;
+        }
+        if (_retired || ct.IsCancellationRequested) return;
+        switch (effect.Phase)
+        {
+            case EffectPhase.Start:
+                lock (_overlayBands) _overlayBands[key] = kind;
+                Sustain(host, kind, effect.Opacity);
+                break;
+            case EffectPhase.Update:
+                if (kind == OverlayKinds.PinkFilter ? Views.Overlays.PinkFilterOverlay.ApplySessionOpacity(effect.Opacity * 100)
+                    : kind == OverlayKinds.Spiral && Views.Overlays.SpiralOverlay.ApplySessionOpacity(effect.Opacity * 100))
+                    Sustain(host, kind, effect.Opacity);
+                break;
+            case EffectPhase.Restart: break; // WPF :258 no remaining time to recompute
+            default:
+                if (kind == OverlayKinds.PinkFilter) Views.Overlays.PinkFilterOverlay.ShowTimed(host, effect.DurationMs, effect.Opacity);
+                else if (kind == OverlayKinds.Spiral) Views.Overlays.SpiralOverlay.ShowTimed(host, effect.DurationMs, effect.Opacity);
+                break;
         }
     }
     private static global::Avalonia.Visual? Host => (global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
