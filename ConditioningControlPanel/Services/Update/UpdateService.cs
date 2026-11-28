@@ -20,39 +20,18 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.4.2";
+        public const string AppVersion = "7.4.3";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.4.2 - Terms & Conditioning
+        public const string CurrentPatchNotes = @"v7.4.3 - Terms & Conditioning
 
-a round of fixes on top of 7.4.1.
+a small fix on top of 7.4.2.
 
 TERMS & CONDITIONING
-- playing it in the app now pays Sparkles, for reaching an end and for stickers. it never did before, which was not in the contract either way.
-- a new sticker shows up as a small card in the corner instead of a pile of them at once.
-- saving your card as a GIF or a video is about three times faster and no longer hangs at the end, and the card says where the file went.
-- saying yes to Scrolller pictures inside the game now gives you pictures, even when your Library is set to My own assets. your Library setting stays as it was.
-
-GETTING STARTED
-- three short cards show where pictures come from, how to add your own and how to switch things on. they are in the Inbox and in Help.
-
-FIXES
-- Presets and sessions: with many presets the sessions list was squeezed down to one row. the presets now scroll in their own box and the list keeps its room.
-- Mandatory Video: the length values lost their first digit in the new font. they have it back.
-- other apps stay quiet for a whole floating video. the quiet used to lift after five minutes while the video was still playing.
-- opening the Blink Trainer or Settings > Devices no longer freezes the app while it looks for cameras.
-- Companion links: a pool you emptied stays empty, and a pool with one video may play it again.
-- a fresh install starts the Library on Both, so there is something to look at before you add your own files. it still asks first.
-- the question about online pictures says Scrolller, where the pictures come from, and no longer says Reddit.
-- six option rows lost a stray colon, and Bubble Pop's Speed row speaks your language.
-- chess: in a cup replay the losing king waits for the last move to land before it falls.
-- the installer closes a CCP that is running hidden instead of failing on it.
-
-UNDER THE HOOD
-- when stopping takes longer than a second, the log now says which step took the time. if the app froze on you after Stop, a bug report from this version tells us far more than before.
+- with Offline Mode on, the picture card now says that Offline Mode is why pictures cannot load, and where to turn it off (Settings > Data > Offline Mode). it used to send you looking for a profile setting that does not exist.
 
 this is a pre-release for testers. tell us what breaks.";
 
