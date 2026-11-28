@@ -146,18 +146,24 @@ public sealed class SubliminalSolidHostTests
         }
         finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; SharedOverlayHost.Raise = raise; }
     });
-    [Fact]
-    public void Pinned_chaos_tick_does_not_re_raise_the_hosted_card() => AvaloniaTestDispatcher.Run(() =>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Pinned_chaos_restacks_hosted_card_like_wpf(bool videoRestack, bool unified) => AvaloniaTestDispatcher.Run(() =>
     {
         SubliminalSilentHintTests.EnsureAvalonia();
         var configure = SharedOverlayHost.Configure;
         var raise = SharedOverlayHost.Raise;
         var bubbles = ChaosRunHost.RaiseBubbles;
         var overlayRaise = ChaosRunHost.RaiseOverlayWindow;
+        var (videos, stackBelow) = (SharedOverlayHost.LiveVideos, SharedOverlayHost.StackBelow);
+        var video = new Window();
         var flash = new FlashOverlayWindow();
         var spawning = typeof(ChaosRunHost).GetField("_spawning", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
         var oldSpawning = spawning.GetValue(null);
         var pin = ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop;
+        var oldUnified = ConditioningControlPanel.CoreSettings.Current.UnifiedOverlayHost;
         var order = new List<string>();
         SharedOverlayHost.Configure = (w, _) => { w.Width = 300; w.Height = 200; return true; };
         SharedOverlayHost.Raise = _ => { order.Add("card"); return true; };
@@ -170,11 +176,20 @@ public sealed class SubliminalSolidHostTests
             order.Clear();
             spawning.SetValue(null, true);
             ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = true;
-            ChaosRunHost.KeepChromeTopmost();
-            // WPF ChaosModeService.cs:788-806 never raises ChaosBubbleHostOverlay: BringAllToFront skips
-            // host-borne bubbles (BubbleService.cs:5551, :3584), so the tick lifts chrome, bubbles and
-            // flashes over a live card. The card host is raised only on show (SubliminalService.cs:829).
-            Assert.Equal(new[] { "bubbles", "flash" }, order);
+            ConditioningControlPanel.CoreSettings.Current.UnifiedOverlayHost = unified;
+            if (videoRestack)
+            {
+                video.Show();
+                SharedOverlayHost.LiveVideos = () => new[] { video };
+                SharedOverlayHost.StackBelow = (_, _) => { order.Add("below video"); return true; };
+                ChaosRunHost.RaiseGameLayerAboveVideo();
+                Assert.Equal(unified ? new[] { "bubbles", "flash" } : new[] { "card", "bubbles", "flash" }, order);
+            }
+            else
+            {
+                ChaosRunHost.KeepChromeTopmost();
+                Assert.Equal(new[] { "bubbles", "flash" }, order);
+            }
         }
         finally
         {
@@ -183,9 +198,12 @@ public sealed class SubliminalSolidHostTests
             ChaosRunHost.RaiseOverlayWindow = overlayRaise;
             SharedOverlayHost.Configure = configure;
             SharedOverlayHost.Raise = raise;
+            (SharedOverlayHost.LiveVideos, SharedOverlayHost.StackBelow) = (videos, stackBelow);
+            video.Close();
             ChaosRunHost.RaiseBubbles = bubbles;
             spawning.SetValue(null, oldSpawning);
             ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = pin;
+            ConditioningControlPanel.CoreSettings.Current.UnifiedOverlayHost = oldUnified;
         }
     });
 

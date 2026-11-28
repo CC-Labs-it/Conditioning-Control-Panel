@@ -1132,6 +1132,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             ChaosFieldFxOverlay.RaiseActive();
             if (ChaosSkiaFxOverlay.Active is { } skiaFx) foreach (var host in skiaFx.Hosts) Raise(host);   // every per-monitor host (restack b123 #4247)
+            // WPF ChaosModeService.cs:755 raises the legacy bubble host before the chrome and bubbles.
+            if (!CoreSettings.Current.UnifiedOverlayHost) SharedOverlayHost.RaiseLive();
             foreach (var w in ChaosPopText.Pool.All) Raise(w);
             RaiseDvdAboveVideo();
             ChaosEffectBannerOverlay.RaiseActive();
