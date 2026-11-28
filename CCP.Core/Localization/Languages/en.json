@@ -61,6 +61,8 @@
   "deeper_open_editor_failed_title": "Open Editor failed",
   "deeper_open_editor_failed_fmt": "Couldn't open Deeper Editor:\n\n{0}: {1}",
   "webcam_unnamed_device": "(unnamed device)",
+  "race_origin_unavailable": "Race cannot open because CCP cannot save its local address. Check CCP storage.",
+  "race_origin_moved": "Another app is using the race's saved local address. The race now moves to a new address and its settings saved on this computer start fresh.",
   "rt_engine_intro": "Racing Thoughts needs its race engine. 124 MB, once.",
   "rt_engine_download": "Download",
   "rt_engine_cancel": "Cancel",

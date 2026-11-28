@@ -64,6 +64,8 @@
   "deeper_open_editor_failed_title": "Impossible d’ouvrir l’éditeur",
   "deeper_open_editor_failed_fmt": "Impossible d’ouvrir l’éditeur Deeper :\n\n{0}: {1}",
   "webcam_unnamed_device": "(appareil sans nom)",
+  "race_origin_unavailable": "La course ne peut pas démarrer car CCP ne peut pas enregistrer son adresse locale. Vérifiez le stockage de CCP.",
+  "race_origin_moved": "Une autre application utilise l’adresse locale enregistrée de la course. La course passe maintenant à une nouvelle adresse et ses réglages enregistrés sur cet ordinateur repartent de zéro.",
   "rt_engine_intro": "Racing Thoughts a besoin de son moteur de course. 124 Mo une fois.",
   "rt_engine_download": "Télécharger",
   "rt_engine_cancel": "Annuler",

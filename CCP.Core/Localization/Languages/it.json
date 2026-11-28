@@ -59,6 +59,8 @@
   "deeper_open_editor_failed_title": "Impossibile aprire l’editor",
   "deeper_open_editor_failed_fmt": "Impossibile aprire l’editor Deeper:\n\n{0}: {1}",
   "webcam_unnamed_device": "(dispositivo senza nome)",
+  "race_origin_unavailable": "La gara non può aprirsi perché CCP non riesce a salvare il suo indirizzo locale. Controlla lo spazio di archiviazione di CCP.",
+  "race_origin_moved": "Un’altra app usa l’indirizzo locale salvato della gara. La gara passa ora a un nuovo indirizzo e le sue impostazioni salvate su questo computer ripartono da zero.",
   "rt_engine_intro": "Racing Thoughts richiede il motore di gara. 124 MB una volta.",
   "rt_engine_download": "Scarica",
   "rt_engine_cancel": "Annulla",

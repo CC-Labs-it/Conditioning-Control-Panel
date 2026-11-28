@@ -64,6 +64,8 @@
   "deeper_open_editor_failed_title": "No se pudo abrir el editor",
   "deeper_open_editor_failed_fmt": "No se pudo abrir el editor Deeper:\n\n{0}: {1}",
   "webcam_unnamed_device": "(dispositivo sin nombre)",
+  "race_origin_unavailable": "La carrera no puede abrirse porque CCP no puede guardar su dirección local. Revisa el almacenamiento de CCP.",
+  "race_origin_moved": "Otra aplicación usa la dirección local guardada de la carrera. La carrera pasa ahora a una dirección nueva y sus ajustes guardados en este equipo empiezan de cero.",
   "rt_engine_intro": "Racing Thoughts necesita su motor de carreras. 124 MB una vez.",
   "rt_engine_download": "Descargar",
   "rt_engine_cancel": "Cancelar",

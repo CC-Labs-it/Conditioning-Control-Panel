@@ -89,6 +89,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>Where pages come from; tests point it at a throwaway root.</summary>
         internal static Func<WebAssetServer> Server { get; set; } = () => WebAssetServer.Shared;
+        /// <summary>Shows a race origin notice; OK runs <c>acknowledged</c> when given (the X does not).</summary>
+        internal static Action<string, string, Action?> RaceOriginNotice = (title, message, acknowledged) =>
+        {
+            var dialog = new Dialogs.MessageDialog(title, message, showCancel: false);
+            if (acknowledged != null) dialog.FindControl<Button>("BtnOk")!.Click += (_, _) => acknowledged();
+            dialog.Show();
+        };
 
         internal Game Spec { get; }
         internal WebHost Web { get; }
@@ -164,6 +171,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
             if (spec.Id == FypId) OpenFypVisit();
+            // Do not let a race write state to an origin that will be abandoned next launch.
+            if ((spec.Id == GlassroadId || spec.Id == "raceclassic") && Server() is { HasStableOrigin: false } server)
+            {
+                var title = Loc.Get(spec.TitleKey);
+                // Owner #5842: a saved port that stays taken is adopted after a notice, not a restart dead end.
+                if (server.SavedPortTaken)
+                    RaceOriginNotice(title, Loc.Get("race_origin_moved"), () =>
+                    {
+                        if (server.AdoptOrigin()) LaunchWindow(spec, room: room, panel: panel);
+                        else RaceOriginNotice(title, Loc.Get("race_origin_unavailable"), null);
+                    });
+                else RaceOriginNotice(title, Loc.Get("race_origin_unavailable"), null);
+                return null;
+            }
             try
             {
                 var window = new GameWindow(spec);

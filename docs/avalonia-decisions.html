@@ -1804,5 +1804,13 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>Visible difference: no blur and no melt warp. Bubbles v2 is offered on this head on that basis.</li>
 <li>Alternatives: hold the pop until a self-excluding capture exists (the bubble would pay XP only); a blurred capture that includes the overlays.</li>
 </ul>
+<h2 id="2026-11-26-race-taken-saved-port">2026-11-26: A taken saved race port is adopted after a notice (owner)</h2>
+<ul>
+<li>Decision: when the saved loopback port of the race origin is still taken after four binds 250 ms apart, Glassroad and Classic show a notice; OK saves this run's port as the race origin and opens the race (<code>CCP.Avalonia/Platform/WebAssetServer.cs</code> <code>AdoptOrigin</code>, <code>CCP.Avalonia/Views/Games/GameWindow.cs</code> race origin check). Only a port that cannot be saved still refuses the race.</li>
+<li>Why: WPF has no port to lose. It maps the fixed virtual host <code>ccp.game</code> (<code>ConditioningControlPanel/Services/Glassroad/GlassroadHostService.cs:102-107</code>, <code>Services/Chaos/CaucusHostService.cs:186-190</code>), so its race storage origin never moves. The earlier refusal ended in "restart CCP"; the owner asked for a recoverable path (CB, <a href="https://github.com/CC-Labs-it/Conditioning-Control-Panel/pull/5842#issuecomment-7192542031">#5842 comment</a>).</li>
+<li>Visible difference: after OK the race's browser-saved settings start fresh under the new origin.</li>
+<li>Alternatives: keep refusing until restart (the dead end); open on the fallback port without saving it (storage lost again next launch).</li>
+<li>Evidence: PR #5229; tests <code>WebAssetServerPortTests</code>, <code>GameWindowTests.RaceDoors_TakenSavedPort_AdoptTheNewOriginAfterTheNotice</code>.</li>
+</ul>
 </body>
 </html>

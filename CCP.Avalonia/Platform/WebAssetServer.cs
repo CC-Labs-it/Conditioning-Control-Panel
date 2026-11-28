@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// Serves Resources/web to this head's web views, standing in for WPF's WebView2
 /// SetVirtualHostNameToFolderMapping("ccp.game", Resources\web). Avalonia.Controls.WebView 12.1 cannot
 /// answer a custom scheme on WebKitGTK and file:// breaks module/fetch loads, so: plain HTTP on 127.0.0.1
-/// only, a random port, and a per-run token. The first URL carries ?ccp_t=token; the answer sets an
+/// only, a remembered port when available, and a per-run token. The first URL carries ?ccp_t=token; the answer sets an
 /// HttpOnly SameSite=Strict cookie so the page's own relative and root-relative loads keep working.
 /// Anything without the token, with a foreign Host header (DNS rebinding), or resolving outside the
 /// root is refused.
@@ -43,7 +43,8 @@ public sealed class WebAssetServer : IDisposable
             lock (_sharedLock)
             {
                 if (_shared != null) return _shared;
-                _shared = new WebAssetServer(Path.Combine(AppContext.BaseDirectory, "Resources", "web"))
+                _shared = new WebAssetServer(Path.Combine(AppContext.BaseDirectory, "Resources", "web"),
+                    Path.Combine(CorePaths.UserData, "web-asset-port.txt"))
                     { AssetsRoot = () => CorePaths.EffectiveAssets, ContentRoot = () => ContentLocator.ContentWebRoot };
                 // Every host's frames point Scrolller media at this server's relay origin (Core ScrolllerRelay.RewriteJson).
                 ScrolllerRelay.Relay = (_shared.RelayOrigin, _shared.Token);
@@ -78,10 +79,18 @@ public sealed class WebAssetServer : IDisposable
         [".woff2"] = "font/woff2", [".ttf"] = "font/ttf", [".wasm"] = "application/wasm",
     };
 
-    readonly HttpListener _listener = new(), _relayListener = new();
+    HttpListener _listener = new(), _relayListener = new();
     readonly string _root;
 
     public int Port { get; }
+
+    /// <summary>True when a race can use the same origin again on a later launch.</summary>
+    internal bool HasStableOrigin { get; private set; }
+
+    /// <summary>The saved port stayed taken through the retries, so this run serves from a fallback port.</summary>
+    internal bool SavedPortTaken { get; }
+
+    readonly string? _portFile;
 
     /// <summary>
     /// The Scrolller relay's OWN port. A web engine caps HTTP/1.1 connections per scheme+host+port (Chromium and libsoup:
@@ -97,17 +106,54 @@ public sealed class WebAssetServer : IDisposable
 
     public string Token { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
 
-    public WebAssetServer(string root)
+    public WebAssetServer(string root, string? portFile = null)
     {
         _root = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        Port = Bind(_listener);
-        RelayPort = Bind(_relayListener);
+        int preferred = 0;
+        bool preferenceReadable = true;
+        if (portFile != null)
+        {
+            try { int.TryParse(File.ReadAllText(portFile), out preferred); }
+            catch (FileNotFoundException) { }
+            catch (DirectoryNotFoundException) { }
+            catch (IOException) { preferenceReadable = false; }
+            catch (UnauthorizedAccessException) { preferenceReadable = false; }
+        }
+        _portFile = portFile;
+        Port = Bind(ref _listener, preferred);
+        SavedPortTaken = portFile != null && preferenceReadable && preferred is > 0 and <= 65535 && Port != preferred;
+        HasStableOrigin = portFile == null || (preferenceReadable && preferred is > 0 and <= 65535 && Port == preferred);
+        // A temporary collision must not strand the browser storage at the original origin.
+        if (portFile != null && preferenceReadable && preferred is not (> 0 and <= 65535))
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(portFile))!);
+                File.WriteAllText(portFile, Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                HasStableOrigin = true;
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        RelayPort = Bind(ref _relayListener);
         _ = Task.Run(() => Loop(_listener, relay: false));
         _ = Task.Run(() => Loop(_relayListener, relay: true));
     }
 
-    static int Bind(HttpListener listener)
+    static int Bind(ref HttpListener listener, int preferred = 0)
     {
+        if (preferred is > 0 and <= 65535)
+        {
+            // A just-closed earlier run can hold the saved port for a moment, so retry before falling back.
+            for (int attempt = 1; ; attempt++)
+            {
+                listener.Prefixes.Add($"http://127.0.0.1:{preferred}/");
+                try { listener.Start(); return preferred; }
+                catch (HttpListenerException) { listener.Close(); listener = new HttpListener(); }
+                if (attempt == 4) break;
+                System.Threading.Thread.Sleep(250);
+            }
+        }
         // ponytail: probe-then-bind can lose the port to another process in between; retry if that ever shows up.
         var probe = new TcpListener(IPAddress.Loopback, 0);
         probe.Start();
@@ -116,6 +162,20 @@ public sealed class WebAssetServer : IDisposable
         listener.Prefixes.Add($"http://127.0.0.1:{port}/");
         listener.Start();
         return port;
+    }
+
+    /// <summary>Saves this run's port as the race origin, once the user has seen that the saved one is taken.</summary>
+    internal bool AdoptOrigin()
+    {
+        if (_portFile == null) return HasStableOrigin = true;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(_portFile))!);
+            File.WriteAllText(_portFile, Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return HasStableOrigin = true;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     /// <summary>The relay url for one Scrolller media url (what a host frame carries after the rewrite), or null.</summary>
