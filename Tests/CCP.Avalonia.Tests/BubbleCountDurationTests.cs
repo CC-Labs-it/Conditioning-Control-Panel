@@ -9,6 +9,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -17,6 +18,10 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class BubbleCountDurationTests
 {
+    // Identity token only. It is never used as a native player and stays rooted for the testhost.
+    private static readonly LibVLCSharp.Shared.LibVLC MismatchedOwner =
+        (LibVLCSharp.Shared.LibVLC)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(LibVLCSharp.Shared.LibVLC));
+
     // WPF BubbleCountWindow.xaml.cs:705-718. A cache hit needs no native parser.
     [Fact]
     public void CachedDurationAndNonblockingMissUseTheSharedCache()
@@ -24,9 +29,13 @@ public sealed class BubbleCountDurationTests
         var dir = Directory.CreateTempSubdirectory("ccp-count-duration-");
         var cacheField = typeof(MandatoryVideoOverlay).GetField("_lengths", BindingFlags.Static | BindingFlags.NonPublic)!;
         var previous = cacheField.GetValue(null);
+        var ownerField = typeof(MandatoryVideoOverlay).GetField("_lengthsOwner", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var previousOwner = ownerField.GetValue(null);
         var cache = new VideoMetadataCache(null!);
         var gate = Field<SemaphoreSlim>(cache, "_parseGate");
+        var engineGate = typeof(LibVlcAudio).GetField("_engineGate", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
         gate.Wait(); // Hold parsing so a miss must return without waiting for metadata.
+        Monitor.Enter(engineGate); // Keep the owner stable while installing and exercising the fixture.
         try
         {
             var hit = Path.Combine(dir.FullName, "hit.mp4");
@@ -34,7 +43,9 @@ public sealed class BubbleCountDurationTests
             File.WriteAllText(hit, "cached clip");
             File.WriteAllText(miss, "unknown clip");
             cache.StoreDuration(hit, 125);
+            ownerField.SetValue(null, MismatchedOwner); // simulate an earlier engine before installing the fixture
             cacheField.SetValue(null, cache);
+            ownerField.SetValue(null, LibVlcAudio.Shared);
             Assert.Equal(125, BubbleCountWindow.ResolveVideoDurationSeconds(hit));
             Assert.Equal(30, BubbleCountWindow.ResolveVideoDurationSeconds(miss));
             Assert.Single(Field<ConcurrentDictionary<string, byte>>(cache, "_inFlight"));
@@ -45,7 +56,9 @@ public sealed class BubbleCountDurationTests
         {
             Field<Timer?>(cache, "_saveTimer")?.Dispose();
             cacheField.SetValue(null, previous);
+            ownerField.SetValue(null, previousOwner);
             gate.Release();
+            Monitor.Exit(engineGate);
             dir.Delete(true);
         }
     }

@@ -30,6 +30,7 @@ public sealed class PossessionDirector : IDisposable
     private readonly Services.LockdownService _lockdown;
     private readonly List<IPossessionEffect> _effects;
     private readonly PossessionDirectorHead _head;
+    private readonly Func<TimeSpan, CancellationToken, Task> _holdDelay;
     private readonly List<IPossessionScene> _scenes;
     private readonly List<HostEntry> _hosts = new();
     private readonly List<LiveGhost> _live = new();
@@ -80,10 +81,11 @@ public sealed class PossessionDirector : IDisposable
     private static readonly TimeSpan WardenVerbTimeout = TimeSpan.FromSeconds(15);
     private const string FallEffectId = "fall";
 
-    public PossessionDirector(Services.LockdownService lockdown, IEnumerable<IPossessionEffect>? effects, PossessionDirectorHead? head = null)
+    public PossessionDirector(Services.LockdownService lockdown, IEnumerable<IPossessionEffect>? effects, PossessionDirectorHead? head = null, Func<TimeSpan, CancellationToken, Task>? holdDelay = null)
     {
         _lockdown = lockdown ?? throw new ArgumentNullException(nameof(lockdown));
         _head = head ?? new PossessionDirectorHead();
+        _holdDelay = holdDelay ?? Task.Delay;
         _scenes = _head.Scenes().ToList();
         _effects = (effects ?? Enumerable.Empty<IPossessionEffect>()).Where(e => e != null).ToList();
 
@@ -136,6 +138,7 @@ public sealed class PossessionDirector : IDisposable
             // down now rather than leaking a ghost that outlives its room.
             foreach (var g in _live.Where(g => ReferenceEquals(g.Host.Host, host)).ToArray())
                 UndoGhostSync(g);
+            try { _head.StopReleasedEffects(host); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { _head.DetachReactive(host); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { entry.Attribution.ReleaseAll(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _hosts.Remove(entry);
@@ -152,6 +155,8 @@ public sealed class PossessionDirector : IDisposable
             // Release() (inside UndoGhostSync) is what owns the ledger; these two are a belt, and they
             // are only safe HERE because there is no await above them for a new ghost to arrive in.
             foreach (var g in _live.ToArray()) UndoGhostSync(g);
+            foreach (var h in _hosts)
+                try { _head.StopReleasedEffects(h.Host); } catch (Exception ex) { Diag.Swallowed(ex); }
             _live.Clear();
             _liveKeys.Clear();
             foreach (var h in _hosts) { try { h.Attribution.ReleaseAll(); } catch (Exception ex) { Diag.Swallowed(ex); } }
@@ -851,7 +856,7 @@ public sealed class PossessionDirector : IDisposable
         CancellationToken token;
         try { token = ghost.Cts.Token; }
         catch (ObjectDisposedException) { return; }      // already released underneath us
-        try { await Task.Delay(hold, token).ConfigureAwait(true); }
+        try { await _holdDelay(hold, token).ConfigureAwait(true); }
         catch (OperationCanceledException) { return; }   // exit / UndoAll already took it down
         catch (ObjectDisposedException) { return; }
         await UndoGhostAsync(ghost, TimeSpan.FromMilliseconds(600)).ConfigureAwait(true);
@@ -1176,6 +1181,8 @@ public sealed class PossessionDirectorHead
     public Action<PossessionDirector, IPossessionHost> AttachReactive { get; init; } = (_, _) => { };
     public Action<IPossessionHost> DetachReactive { get; init; } = _ => { };
     public Action DetachAllReactive { get; init; } = () => { };
+    /// <summary>Stop head effects still animating after leaving the live ledger.</summary>
+    public Action<IPossessionHost> StopReleasedEffects { get; init; } = _ => { };
     /// <summary>Last cursor position in ghost-layer coordinates; (0,0) until the mouse has moved.</summary>
     public Func<(double X, double Y)> Pointer { get; init; } = () => (0, 0);
     /// <summary>A control's bounds in ghost-layer coordinates, or null when it has none.</summary>

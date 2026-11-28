@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Gaze.ActiveChanged += OnGazeActiveChanged;
             SyncFocusGazeToggle(CoreSettings.Current.FocusGazeEnabled);
             CoreMods.ModChanged += OnModChangedRepaintArt;
-            RefreshHeroArt();
+            if (_heroArtRevision != CoreMods.ModRevision) RefreshHeroArt();   // only a mod change missed while detached
             App.IntakePass.PassStateChanged += OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged += OnIntakePassStateChanged;
             RefreshPlayCards();
@@ -138,8 +138,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// Paints each hero plate, mod override first (<see cref="ModArt.TryLoad"/>), this head's
         /// shipped avares:// copy second. A null resolve LEAVES the plate as it is.
         /// </summary>
+        private long _heroArtRevision = -1;
         private void RefreshHeroArt()
         {
+            _heroArtRevision = CoreMods.ModRevision;
             foreach (var (plateName, art, fit, decodeWidth) in HeroPlates)
             {
                 try

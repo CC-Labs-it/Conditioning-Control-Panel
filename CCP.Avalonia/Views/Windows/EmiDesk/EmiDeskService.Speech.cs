@@ -9,6 +9,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 internal sealed partial class EmiDeskService
 {
     private DispatcherTimer? _greetingTimer;
+    internal Action<string, object?>? SummonMoment;
+    private void FireSummonMoment(string id, object? context = null)
+    {
+        if (SummonMoment != null) SummonMoment(id, context);
+        else Fire(id, context);
+    }
     private string _summonVia = "rail";
     private bool _summonTouring;
     private DateTime _outSinceUtc;
@@ -17,7 +23,7 @@ internal sealed partial class EmiDeskService
     internal EmiDeskService()
     {
         EmiLineEngine.AskSituationProbe = static () => Instance.AskSituationOk();
-        EmiLineEngine.EffectFeasibleProbe = EffectFeasible;
+        EmiLineEngine.EffectFeasibleProbe = EmiOffers.EffectFeasible;
     }
     private bool AskSituationOk()
     {
@@ -26,13 +32,6 @@ internal sealed partial class EmiDeskService
         return IsOut && win is { IsVisible: true, PresentationActive: false, InputLocked: false, Transiting: false, AskLive: false, RainAskLive: false }
             && !CoreSession.IsSessionRunning && App.Sessions?.IsRunning != true && CoreEngine.Video?.IsPlaying != true
             && !TubeBubbleLive() && main?.WindowState != WindowState.Minimized;
-    }
-    private static bool EffectFeasible(string? effect)
-    {
-        if (!string.Equals(effect, "pinTop:fyp", StringComparison.OrdinalIgnoreCase)) return false;
-        var target = EmiTargets.Find("fyp");
-        return target is { Available: true, Locked: false }
-            && !EmiState.Current.Pins.Contains("fyp", StringComparer.OrdinalIgnoreCase);
     }
     internal EmiLineEngine LineEngine { get; set; } = EmiLineEngine.Instance;
     internal Func<bool> TubeBubbleLive = () => global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.Live?.HasBubbleUp == true;
@@ -103,6 +102,11 @@ internal sealed partial class EmiDeskService
         try { ArmVoiceHold("avatarSpeaking"); }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] avatar hold arm failed"); }
     }
+    internal void NoteAwarenessReaction()
+    {
+        try { ArmVoiceHold("awarenessReaction"); }
+        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] awareness hold arm failed"); }
+    }
     private void ArmVoiceHold(string momentId)
     {
         if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => ArmVoiceHold(momentId)); return; }
@@ -150,7 +154,11 @@ internal sealed partial class EmiDeskService
         // WPF EmiDeskService.cs:819,847-855: delayed, ordered greetings.
         var moment = !LineEngine.EverSpent("firstContact") ? "firstContact"
             : !LineEngine.EverSpent("desktopFirstBoot") ? "desktopFirstBoot" : "summoned";
-        Fire(moment, new { via = _summonVia, minutes = Math.Max(0, (int)(UtcNow() - _outSinceUtc).TotalMinutes), touring = _summonTouring });
+        // WPF :913-933 submits the verdict first; the engine arbitrates it with the greeting.
+        var mute = _pendingMuteMoment;
+        _pendingMuteMoment = null;
+        if (mute != null) FireSummonMoment(mute);
+        FireSummonMoment(moment, new { via = _summonVia, minutes = Math.Max(0, (int)(UtcNow() - _outSinceUtc).TotalMinutes), touring = _summonTouring });
     }
     private void CancelGreeting()
     {
@@ -159,6 +167,11 @@ internal sealed partial class EmiDeskService
     }
     internal void PanicSilence()
     {
+        _window?.CloseGlassForPanic();
+        ++_summonGen;
+        _pendingMuteMoment = null;
+        EmiMutePromptWindow.Cancel();
+        if (IsOut && _window?.IsVisible != true) { IsOut = false; RaiseOutChanged(); }
         CancelGreeting();
         _window?.CancelAsk();
         _window?.CancelChain();

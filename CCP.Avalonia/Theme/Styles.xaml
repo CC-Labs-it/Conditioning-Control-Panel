@@ -550,7 +550,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource PinkButtonHoveredBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
@@ -1050,8 +1054,7 @@
     </Setter>
   </ControlTheme>
 
-  <!-- Inputs.xaml:152-208, the implicit ComboBoxItem every WPF dropdown row wears (DarkComboBoxStyle
-       sets no ItemContainerStyle, so its rows are these too): r6 row, 5px accent dot on the
+  <!-- Inputs.xaml:152-208, the implicit ComboBoxItem: r6 row, 5px accent dot on the
        selected row, pink 20% hover / 40% selected. Own template: Fluent's item theme repaints its
        presenter for every state. Declared first: a same-dictionary StaticResource resolves at parse time. -->
   <ControlTheme x:Key="DarkComboBoxItem" TargetType="ComboBoxItem">
@@ -1191,11 +1194,28 @@
     </Style>
   </ControlTheme>
 
+  <!-- MainWindow.xaml:1389-1420: compact rows omit the implicit selected dot. -->
+  <ControlTheme x:Key="CompactComboBoxItem" TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItem}">
+    <Setter Property="Padding" Value="8,5"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ComboBoxItem">
+        <Border x:Name="Bd" CornerRadius="6" Margin="0,1" Background="{TemplateBinding Background}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter x:Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
   <!-- MainWindow.xaml:1234, the COMPACT variant of the implicit ComboBox above for dense rows: 11px,
        MinHeight 24, an 18px arrow column with a smaller chevron, text at 8,2,2,2 and a popup capped
        at 240px. Same template; the old 32px Fluent glyph column cut "Default (follow multi-monitor)"
        at Width 180 (Pink Filter, Spiral). Several code-behind sites resolve this key by name. -->
   <ControlTheme x:Key="DarkComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource InputComboBoxTheme}">
+    <Setter Property="ItemContainerTheme" Value="{StaticResource CompactComboBoxItem}"/>
     <Setter Property="FontSize" Value="11"/>
     <Setter Property="MinHeight" Value="24"/>
     <Setter Property="Padding" Value="8,2,2,2"/>
@@ -1336,7 +1356,13 @@
                      glyph came out about twice the size; the filled caret is the same small triangle. -->
                 <fx:IconGlyph x:Name="Chevron" Grid.Column="3" Kind="CaretRight" Variant="Filled" Size="8"
                               Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center" Margin="8,0,4,0"
-                              RenderTransformOrigin="50%,50%"/>
+                              RenderTransformOrigin="50%,50%" RenderTransform="rotate(0deg)">
+                  <fx:IconGlyph.Transitions>
+                    <Transitions>
+                      <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2"/>
+                    </Transitions>
+                  </fx:IconGlyph.Transitions>
+                </fx:IconGlyph>
               </Grid>
             </ToggleButton>
             <ContentPresenter x:Name="PART_ContentPresenter" Grid.Row="1" Margin="15,0,15,15"
@@ -1349,6 +1375,9 @@
     </Setter>
     <Style Selector="^:expanded /template/ fx|IconGlyph#Chevron">
       <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+    </Style>
+    <Style Selector="^ /template/ ToggleButton#PART_toggle:pointerover fx|IconGlyph#Chevron">
+      <Setter Property="Foreground" Value="White"/>
     </Style>
   </ControlTheme>
 
@@ -1397,6 +1426,7 @@
 
   <!-- WPF TabButton/TabButtonActive, reused from the existing quest view port. -->
   <ControlTheme x:Key="TabButton" TargetType="Button">
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
@@ -1425,6 +1455,7 @@
   </ControlTheme>
 
   <ControlTheme x:Key="TabButtonActive" TargetType="Button">
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
     <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
     <Setter Property="Foreground" Value="White"/>
     <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
@@ -1527,5 +1558,19 @@
     </Style>
     <Style Selector="^:pointerover /template/ Border#bd"><Setter Property="Opacity" Value="0.85"/></Style>
   </ControlTheme>
+
+        <ControlTheme x:Key="DlgHeader" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource PinkBrush}"/>
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </ControlTheme>
+
+        <ControlTheme x:Key="DlgHeaderLarge" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource PinkBrush}"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </ControlTheme>
 
 </ResourceDictionary>

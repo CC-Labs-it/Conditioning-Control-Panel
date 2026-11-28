@@ -1,10 +1,15 @@
-// WPF MainWindow.Browser.cs:2814-2859, 2889-2936, 2953-2990, 3081-3136.
+// WPF MainWindow.Browser.cs:2814-2859, 2889-2936, 2953-3136.
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
 
@@ -17,6 +22,12 @@ public partial class MainShellWindow
     private WebHost? _browserFullscreenHost;
     private long _browserFullscreenSession;
     private long? _browserNavigationFullscreenSession;
+    // Embedded mode (WPF :2995-3055): the page moves into a window CCP owns and closes again on exit.
+    private Window? _browserTakeoverWindow;
+    internal Window? BrowserTakeoverWindow => _browserTakeoverWindow;
+    private bool _browserTakeoverClosing;
+    private double? _browserPreFullscreenZoom;
+    private DisplayMirror? _browserMirror;
 
     // A page may report exit, but only the native engine signal can enter fullscreen.
     private const string BrowserFullscreenExitScript = @"(function(){
@@ -49,7 +60,7 @@ public partial class MainShellWindow
     {
         _browserFullscreenHost = BrowserView;
         if (_browserFullscreenHost == null) return;
-        _browserFullscreenHost.NativeFullscreenEntered += EnterBrowserPopoutFullscreen;
+        _browserFullscreenHost.NativeFullscreenEntered += EnterBrowserFullscreen;
         _browserFullscreenHost.NativeFullscreenExited += ExitBrowserPopoutFullscreen;
         _browserFullscreenHost.NavigationBeginning += BrowserFullscreenNavigationStarted;
         _browserFullscreenHost.NavigationCompleted += BrowserFullscreenNavigation;
@@ -74,21 +85,35 @@ public partial class MainShellWindow
         if (message.Trim().Trim('"') == "ccp_browser_fullscreen_off") ExitBrowserPopoutFullscreen();
     }
 
-    private void EnterBrowserPopoutFullscreen()
+    private void EnterBrowserFullscreen()
     {
-        var window = _browserPopoutWindow;
-        if (window == null || _browserFullscreenWindow != null) return; // embedded takeover is part B
-        // WPF MainWindow.Browser.cs:2870-2877 (RemoteBrowserStopRule.HideBrowser): while the remote
-        // controller card is up, a late page fullscreen must not raise a topmost host over it. Remote
-        // browser video (the rule's exemption) is not on this head, so the card always wins (#4423).
-        if (Named<Border>("RemoteControlOverlay")?.IsVisible == true)
+        if (_browserFullscreenWindow != null || _browserFullscreenHost is not { } host) return;
+        // WPF :2821-2828 RemoteBrowserStopRule.HideBrowser: the remote card refuses page fullscreen unless the
+        // page is the controller's own video (#4423).
+        if (Named<Border>("RemoteControlOverlay")?.IsVisible == true && !_remoteBrowserVideoActive)
         {
-            _ = _browserFullscreenHost?.InvokeScriptAsync(BrowserFullscreenCleanupScript);
+            _ = host.InvokeScriptAsync(BrowserFullscreenCleanupScript);
             return;
+        }
+        var window = _browserPopoutWindow;
+        var page = BrowserPage;
+        if (window == null)
+        {
+            if (page == null || !page.BrowserContainer.Children.Contains(host)) return;
+            var screen = Screens.ScreenFromWindow(this)?.Bounds ?? default;
+            // WPF :3011-3024: borderless, topmost, off the taskbar, shown small and then sized to the screen.
+            window = new Window
+            {
+                WindowDecorations = WindowDecorations.None, CanResize = false, ShowInTaskbar = false, Topmost = true,
+                Background = Brushes.Black, WindowStartupLocation = WindowStartupLocation.Manual,
+                Position = new global::Avalonia.PixelPoint(screen.X + 100, screen.Y + 100), Width = 400, Height = 300,
+            };
+            _browserTakeoverWindow = window;
+            window.Closing += BrowserTakeoverClosing;
         }
         _browserFullscreenWindow = window;
         _browserFullscreenSession++;
-        if (_browserFullscreenHost is { } host) _ = InstallBrowserFullscreenExitScriptAsync(host);
+        _ = InstallBrowserFullscreenExitScriptAsync(host);
         _browserPreviousState = window.WindowState;
         _browserPreviousDecorations = window.WindowDecorations;
         _browserPreviousTopmost = window.Topmost;
@@ -98,9 +123,28 @@ public partial class MainShellWindow
         window.AddHandler(KeyDownEvent, BrowserFullscreenKeyDown, RoutingStrategies.Tunnel);
         try
         {
-            window.WindowDecorations = WindowDecorations.None;
-            window.CanResize = false;
-            window.Topmost = true;
+            // WPF :2831-2842: clone the screens only when "Show content on" covers more than one.
+            if (GlobalScreenCount() > 1 && _browserMirror == null && ScreenMirrorHead.For(this) is { } mirror && mirror.EnableMirror())
+                _browserMirror = mirror;
+            // WPF :2963-2964: the page runs at 100 % while it fills the screen.
+            _browserPreFullscreenZoom = host.BrowserZoom;
+            if (_browserPreFullscreenZoom != null) host.SetBrowserZoom(1.0);
+            if (window == _browserTakeoverWindow && page != null)
+            {
+                using (host.BeginReparenting())
+                {
+                    page.BrowserContainer.Children.Remove(host);
+                    window.Content = host;
+                    window.Show();
+                }
+                page.SyncBrowserPrompt();
+            }
+            else
+            {
+                window.WindowDecorations = WindowDecorations.None;
+                window.CanResize = false;
+                window.Topmost = true;
+            }
             window.WindowState = WindowState.FullScreen;
         }
         catch (Exception ex)
@@ -108,6 +152,24 @@ public partial class MainShellWindow
             Serilog.Log.Warning(ex, "Browser fullscreen entry failed");
             ExitBrowserPopoutFullscreen();
         }
+    }
+
+    // WPF App.GetGlobalScreens (:2833): the screens the "Show content on" pick covers.
+    private int GlobalScreenCount()
+    {
+        var screens = ScreenList.Enumerate(this);
+        var s = CoreSettings.Current;
+        return Overlays.PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor,
+            s.DualMonitorEnabled, screens.Count, screens.ToList().FindIndex(x => x.IsPrimary)).Length;
+    }
+
+    // Alt+F4 or the OS closing the takeover window is an exit too (WPF :3029-3048).
+    private void BrowserTakeoverClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (sender != _browserTakeoverWindow) return;
+        _browserTakeoverClosing = true;
+        try { ExitBrowserPopoutFullscreen(); }
+        finally { _browserTakeoverClosing = false; }
     }
 
     private void BrowserFullscreenActivated(object? sender, EventArgs e)
@@ -127,13 +189,35 @@ public partial class MainShellWindow
 
     internal void ExitBrowserPopoutFullscreen()
     {
+        // WPF :3085-3089: mirroring goes first, and a failed restore is retried by the next stop.
+        if (_browserMirror is { } mirror && mirror.DisableMirror()) _browserMirror = null;
         var window = _browserFullscreenWindow;
         if (window == null) return;
         _browserFullscreenWindow = null;
         window.Activated -= BrowserFullscreenActivated;
         window.Deactivated -= BrowserFullscreenDeactivated;
         window.RemoveHandler(KeyDownEvent, BrowserFullscreenKeyDown);
-        _ = _browserFullscreenHost?.InvokeScriptAsync(BrowserFullscreenCleanupScript);
+        var host = _browserFullscreenHost;
+        _ = host?.InvokeScriptAsync(BrowserFullscreenCleanupScript);
+        if (_browserPreFullscreenZoom is { } zoom) host?.SetBrowserZoom(zoom);
+        _browserPreFullscreenZoom = null;
+        if (window == _browserTakeoverWindow)
+        {
+            _browserTakeoverWindow = null;
+            window.Closing -= BrowserTakeoverClosing;
+            window.Topmost = false;
+            if (BrowserPage is { } page && host != null)
+            {
+                using (host.BeginReparenting())
+                {
+                    window.Content = null;
+                    if (!page.BrowserContainer.Children.Contains(host)) page.BrowserContainer.Children.Add(host);
+                }
+                page.SyncBrowserPrompt();
+            }
+            if (!_browserTakeoverClosing) window.Close();
+            return;
+        }
         window.WindowState = _browserPreviousState;
         window.WindowDecorations = _browserPreviousDecorations;
         window.CanResize = _browserPreviousCanResize;
@@ -144,7 +228,7 @@ public partial class MainShellWindow
     {
         ExitBrowserPopoutFullscreen();
         if (_browserFullscreenHost is not { } host) return;
-        host.NativeFullscreenEntered -= EnterBrowserPopoutFullscreen;
+        host.NativeFullscreenEntered -= EnterBrowserFullscreen;
         host.NativeFullscreenExited -= ExitBrowserPopoutFullscreen;
         host.NavigationBeginning -= BrowserFullscreenNavigationStarted;
         host.NavigationCompleted -= BrowserFullscreenNavigation;

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -12,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Remix;
+using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -21,6 +23,7 @@ public class JackpotRemixFlowTests
     [Fact]
     public Task OwnedToggleAndCachedRemixReachAnimatedFlashAndCleanUp() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        using var cache = new FlashLuminanceCacheIsolation();
         var s = CoreSettings.Current;
         var old = (s.JackpotRemixEnabled, s.MotionLevel, s.FlashClickable, s.CorruptionMode, s.HydraLimit, s.FlashStayUntilPopped, s.GlobalTargetMonitor);
         var own = PrizeOwnership.IsGranted;
@@ -99,6 +102,79 @@ public class JackpotRemixFlowTests
             Directory.Delete(dir, true);
         }
     });
+
+    [Theory]
+    [InlineData(false, true, false, 2)]
+    [InlineData(false, true, true, 1)]
+    [InlineData(true, true, false, 0)]
+    [InlineData(false, false, false, 0)]
+    public Task RemixLuminanceFollowsSuccessfulSpawns(bool suppress, bool enabled, bool refuseSecond, int expectedCount) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            using var cache = new FlashLuminanceCacheIsolation();
+            var s = CoreSettings.Current;
+            var old = (s.GlobalTargetMonitor, s.FlashClickable, s.FlashStayUntilPopped, s.HydraLimit);
+            var saved = (CoreHaptics.Service, FlashOverlay.SetLuminance, FlashOverlay.Present, CoreProgression.AddXPProvider);
+            var warning = typeof(FlashOverlay).GetField("_warnedUnavailable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            var warned = (bool)warning.GetValue(null)!;
+            var settings = new HapticSettings { LuminanceSyncEnabled = true, LuminanceSyncIntensity = 0.6 };
+            using var haptics = new HapticService(settings);
+            var calls = new List<(double Value, int Ms)>();
+            var dir = Directory.CreateTempSubdirectory("ccp-remix-cues-").FullName;
+            var fixture = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Here())!, "..", "..", "Assets/web/dtrh/assets/bubbles/effects/spirals/sp6.gif"));
+            var path = Path.Combine(dir, "remix-fixture.gif");
+            File.Copy(fixture, path);
+            var host = new Window();
+            try
+            {
+                CoreHaptics.Service = haptics;
+                FlashOverlay.SetLuminance = (value, ms) => calls.Add((value, ms));
+                var (frames, _) = SpiralOverlay.Decode(path, maxFrames: 60);
+                Assert.True(frames.Count > 1);
+                FlashOverlay.ApplyLuminance(frames[0], "", TimeSpan.FromMilliseconds(3300));
+                var expected = Assert.Single(calls).Value;
+                foreach (var frame in frames) frame.Dispose();
+                calls.Clear();
+                settings.LuminanceSyncEnabled = enabled;
+                var attempts = 0;
+                FlashOverlay.Present = (_, _, _) => ++attempts != 2 || !refuseSecond;
+                CoreProgression.AddXPProvider = (_, _) => { };
+                (s.GlobalTargetMonitor, s.FlashClickable, s.FlashStayUntilPopped, s.HydraLimit) =
+                    (ConditioningControlPanel.Services.UI.MonitorTarget.All, false, false, 20);
+                FlashOverlay._remix = new JackpotRemixDirector(() => new[] { path }, () => false, () => false,
+                    () => true, dir, () => true, () => MotionLevel.Full, () => false,
+                    (_, _, _) => Task.FromResult<string?>(null), () => ulong.MaxValue, odds: 1);
+                var screen = host.Screens.All[0];
+                Assert.True(await FlashOverlay.TryShowRemix(s, new[] { screen, screen }, 2300, true, FlashOverlay.Generation, suppress));
+                Assert.Equal(2, attempts);
+                Assert.Equal(refuseSecond ? 1 : 2, FlashOverlay.Active.Count);
+                Assert.Equal(expectedCount, calls.Count);
+                Assert.All(calls, call => { Assert.Equal(expected, call.Value, 6); Assert.Equal(3300, call.Ms); });
+            }
+            finally
+            {
+                FlashOverlay.CloseAll(false);
+                warning.SetValue(null, warned);
+                host.Close();
+                (CoreHaptics.Service, FlashOverlay.SetLuminance, FlashOverlay.Present, CoreProgression.AddXPProvider) = saved;
+                (s.GlobalTargetMonitor, s.FlashClickable, s.FlashStayUntilPopped, s.HydraLimit) = old;
+                Directory.Delete(dir, true);
+            }
+        });
+
+    [Fact]
+    public async Task RefusedRemixSpawnRestoresUnavailableWarningState()
+    {
+        var field = typeof(FlashOverlay).GetField("_warnedUnavailable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var previous = (bool)field.GetValue(null)!;
+        try
+        {
+            field.SetValue(null, false);
+            await RemixLuminanceFollowsSuccessfulSpawns(false, true, true, 1);
+            Assert.False((bool)field.GetValue(null)!);
+        }
+        finally { field.SetValue(null, previous); }
+    }
 
     private sealed class LuckyRandom : Random { public override double NextDouble() => 0; }
 

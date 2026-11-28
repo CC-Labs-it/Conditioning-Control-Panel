@@ -197,6 +197,81 @@ public sealed partial class FirstShowStageTests
         AssertWarningThenStart(stage, credited: yes);   // the built-in pictures carry no "via Scrolller"
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task ConsentRefreshesVisibleSourceAndDealtQueues(bool yes) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var service = new SettingsService();
+        var old = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = () => service;
+        var video = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        var bubbles = BubbleCountHost.Instance;
+        var (oldVideo, oldBubbles) = (video.Scheduler, bubbles.Scheduler);
+        MainShellWindow? shell = null;
+        try
+        {
+            var s = CoreSettings.Current;
+            s.Welcomed = true; s.HasAcceptedAgeVerification = true;
+            s.MotionLevel = MotionLevel.Off; s.MasterVolume = 0;
+            s.MediaSource = "local"; s.RemoteMediaConsented = false; s.FypOnlineConsented = false; s.OfflineMode = false;
+            IReadOnlyList<string> Library() => s.MediaSource == "local" ? new[] { "local1", "local2" } : new[] { "remote" };
+            video.Scheduler = new MandatoryVideoScheduler(video, library: Library);
+            bubbles.Scheduler = new BubbleCountScheduler(bubbles, library: Library);
+            Assert.StartsWith("local", video.Scheduler.PickNext());
+            Assert.StartsWith("local", bubbles.Scheduler.PickNext());
+            FirstShowService.RequireClickThrough = false;
+            shell = new MainShellWindow { OpenWelcomeShow = _ => false };
+            shell.Show(); shell.ShowTab("assets"); Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView>("AssetsTab")!;
+            var chips = tab.FindControl<WrapPanel>("RemoteSourceChips")!;
+            global::Avalonia.Controls.Primitives.ToggleButton Chip(string name) => chips.Children
+                .OfType<global::Avalonia.Controls.Primitives.ToggleButton>().Single(c => (string?)c.Tag == name);
+            Assert.True(Chip("local").IsChecked);
+            Assert.True(FirstShowService.Open(shell));
+            var stage = FirstShowService.Window!;
+            var asked = 0;
+            stage.ConsentOverride = (_, _) => { asked++; return Task.FromResult(yes); };
+            await WithPictures(stage, new List<string>(), () => stage.Pick("HypnoGoneWild"));
+            Assert.Equal(1, asked);
+            Assert.Equal(yes ? "mixed" : "local", s.MediaSource);
+            Assert.Multiple(
+                () => Assert.True(Chip(yes ? "mixed" : "local").IsChecked),
+                () => Assert.Equal(yes ? "remote" : "local", video.Scheduler.PickNext()![..(yes ? 6 : 5)]),
+                () => Assert.Equal(yes ? "remote" : "local", bubbles.Scheduler.PickNext()![..(yes ? 6 : 5)]));
+        }
+        finally
+        {
+            FirstShowService.Stop(); FirstShowService.RequireClickThrough = true;
+            EmiDeskService.Instance.Window?.ShutDown();
+            foreach (var w in shell?.OwnedWindows.ToList() ?? new()) w.Close();
+            shell?.RequestExit(); Dispatcher.UIThread.RunJobs();
+            video.Scheduler = oldVideo; bubbles.Scheduler = oldBubbles;
+            service.SaveImmediate(); CoreSettings.ServiceProvider = old;
+        }
+    });
+
+    [Fact]
+    public Task PanicWhileConsentIsPendingDoesNotApplyIt() => Run(async stage =>
+    {
+        var s = CoreSettings.Current;
+        s.MediaSource = "local"; s.RemoteMediaConsented = false; s.FypOnlineConsented = false; s.OfflineMode = false;
+        var response = new TaskCompletionSource<bool>();
+        stage.ConsentOverride = (_, _) => response.Task;
+        await WithPictures(stage, new List<string>(), async () =>
+        {
+            var pick = stage.Pick("HypnoGoneWild");
+            Assert.False(pick.IsCompleted);
+            PanicSurfaces.StopAll("test");
+            response.SetResult(true);
+            await pick;
+        });
+        Assert.False(FirstShowService.IsActive);
+        Assert.False(s.RemoteMediaConsented);
+        Assert.Equal("local", s.MediaSource);
+    });
+
     /// <summary>Already consented with a fetching source: no card, the preset loads, the source stays the user's.</summary>
     [Fact]
     public Task AConsentedSourceLoadsThePresetWithoutAsking() => Run(async stage =>
