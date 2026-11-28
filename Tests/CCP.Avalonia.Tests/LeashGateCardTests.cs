@@ -44,44 +44,48 @@ public sealed class LeashGateCardTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
-        var s = CoreSettings.Current;
-        (s.Welcomed, s.HasAcceptedAgeVerification, s.WhatMovedCardShown, s.LauncherSoundEnabled) = (true, true, 1, false);
-        var (oldIn, oldLab) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider);
-        var (oldSvc, oldDue, oldPresent) = (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider);
-        var oldSelfCut = LeashHead.SelfCut;   // a cut in the body notes it (WPF LeashSurfaces._iCut)
-        (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (() => true, () => true);
-        var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
-        if (punished) svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
-        // What LeashHead.Start publishes (LeashHeadTests proves Start sets them).
-        LeashHead.Service = svc;
-        MainShellWindow.LeashGateDueProvider = () => LeashHead.Service?.GateDue != null;
-        MainShellWindow.PresentLeashGateProvider = sh => sh.PresentLeashGate();
-        var shell = new MainShellWindow();
+        var oldSettingsProvider = CoreSettings.ServiceProvider;
         try
         {
-            shell.Show();
-            Dispatcher.UIThread.RunJobs();
-            shell.CheckLeashGate(); // Evaluate the timer's shown-panel phase even on a fast machine.
-            Assert.Equal(punished, shell.LeashGate!.IsUp);
-            Assert.True(LauncherWindow.BackToLauncher(shell));
-            shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
-            Dispatcher.UIThread.RunJobs();
-            var launcher = LauncherWindow.Instance!;
-            launcher.Hide();                             // off screen: no exit beat to wait out
-            shell.CheckLeashGate(); // Evaluate the away-panel phase without racing the next 2 s tick.
-            body(shell, launcher, svc);
+            CoreSettings.ServiceProvider = () => settings;
+            var s = CoreSettings.Current;
+            (s.Welcomed, s.HasAcceptedAgeVerification, s.WhatMovedCardShown, s.LauncherSoundEnabled) = (true, true, 1, false);
+            var (oldIn, oldLab) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider);
+            var (oldSvc, oldDue, oldPresent) = (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider);
+            var oldSelfCut = LeashHead.SelfCut;   // a cut in the body notes it (WPF LeashSurfaces._iCut)
+            (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (() => true, () => true);
+            var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            if (punished) svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+            // What LeashHead.Start publishes (LeashHeadTests proves Start sets them).
+            LeashHead.Service = svc;
+            MainShellWindow.LeashGateDueProvider = () => LeashHead.Service?.GateDue != null;
+            MainShellWindow.PresentLeashGateProvider = sh => sh.PresentLeashGate();
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show();
+                Dispatcher.UIThread.RunJobs();
+                shell.CheckLeashGate(); // Evaluate the timer's shown-panel phase even on a fast machine.
+                Assert.Equal(punished, shell.LeashGate!.IsUp);
+                Assert.True(LauncherWindow.BackToLauncher(shell));
+                shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
+                Dispatcher.UIThread.RunJobs();
+                var launcher = LauncherWindow.Instance!;
+                launcher.Hide();                             // off screen: no exit beat to wait out
+                shell.CheckLeashGate(); // Evaluate the away-panel phase without racing the next 2 s tick.
+                body(shell, launcher, svc);
+            }
+            finally
+            {
+                ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashAskWindow.CloseCurrent();   // an ask or snap the body left up
+                LeashHead.SelfCut = oldSelfCut;
+                LauncherWindow.Instance?.Close();
+                (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (oldIn, oldLab);
+                (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider) = (oldSvc, oldDue, oldPresent);
+                shell.Close();
+            }
         }
-        finally
-        {
-            ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashAskWindow.CloseCurrent();   // an ask or snap the body left up
-            LeashHead.SelfCut = oldSelfCut;
-            LauncherWindow.Instance?.Close();
-            (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (oldIn, oldLab);
-            (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider) = (oldSvc, oldDue, oldPresent);
-            shell.Close();
-            CoreSettings.ServiceProvider = null;
-        }
+        finally { CoreSettings.ServiceProvider = oldSettingsProvider; }
     });
 
     internal static void PressTile(LauncherWindow launcher)

@@ -65,27 +65,48 @@ public sealed class Sync7HistoryGentleTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task IncompleteGentlePromiseStaysOutOfTheSettingsUi(bool enabled) => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task GentleControlsAreVisibleInSettings(bool enabled) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();
         var s = CoreSettings.Current;
-        s.GentleVisuals = enabled;
-        var section = new PerformanceSettingsSection();
-        section.OnSectionShown();
-        // Every control, including the tooltip's grid, must have an invisible ancestor.
-        // A saved preference or a settings refresh must never reveal the pending promise.
-        var toggle = section.FindControl<CheckBox>("ChkGentleVisuals")!;
-        var choices = section.FindControl<StackPanel>("PnlGentleChoices")!;
-        Assert.Equal(enabled, toggle.IsChecked);
-        Assert.Equal(enabled, choices.IsVisible);
-        var controls = section.GetLogicalDescendants().OfType<Control>()
-            .Where(c => c.Name is "ChkGentleVisuals" or "CmbGentleFade" or "CmbGentleSpeed"
-                || ToolTip.GetTip(c) is not null && c.GetLogicalDescendants().Contains(toggle)).ToArray();
-        Assert.Equal(4, controls.Length);
-        foreach (var control in controls)
-            Assert.Contains(control.GetLogicalAncestors().OfType<Control>(), ancestor => !ancestor.IsVisible);
-        Assert.Equal(enabled, s.GentleVisuals);
+        var original = s.GentleVisuals;
+        try
+        {
+            s.GentleVisuals = enabled;
+            var section = new PerformanceSettingsSection();
+            section.OnSectionShown();
+            var toggle = section.FindControl<CheckBox>("ChkGentleVisuals")!;
+            var choices = section.FindControl<StackPanel>("PnlGentleChoices")!;
+            Assert.Equal(enabled, toggle.IsChecked);
+            Assert.Equal(enabled, choices.IsVisible);
+            var controls = new Control[] { toggle, section.FindControl<ComboBox>("CmbGentleFade")!,
+                section.FindControl<ComboBox>("CmbGentleSpeed")! };
+            foreach (var control in controls)
+            {
+                Assert.True(control.IsVisible);
+                Assert.DoesNotContain(control.GetLogicalAncestors().OfType<Control>(),
+                    ancestor => ancestor != choices && !ancestor.IsVisible);
+            }
+            Assert.Equal(enabled, s.GentleVisuals);
+        }
+        finally { s.GentleVisuals = original; }
         return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task VisibilityTestRestoresGentleVisuals(bool enabled) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var settings = CoreSettings.Current;
+        var original = settings.GentleVisuals;
+        try
+        {
+            settings.GentleVisuals = !enabled;
+            await GentleControlsAreVisibleInSettings(enabled);
+            Assert.Equal(!enabled, settings.GentleVisuals);
+        }
+        finally { settings.GentleVisuals = original; }
     });
 
     [Fact]

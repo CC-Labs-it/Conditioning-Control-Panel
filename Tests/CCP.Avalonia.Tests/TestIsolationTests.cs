@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
+using System;
 using System.IO;
 using System.Linq;
 using Avalonia.Headless;
@@ -594,6 +595,28 @@ public class TestIsolationTests
             }
             finally { snapshot.Restore(); }
         });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LeashGateHelperRestoresTheSettingsProvider(bool fail) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var original = CoreSettings.ServiceProvider;
+        var service = new ConditioningControlPanel.Services.SettingsService();
+        Func<ConditioningControlPanel.Services.SettingsService?> provider = () => service;
+        CoreSettings.ServiceProvider = provider;
+        try
+        {
+            void Run() => LeashGateCardTests.Run(false, (_, _, _) =>
+            {
+                if (fail) throw new InvalidOperationException("test failure");
+            });
+            if (fail) Assert.Throws<InvalidOperationException>(Run); else Run();
+            Assert.Same(provider, CoreSettings.ServiceProvider);
+            Assert.Same(service.Current, CoreSettings.Current);
+        }
+        finally { CoreSettings.ServiceProvider = original; }
+    });
 
     [Fact]
     public void PrivacyRingTestRestoresProviderAndLeavesRunningEngineAlone() => AvaloniaTestDispatcher.Run(() =>
