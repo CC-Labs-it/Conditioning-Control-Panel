@@ -133,6 +133,115 @@ public sealed class BrowserInitialHomeTests
         Assert.Equal(0, Seeks());
     }));
 
+    [Fact]
+    public Task BrowserZoomAndFoldControlsHaveSeparateHitAreas() => Run((shell, page, host, mod) =>
+    {
+        shell.Width = 1600;
+        shell.CompleteTabTransition();
+        shell.UpdateLayout();
+        var minus = page.FindControl<Button>("BtnBrowserZoomOut")!;
+        var plus = page.FindControl<Button>("BtnBrowserZoomIn")!;
+        var fold = page.FindControl<Button>("BtnFoldBrowser")!;
+        var reload = page.FindControl<Button>("BtnReloadBrowser")!;
+        Assert.IsType<IconGlyph>(minus.Content);
+        Assert.IsType<IconGlyph>(plus.Content);
+        Assert.True(plus.Bounds.Width > 0);
+        Assert.True(fold.Bounds.Width > 0);
+        var plusRight = plus.TranslatePoint(new Point(plus.Bounds.Width, 0), page)!.Value.X;
+        var foldLeft = fold.TranslatePoint(default, page)!.Value.X;
+        Assert.True(plusRight <= foldLeft, $"Zoom ends at {plusRight}, fold starts at {foldLeft}");
+        var foldRight = fold.TranslatePoint(new Point(fold.Bounds.Width, 0), page)!.Value.X;
+        var clip = (Control)((Control)fold.Parent!).Parent!;
+        Assert.True(clip.ClipToBounds);
+        var clipLeft = clip.TranslatePoint(default, page)!.Value.X;
+        var clipRight = clip.TranslatePoint(new Point(clip.Bounds.Width, 0), page)!.Value.X;
+        Assert.True(foldLeft - 4 >= clipLeft && foldRight + 4 <= clipRight,
+            $"Fold {foldLeft}..{foldRight} lacks halo space in clip {clipLeft}..{clipRight}");
+        var webcam = page.FindControl<Button>("BtnWebcamTracking")!;
+        var webcamLeft = webcam.TranslatePoint(default, page)!.Value.X;
+        Assert.True(foldRight <= webcamLeft, $"Fold ends at {foldRight}, webcam starts at {webcamLeft}");
+        var reloadRight = reload.TranslatePoint(new Point(reload.Bounds.Width, 0), page)!.Value.X;
+        var minusLeft = minus.TranslatePoint(default, page)!.Value.X;
+        Assert.True(reloadRight <= minusLeft, $"Reload ends at {reloadRight}, zoom starts at {minusLeft}");
+        var zoomCentre = plus.TranslatePoint(new Point(0, plus.Bounds.Height / 2), page)!.Value.Y;
+        var foldCentre = fold.TranslatePoint(new Point(0, fold.Bounds.Height / 2), page)!.Value.Y;
+        var reloadCentre = reload.TranslatePoint(new Point(0, reload.Bounds.Height / 2), page)!.Value.Y;
+        Assert.InRange(Math.Abs(zoomCentre - foldCentre), 0, 1);
+        Assert.InRange(Math.Abs(zoomCentre - reloadCentre), 0, 1);
+    });
+
+    [Fact]
+    public Task BrowserToolbarZoomStepsClampsAndPanicCancelsPendingWork() => Run((shell, page, host, mod) =>
+    {
+        var minus = page.FindControl<Button>("BtnBrowserZoomOut")!;
+        var plus = page.FindControl<Button>("BtnBrowserZoomIn")!;
+        void Click(Button button) => button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        var before = host.BrowserZoom;
+        Click(plus);
+        Assert.Equal(before, host.BrowserZoom); // no engine
+        host.ScriptInvoker = _ => Task.FromResult<string?>(null);
+        System.Threading.CancellationToken pending = default;
+        double native = 1;
+        host.ZoomInvoker = (value, token) => { native = value; pending = token; };
+        host.ZoomStepInvoker = (direction, token, done) =>
+        {
+            pending = token;
+            native = Math.Round(Math.Clamp(native + direction * 0.1, 0.25, 5.0), 2);
+            done(native);
+        };
+        host.BrowserZoomAdapterReady();
+        host.SetBrowserZoom(0.5);
+        Click(plus);
+        Assert.Equal(0.6, host.BrowserZoom);
+        Click(minus);
+        Assert.Equal(0.5, host.BrowserZoom);
+        host.SetBrowserZoom(0.25);
+        Click(minus);
+        Assert.Equal(0.25, host.BrowserZoom);
+        host.SetBrowserZoom(5.0);
+        Click(plus);
+        Assert.Equal(5.0, host.BrowserZoom);
+        Assert.False(pending.IsCancellationRequested);
+        foreach (var surface in PanicSurfaces.All)
+            if (surface.Id == "browser-media") surface.Stop(shell);
+        Assert.True(pending.IsCancellationRequested);
+    });
+
+    [Fact]
+    public Task ToolbarZoomUsesTheCurrentNativeValue() => Run((shell, page, host, mod) =>
+    {
+        host.ScriptInvoker = _ => Task.FromResult<string?>(null);
+        double native = 1;
+        host.ZoomInvoker = (value, _) => native = value;
+        host.ZoomStepInvoker = (direction, _, completed) =>
+        {
+            native = Math.Round(Math.Clamp(native + direction * 0.1, 0.25, 5.0), 2);
+            completed(native);
+        };
+        host.BrowserZoomAdapterReady();
+        host.SetBrowserZoom(0.5);
+        native = 1.4; // a Ctrl+scroll change made inside the browser
+        page.FindControl<Button>("BtnBrowserZoomIn")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(1.5, native);
+        Assert.Equal(1.5, host.BrowserZoom);
+    });
+
+    [Fact]
+    public Task ToolbarZoomBeforeAdapterReadyIsDiscarded() => Run((shell, page, host, mod) =>
+    {
+        host.ScriptInvoker = _ => Task.FromResult<string?>(null);
+        var steps = 0;
+        host.ZoomStepInvoker = (_, _, _) => steps++;
+        var plus = page.FindControl<Button>("BtnBrowserZoomIn")!;
+        plus.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(0, steps);
+        Assert.Null(host.BrowserZoom);
+        host.BrowserZoomAdapterReady();
+        Assert.Equal(0, steps); // the earlier click must not be replayed
+        plus.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(1, steps);
+    });
+
     private static void WithVideoSettings(Action check)
     {
         var settings = CoreSettings.Current;
