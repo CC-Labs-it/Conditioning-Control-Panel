@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private double _riseFrom;
         private bool _animate, _particles, _listening;
         public event EventHandler? VisitRequested;
+        public event EventHandler? CounterRequested;
 
         public SparkleWallet()
         {
@@ -53,7 +54,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 if (e.Property == IsVisibleProperty && !IsVisible) { ClosePopup(); StopWave(); ClearReward(); }
             };
-            WalletButton.Click += (_, _) => { HelpPopup.IsOpen = false; InvitePopup.IsOpen = !InvitePopup.IsOpen; };
+            WalletButton.Click += (_, _) =>
+            {
+                if (CounterRequested is { } counter) { ClosePopup(); counter(this, EventArgs.Empty); return; }
+                HelpPopup.IsOpen = false; InvitePopup.IsOpen = !InvitePopup.IsOpen;
+            };
             WalletButton.PointerEntered += (_, _) => Wave();
             WalletButton.PointerExited += (_, _) => StopWave();
             WalletButton.GotFocus += (_, _) => Wave();

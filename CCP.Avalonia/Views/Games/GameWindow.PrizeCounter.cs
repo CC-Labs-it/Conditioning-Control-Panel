@@ -2,7 +2,7 @@
 // Requests go through the Core PrizeCounterRelay pinned to the opener. Panic closes it (PanicSurfaces "games",
 // WPF GameSurfaces.cs:66), app exit closes it (WPF App.xaml.cs:6433), a first Escape is the page's back
 // (PanicPolicy.KeptEscapePage.Counter, WPF MainWindow.xaml.cs:1531). Openers hear the close once, with its reason.
-// Part B: desk, chess, kart and Rain wear routing, remaining doors, Rain price cache, boot wallet read.
+// Part B: desk, chess, kart and Rain wear routing, remaining doors and Rain price cache.
 using System;
 using System.Collections.Generic;
 using System.Linq;
