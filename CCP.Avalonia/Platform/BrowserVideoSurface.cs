@@ -182,6 +182,7 @@ internal sealed class BrowserVideoSurface : IDisposable
           if(v.currentTime!==lastTime){lastTime=v.currentTime; lastAdvance=performance.now();}
           else if(performance.now()-lastAdvance>=10000){clearInterval(watchdog); send({type:'error',code:100});}
         },1000);
+        window.addEventListener('pointerdown',()=>send({type:'click'}),true);
         window.addEventListener('contextmenu',e=>e.preventDefault());
         window.addEventListener('keydown',e=>{e.preventDefault(); if(!e.repeat)
           send({type:'key',key:e.key,alt:e.altKey});},true);

@@ -7,7 +7,7 @@ function page(play = () => Promise.resolve(), primary = true, paused = false) {
   let now = 0, nextId = 0;
   const timers = new Map(), messages = [], listeners = new Map();
   const video = { paused: false, ended: false, currentTime: 0, play, pause() { this.paused = true; } };
-  const window = { invokeCSharpAction: s => messages.push(JSON.parse(s)), addEventListener: (type, listener) => listeners.set(type, listener) };
+  const window = { invokeCSharpAction: s => messages.push(JSON.parse(s)), addEventListener: (type, listener, capture) => listeners.set(type, { listener, capture }) };
   const schedule = (f, ms, repeat) => {
     const id = ++nextId;
     timers.set(id, { f, due: now + ms, period: repeat ? ms : 0 });
@@ -79,7 +79,7 @@ test('media errors retain their code; a rejected start without MediaError stays 
 test('context menu is cancelled before native playback controls appear', () => {
   const p = page();
   let cancelled = false;
-  p.listeners.get('contextmenu')({ preventDefault() { cancelled = true; } });
+  p.listeners.get('contextmenu').listener({ preventDefault() { cancelled = true; } });
   assert.equal(cancelled, true);
 });
 
@@ -112,6 +112,16 @@ test('a rejected resume reports an error to the host', async () => {
   p.controls.resume();
   await Promise.resolve();
   assert.deepEqual(p.messages.at(-1), { type: 'error', code: 0, session: 'test' });
+});
+
+test('pointerdown reports one click in capture phase without cancelling it', () => {
+  const p = page();
+  let cancelled = false;
+  const handler = p.listeners.get('pointerdown');
+  assert.equal(handler?.capture, true);
+  handler.listener({ preventDefault() { cancelled = true; } });
+  assert.deepEqual(p.messages, [{ type: 'click', session: 'test' }]);
+  assert.equal(cancelled, false);
 });
 
 test('time messages include position, played ranges and pause state', () => {
