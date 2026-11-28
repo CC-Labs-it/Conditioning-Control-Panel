@@ -110,7 +110,7 @@ public sealed partial class GameWindowTests
         {
             Log.Logger = logger;
             w.Web.OnWebMessage(new JObject { ["type"] = "log", ["level"] = level, ["msg"] = "page probe" }.ToString());
-            var entry = Assert.Single(sink.Events);
+            var entry = Assert.Single(sink.Events, e => e.MessageTemplate.Text.Contains("[page]"));   // a debounced settings save from the run before can log into the global sink
             Assert.Equal(expected, entry.Level);
             Assert.Contains("page probe", entry.RenderMessage());
             Assert.Contains("breakoutdemo", entry.RenderMessage());

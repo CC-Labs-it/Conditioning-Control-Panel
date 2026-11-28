@@ -68,7 +68,7 @@ public sealed class DeeperEditorTestFireTests
     });
     [Theory]
     [InlineData(false, true, "deeper_editor_haptic_test_row_off")]
-    [InlineData(true, false, "deeper_editor_haptic_test_premium")]
+    [InlineData(true, false, null)] // toys are free since 2026-11-11 (HapticsAccess.IsOpen): no premium still fires
     [InlineData(true, true, null)]
     public Task HapticTestHonoursRoutingAndPremium(bool routing, bool premium, string? message) => AvaloniaTestDispatcher.RunAsync(async () =>
     {

@@ -33,7 +33,7 @@ public sealed class HelpButtonsTests
 
     private static readonly string[] Tabs =
     {
-        "settings", "studio", "presets", "haptics", "companion", "awareness", "play", "gradedintake",
+        "settings", "studio", "presets", "haptics", "companion", "awareness", "playeyes", "gradedintake",   // "play" opens the launcher (declutter wave 2)
         "blinktrainer", "remotecontrol", "discord", "quests", "achievements", "leaderboard", "assets", "appsettings",
     };
 

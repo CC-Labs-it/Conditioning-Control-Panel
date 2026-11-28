@@ -45,8 +45,9 @@ public sealed class CompanionEffectsTests
             CoreEntitlement.HasPremiumProvider = () => true;   // DtRH is Basic (owner 2026-10-31); the race stays Prime
             CoreAccount.IsLoggedInProvider = () => true;
             var all = CompanionEffects.Activities();
-            // WPF CompanionActivities.cs:15 offers every LauncherCatalogue game, Classic included (:249).
-            Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.race", "game.raceclassic", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
+            // WPF CompanionActivities.cs:15 offers every LauncherCatalogue game, Classic included (:249), and the one
+            // Breakout card (declutter 2026-11-15) beside the unlisted demo, as WPF LauncherCatalogue.Games does.
+            Assert.Equal(new[] { "game.breakoutdemo", "game.breakout", "game.piecebypiece", "game.race", "game.raceclassic", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
                 all.Select(a => a.Id));
             var race = all.Single(a => a.Id == "game.race");
             var intake = all.Single(a => a.Id == "game.intake");
