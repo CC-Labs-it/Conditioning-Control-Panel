@@ -117,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         first pass assumed: NavigationStarted carries a settable Cancel (so the allowlist
     ///         and the one-shot file:// pin are real) and InvokeScript is ExecuteScriptAsync. What
     ///         genuinely has no counterpart is ZoomFactor, AddScriptToExecuteOnDocumentCreatedAsync
-    ///         and ContainsFullScreenElementChanged. Zoom stays stubbed; fullscreen entry reads the engine's
+    ///         and ContainsFullScreenElementChanged. Fullscreen entry reads the engine's
     ///         own signal through the platform handle (Platform/WebFullscreenSignal), exit uses page messages.</item>
     ///   <item>Dark title bars are tinted globally by Win32Window on Windows. Fullscreen uses Avalonia windows.</item>
     /// </list>
@@ -142,6 +142,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private int _audioLoad;
         private bool _audioDurationRemembered;
         internal Action<string?, double> RememberAudioDuration = MediaDurationCache.Remember;
+        internal Action<string?, double> RememberVideoDuration = MediaDurationCache.Remember;
+        private string? _videoDurationKey;
+        private bool _videoDurationRemembered;
         // Tests only: a decode that settles at once keeps the open synchronous.
         internal Func<string, Task<AudioWaveformResult>> LoadWaveformPeaks = AudioWaveformCache.LoadAsync;
         private int _waveformGeneration;
@@ -917,6 +920,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             StopAudio(); InvalidateWaveform(); EndVideoWatch(); ++_videoLoad; _pollDisabled = false;
             _currentSec = _durationSec = 0; // WPF BindVideoSource (xaml.cs:1430): a fresh BrowserVideoTimeSource starts at 0 (BrowserVideoTimeSource.cs:33).
+            _videoDurationKey = path; _videoDurationRemembered = false;
             try
             {
                 ShowMediaPaneFor(MediaTypes.Video);
@@ -965,6 +969,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             StopAudio(); InvalidateWaveform(); EndVideoWatch(); ++_videoLoad; _pollDisabled = false;
             _currentSec = _durationSec = 0; // WPF BindVideoSource (xaml.cs:1430): a fresh BrowserVideoTimeSource starts at 0 (BrowserVideoTimeSource.cs:33).
+            _videoDurationKey = url; _videoDurationRemembered = false;
             try
             {
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_loading");
@@ -1097,14 +1102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void AdjustVideoZoom(double delta)
         {
-            // ponytail: needs a browser zoom factor. NativeWebView genuinely has none — this is one
-            // of the CoreWebView2 members with no NativeWebView counterpart (another is
-            // AddScriptToExecuteOnDocumentCreatedAsync), and
-            // it is NOT a missing script channel: InvokeScript works. CSS `zoom` through that
-            // channel was the obvious substitute and is not one — it is per-document, so it is lost
-            // on the next navigation, and it does not scale a fullscreened video at all. So the
-            // ±10% clamp to [0.25, 5.0] and the Ctrl+MouseWheel bridge stay lost here.
-            Log.Debug("EnhancementPlayer(Avalonia): browser zoom {Delta:+0.00;-0.00} is a stub", delta);
+            _videoBrowser.SetBrowserZoom(Math.Clamp((_videoBrowser.BrowserZoom ?? 1.0) + delta, 0.25, 5.0));
         }
 
         /// <summary>
@@ -1231,7 +1229,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 var validDuration = double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var dur)
                     && dur > 0 && double.IsFinite(dur);
                 if (validDuration)
+                {
                     _durationSec = dur;
+                    if (!_videoDurationRemembered && _videoDurationKey != null)
+                    {
+                        _videoDurationRemembered = true;
+                        RememberVideoDuration(_videoDurationKey, dur);
+                    }
+                }
 
                 // The page can start or stop playing without us — an autoplay, an ad, the user
                 // clicking the video's own controls. Follow it, or the pill lies the other way.
@@ -1469,13 +1474,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _audioPane.IsVisible = !isVideo;
             if (!isVideo) ExitVideoFullscreen();
             _videoPane.IsVisible = isVideo;
-            // The WPF cluster bound its Visibility to VideoPane's. Pinned HIDDEN here, and not
-            // because of the mode: AdjustVideoZoom only logs, since NativeWebView has no zoom
-            // factor and CSS zoom through the script channel is not a substitute. Two enabled
-            // buttons that do nothing is a toolbar lying about what it offers. Put `isVideo` back
-            // the moment zoom is real. Same call and same reason in DeeperEditorWindow.axaml's
-            // PreviewZoomCluster.
-            _browserZoomCluster.IsVisible = false;
+            _browserZoomCluster.IsVisible = isVideo;
             // WPF xaml.cs:1361-1364: volume stays up in video mode, the slider drives the page's video.
             _volumePanel.IsVisible = true;
             _btnPictureInPicture.IsVisible = isVideo;

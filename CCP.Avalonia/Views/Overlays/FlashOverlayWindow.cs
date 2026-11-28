@@ -31,8 +31,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// renderer under XWayland that stalled the UI dispatcher ~1.7 s per burst (staggers and
     /// timers late). With the property the app renders each flash exactly once.</para>
     /// </summary>
-    internal sealed class FlashOverlayWindow : Window
+    internal sealed partial class FlashOverlayWindow : Window
     {
+        internal System.Threading.CancellationTokenSource? FlashOwner { get; set; }
         private readonly Image _image;
         internal IImageBrushSource? GazePreview => _image.Source as IImageBrushSource;
         private bool _closed;
@@ -80,6 +81,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Width = m.W / k + 2 * GlowPadPx / k;
             Height = m.H / k + 2 * GlowPadPx / k;
             Position = new PixelPoint((int)Math.Round(m.X) - GlowPadPx, (int)Math.Round(m.Y) - GlowPadPx);
+            if (DeckInputPx is not { } input) return;
+            // A swinging card's window is the swing box: the clickable part follows it (WPF hit-tests the live item rect).
+            var glow = GlowPadPx - DeckPadPx;
+            var r = new PixelRect(DeckPadPx, DeckPadPx, (int)Math.Ceiling(m.W) + 2 * glow, (int)Math.Ceiling(m.H) + 2 * glow);
+            if (r == input[0]) return;
+            input[0] = r;
+            X11Overlay.SetInputRect(this, r);   // Windows: the deck tick polls DeckInputPx
         }
         // The picture, its glow card and the TvOff whiten move together on an exit; the sparks do not.
         private readonly Panel _card, _picture, _root;
@@ -148,16 +156,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF FlashService.cs:1765 IsClickable: this flash takes the mouse, and a press
         /// pops it (<paramref name="onPop"/>). Without this call the window stays hit-test invisible.</summary>
-        internal void MakeClickable(Action onPop)
+        internal void MakeClickable(Action onPop, Action? onTap = null)
         {
+            onTap ??= onPop;   // a left press or a tap; a Flicker Deck card flips here (WPF FlashService.cs:2700-2701)
             IsHitTestVisible = true;
             double NowMs() => FlashOverlay.Clock.GetElapsedTime(0).TotalMilliseconds;
             PointerPressed += (_, e) =>
             {
                 e.Handled = true;
                 // WPF FlashService.cs:4798-4807: a right (or any non-left) press always pops; only left may drag.
-                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
-                    || !CoreSettings.Current.FlashDraggable || !FlashOverlay.OwnsMotion) { onPop(); return; }
+                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) { onPop(); return; }
+                if (!CoreSettings.Current.FlashDraggable || !FlashOverlay.OwnsMotion) { onTap(); return; }
                 var m = FlashOverlay.MotionForDrag(this);
                 var p = this.PointToScreen(e.GetPosition(this));
                 FlashDrag.Begin(m, p.X, p.Y, NowMs());
@@ -188,7 +197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var outcome = FlashDrag.Release(m, NowMs(), CoreSettings.Current.MotionLevel);
                 e.Pointer.Capture(null);
                 e.Handled = true;
-                if (outcome == FlashDragOutcome.Tap) onPop();
+                if (outcome == FlashDragOutcome.Tap) onTap();   // WPF FlashService.cs:3062-3066
             };
             PointerCaptureLost += (_, _) =>
             {
@@ -201,7 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// and close when it is done. The flash no longer takes clicks while it leaves.</summary>
         internal void BeginExit(FlashExitState exit, bool fromDisplayedAlpha = false)
         {
-            if (Exit != null || Shatter != null) return;
+            if (Exit != null || Shatter != null || DeckShatter != null) return;
             if (fromDisplayedAlpha) _alpha = DisplayedAlpha;
             Exit = exit;
             if (CreditMark != null) CreditMark.IsVisible = false; // WPF FlashLayer.cs:484: no credit during an exit.
@@ -212,7 +221,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _exitScale = new ScaleTransform();
             _exitRotate = new RotateTransform();
             _exitShift = new TranslateTransform();
-            _card.RenderTransform = new TransformGroup { Children = { _exitScale, _exitRotate, _exitShift } };
+            _card.RenderTransform = Deck != null   // WPF FlashLayer.cs:518-523: a leaving card eases out of its pose
+                ? new TransformGroup { Children = { _deckScale, _deckRotate, _deckShift, _exitScale, _exitRotate, _exitShift } }
+                : new TransformGroup { Children = { _exitScale, _exitRotate, _exitShift } };
             BuildExitLayers(exit);
             Apply(FlashExit.Sample(exit));
             StartExitClock();
@@ -222,16 +233,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// no glow halo, stepping the shared pixel-space physics on the monitor it is on now.</summary>
         internal bool TryBeginShatter(MotionLevel motion, Random rng)
         {
-            if (Exit != null || Shatter != null || _image.Source is not { } source) return false;
-            UpdateLayout();
-            var fit = Stretch.Uniform.CalculateSize(_image.Bounds.Size, source.Size);
-            var scale = DesktopScaling > 0 ? DesktopScaling : 1;
-            var imageOrigin = (_image.TranslatePoint(default, _card) ?? default) + new Vector(_card.Bounds.X, _card.Bounds.Y);
-            var local = imageOrigin + new Point((_image.Bounds.Width - fit.Width) / 2, (_image.Bounds.Height - fit.Height) / 2);
-            var x = Position.X + local.X * scale;
-            var y = Position.Y + local.Y * scale;
-            var monitor = Screens.ScreenFromPoint(new PixelPoint((int)(x + fit.Width * scale / 2), (int)(y + fit.Height * scale / 2))) ?? SpawnScreen;
-            var bounds = monitor?.Bounds ?? new PixelRect(Position, PixelSize.FromSize(Bounds.Size, scale));
+            if (Exit != null || Shatter != null || DeckShatter != null || _image.Source is not { } source) return false;
+            var (x, y, fit, scale, bounds) = PictureOnScreen(source);
             var state = FlashShatter.Create(x, y, fit.Width * scale, fit.Height * scale,
                 bounds.X, bounds.Y, bounds.Width, bounds.Height, motion, rng);
             if (state.Shards.Length == 0) return false; // Motion Off falls through to FlashExit, like WPF.
@@ -289,6 +292,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return true;
         }
 
+        /// <summary>The letterboxed picture's top-left in screen px, its size in DIPs, the scaling and its monitor.</summary>
+        private (double X, double Y, Size Fit, double Scale, PixelRect Bounds) PictureOnScreen(IImage source)
+        {
+            UpdateLayout();
+            var fit = Stretch.Uniform.CalculateSize(_image.Bounds.Size, source.Size);
+            var scale = DesktopScaling > 0 ? DesktopScaling : 1;
+            var imageOrigin = (_image.TranslatePoint(default, _card) ?? default) + new Vector(_card.Bounds.X, _card.Bounds.Y);
+            var local = imageOrigin + new Point((_image.Bounds.Width - fit.Width) / 2, (_image.Bounds.Height - fit.Height) / 2);
+            var x = Position.X + local.X * scale;
+            var y = Position.Y + local.Y * scale;
+            var monitor = Screens.ScreenFromPoint(new PixelPoint((int)(x + fit.Width * scale / 2), (int)(y + fit.Height * scale / 2))) ?? SpawnScreen;
+            return (x, y, fit, scale, monitor?.Bounds ?? new PixelRect(Position, PixelSize.FromSize(Bounds.Size, scale)));
+        }
+
         private void StartExitClock()
         {
             _lastExitTick = FlashOverlay.Clock.GetTimestamp();
@@ -322,6 +339,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>One exit frame on real elapsed time (P40); closes the window when it is done.</summary>
         internal void ExitFrame()
         {
+            if (DeckShatterFrame()) return;
             if (Shatter is { } shatter && _shards is { } shards)
             {
                 var stamp = FlashOverlay.Clock.GetTimestamp();
@@ -480,6 +498,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Canvas.SetTop(dot, cy + sp.Dy * sp.Distance * half - r);
                 }
             }
+            if (Deck is { } deck && Exit is { } leaving)
+                ApplyDeckPose(FlickerDeck.Settle(FlickerDeck.Sample(deck, DeckLevel), leaving.ElapsedSec));
             SetDisplayedAlpha(_alpha * Math.Clamp(s.Alpha, 0, 1));
         }
 
@@ -588,6 +608,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public FlashOverlayWindow(Bitmap picture, string? path = null, bool ownsPicture = true)
         {
+            SourcePath = path;
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
@@ -626,6 +647,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (_gifFrames is { } frames) for (var i = 1; i < frames.Count; i++) frames[i].Dispose();
                 _gifFrames = null;
                 if (ownsPicture) picture.Dispose();
+                DropDeckPictures();
             };
         }
 
@@ -658,7 +680,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var v = from + (to - from) * i / steps;
                 var last = i == steps;
-                DispatcherTimer.RunOnce(() => { if (_closed || Exit != null || Shatter != null) return; SetDisplayedAlpha(v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
+                DispatcherTimer.RunOnce(() => { if (_closed || Exit != null || Shatter != null || DeckShatter != null) return; SetDisplayedAlpha(v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
             }
         }
     }
