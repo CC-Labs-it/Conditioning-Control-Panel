@@ -9430,5 +9430,6 @@
   "promo_hours": "Std.",
   "promo_minutes": "Min.",
   "native_repair_title": "Conditioning Control Panel - Start fehlgeschlagen",
-  "native_repair_message": "Conditioning Control Panel kann seine Grafikbibliotheken nicht laden und nicht starten.\n\nSchließe die App, lösche diesen temporären Ordner und starte sie erneut:\n\n{0}\n\nDer Ordner wird automatisch neu erstellt. Falls das nicht hilft, prüfe, ob dein Virenschutz Dateien in Quarantäne verschoben hat.\n\nDetails: {1}"
+  "native_repair_message": "Conditioning Control Panel kann seine Grafikbibliotheken nicht laden und nicht starten.\n\nSchließe die App, lösche diesen temporären Ordner und starte sie erneut:\n\n{0}\n\nDer Ordner wird automatisch neu erstellt. Falls das nicht hilft, prüfe, ob dein Virenschutz Dateien in Quarantäne verschoben hat.\n\nDetails: {1}",
+  "brain_drain_capture_failed": "Brain Drain konnte den Bildschirm nicht aufnehmen. Bitte sende einen Fehlerbericht."
 }
