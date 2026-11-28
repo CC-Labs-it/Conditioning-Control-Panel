@@ -537,6 +537,10 @@ public sealed class RealProfileMigrationTests
                 // runs the one-time intensity migration, as WPF App.xaml.cs:3125 does at every launch.
                 else if (AwarenessPrivacySeededAtLaunch(key, value, now, original))
                     expect("awareness-privacy-seeded-at-launch");
+                // Expected: an unlaunched profile gets the one-shot Flash decoupling and the legacy companion
+                // start (OG Bambi Sprite), as WPF App.xaml.cs:2612-2624 and 2787 do at launch.
+                else if (LaunchMigrationsRan(key, value, now, original))
+                    expect("launch-migrations-ran");
                 else yield return "value changed: " + key;
                 continue;
             }
@@ -544,6 +548,23 @@ public sealed class RealProfileMigrationTests
             var defaultToken = fallback is null ? JValue.CreateNull() : JToken.FromObject(fallback);
             if (!JToken.DeepEquals(value, defaultToken)) yield return "key dropped with a non-default value: " + key;
         }
+    }
+
+    private static bool LaunchMigrationsRan(string key, JToken original, JToken now, JObject before)
+    {
+        bool unmigrated = before["MigratedFlashClickableDecoupling"] is not { Type: JTokenType.Boolean } m || !(bool)m;
+        bool wasClickable = before["FlashClickable"] is not { Type: JTokenType.Boolean } c || (bool)c;
+        bool noProgress = before["CompanionProgressData"] is not JObject { Count: > 0 };
+        string og = ((int)CompanionId.OGBambiSprite).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return key switch
+        {
+            "MigratedFlashClickableDecoupling" => unmigrated && now.Type == JTokenType.Boolean && (bool)now,
+            "FlashGazePopEnabled" or "FlashGazeLingerEnabled" => unmigrated && !wasClickable && now.Type == JTokenType.Boolean && !(bool)now,
+            "FlashGazeDisabledByDecoupling" => unmigrated && !wasClickable && now.Type == JTokenType.Boolean && (bool)now,
+            "CompanionProgressData" => noProgress && now is JObject map && map.Count == 1 && map[og] != null,
+            "ActiveCompanionId" => noProgress && now.Type == JTokenType.Integer && (int)now == (int)CompanionId.OGBambiSprite,
+            _ => false,
+        };
     }
 
     private static bool AwarenessPrivacySeededAtLaunch(string key, JToken original, JToken now, JObject before)

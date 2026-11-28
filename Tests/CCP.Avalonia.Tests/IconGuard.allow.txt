@@ -11,6 +11,8 @@ Views/Windows/EmiDesk/EmiFace.cs :: "Noto Sans Symbols 2, Segoe UI Symbol, Segoe
 
 Views/Overlays/GazeRefineOverlay.cs :: new Path { Stroke = Brushes.HotPink :: path: animated gaze dwell progress ring, not an icon
 Views/Tabs/ChasterTabView.axaml :: <Path x:Name="SpiralPath" :: path: decorative rotating spiral watermark, not an icon (WPF ChasterTabView.xaml:276)
+Views/Overlays/FlashOverlayWindow.Deck.cs :: _crackUnder = new Path { :: path: the Deck card crack shadow line, drawn per break, not an icon (WPF Services/Super/Draw deck crack)
+Views/Overlays/FlashOverlayWindow.Deck.cs :: CrackLine = new Path { :: path: the Deck card crack line, drawn per break, not an icon (WPF Services/Super/Draw deck crack)
 # --- content (c).1: companion/chat text ---
 Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
 
@@ -20,6 +22,7 @@ Views/Dialogs/AwarenessPresetDetailDialog.axaml :: (e.g. 🎯) :: example of a u
 Views/Tabs/AwarenessTabView.Presets.cs :: Icon = "✨", :: seed icon of a new user preset; the user edits it, so it is preset data (content (c).2)
 
 # --- content (c).4: typography ---
+Views/Windows/ModCreatorWindow.ArtFramingEditor.cs :: −   15m   + :: static 15-minute preview text from WPF ModCreatorWindow.ArtFraming.cs:569, not a control
 Views/Windows/ProgramsIntroPopup.axaml :: Text="●" :: list bullets beside prose rows, typography (content (c).4)
 Views/Dialogs/LoginDialog.axaml :: PasswordChar="●" :: PasswordChar mask, typography (content (c).4)
 
