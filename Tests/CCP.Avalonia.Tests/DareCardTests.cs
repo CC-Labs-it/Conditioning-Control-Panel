@@ -52,9 +52,11 @@ public sealed class DareCardTests
         var host = new DarePanicTests.Host();
         using var service = new DaresService(api, host, new DareMeter(), new DareLockdownKeeper(host, new DareLockdownKeeper.MemoryStore()));
         var settings = CoreSettings.Current;
-        var saved = (DareDebtCard.RunsAtStartup, settings.LockdownDisablePanicKey);
+        var saved = (DareDebtCard.RunsAtStartup, settings.LockdownDisablePanicKey, DareIntro.Seen, DareIntro.MarkSeen);
         DareHead.Service = service;
         DareDebtCard.RunsAtStartup = () => false;
+        DareIntro.Seen = () => true;
+        DareIntro.MarkSeen = () => { };
         try
         {
             await service.RefreshAsync();
@@ -67,7 +69,7 @@ public sealed class DareCardTests
             api.Start.TrySetResult(null);
             DareHead.Service = null;
             DareHead.Resume();
-            (DareDebtCard.RunsAtStartup, settings.LockdownDisablePanicKey) = saved;
+            (DareDebtCard.RunsAtStartup, settings.LockdownDisablePanicKey, DareIntro.Seen, DareIntro.MarkSeen) = saved;
         }
     });
 
@@ -98,6 +100,27 @@ public sealed class DareCardTests
         Assert.Equal(DareActResult.Done, await card.LastPay!);
         Assert.True(host.Active);
         Assert.False(card.IsVisible);
+    });
+
+    private static bool Has(Window w, string tag) => w.GetLogicalDescendants().OfType<Control>().Any(c => c.Tag as string == tag);
+
+    [Fact]
+    public Task First_offer_shows_the_intro_once_before_the_slip() => Run((_, _, _) =>
+    {
+        var seen = false;
+        DareIntro.Seen = () => seen;
+        DareIntro.MarkSeen = () => seen = true;
+        DareOfferCard.Present(null, "o1");
+        var card = DareOfferCard.Open!;
+        Assert.True(Has(card, "dares-intro"));
+        Assert.False(Has(card, "dares-accept"));   // WPF DareOfferCard.cs:42-43: nothing to accept until the intro is done
+        Press(card, "dares-intro-go");
+        Assert.True(seen);
+        Assert.False(Has(card, "dares-intro"));
+        Assert.True(Has(card, "dares-accept"));
+        DareOfferCard.Present(null, "o1");
+        Assert.False(Has(DareOfferCard.Open!, "dares-intro"));
+        return Task.CompletedTask;
     });
 
     [Theory]

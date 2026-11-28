@@ -74,7 +74,7 @@ internal static class DareLook
     }
 
     // Card shell for the offer and debt cards. shortcut: plain print and flat desk, not WPF's slip
-    // paper, fonts and motion (Dialogs/Dares/*); upgrade when the slip-window lane lands its look.
+    // paper, fonts, motion and (?) help (Dialogs/Dares/*); s19-dares-cards-look, stacked on this lane, ports them.
     public static readonly IBrush ChalkBrush = new SolidColorBrush(Color.FromRgb(0xF1, 0xEA, 0xFF));
     public static readonly IBrush MutedBrush = new SolidColorBrush(Color.FromRgb(0xB8, 0xB1, 0xCC));
     public static readonly IBrush WarnBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x9A, 0x8A));

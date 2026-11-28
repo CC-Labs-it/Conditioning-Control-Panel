@@ -39,7 +39,9 @@ public sealed class DareOfferCard : Window, IPassiveStartupSurface
         _betId = bet.Id;
         _body = DareLook.Shell(this, 560, "dares-offer-card");
         Closed += (_, _) => _closed = true;
-        Build(bet);
+        // WPF :42-43: the first-time introduction comes before the first offer.
+        if (DareIntro.Seen()) Build(bet);
+        else _body.Children.Add(DareIntro.Build(() => { _body.Children.Clear(); Build(Find(_svc, _betId) ?? bet); }));
     }
 
     public static void Present(Window? owner, string betId)
