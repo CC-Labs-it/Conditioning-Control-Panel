@@ -42,9 +42,9 @@ public sealed class PossessionStealCardTests
         public bool AnyPossessed => false;
         public void ReleaseAll() { }
     }
-    private static Task Run(Func<StealCardEffect, Border, Canvas, PossessionTarget, PossessionContext, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task Run(Func<StealCardEffect, Border, Canvas, PossessionTarget, PossessionContext, Task> body, string? cardName = null, string? buttonName = null) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var card = new Border { Width = 100, Height = 70, Opacity = .7, Child = new Button { Content = "Option" } };
+        var card = new Border { Name = cardName, Width = 100, Height = 70, Opacity = .7, Child = new Button { Name = buttonName, Content = "Option" } };
         var layer = new Canvas { IsHitTestVisible = false };
         var window = new Window { Width = 400, Height = 300, Content = new Grid { Children = { card, layer } } };
         window.Show(); Dispatcher.UIThread.RunJobs();
@@ -84,6 +84,28 @@ public sealed class PossessionStealCardTests
         Assert.False(effect.CanApply(ctx, target));
         return Task.CompletedTask;
     });
+
+    [Theory]
+    [InlineData("BtnClose")]
+    [InlineData("BtnMinimize")]
+    [InlineData("BtnMaximize")]
+    [InlineData("TitleBarBorder")]
+    public Task ChromeTargetIsRefused(string name) => Run((effect, card, layer, target, ctx) =>
+    {
+        Assert.False(effect.CanApply(ctx, target));
+        return Task.CompletedTask;
+    }, cardName: name);
+
+    [Theory]
+    [InlineData("BtnClose")]
+    [InlineData("BtnMinimize")]
+    [InlineData("BtnMaximize")]
+    [InlineData("TitleBarButton")]
+    public Task ChromeDescendantIsNotAnOption(string name) => Run((effect, card, layer, target, ctx) =>
+    {
+        Assert.False(effect.CanApply(ctx, target));
+        return Task.CompletedTask;
+    }, buttonName: name);
 
     [Fact]
     public Task PanicRestoresDuringImplosion() => Run(async (effect, card, layer, target, ctx) =>
