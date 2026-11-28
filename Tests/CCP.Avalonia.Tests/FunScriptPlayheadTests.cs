@@ -127,7 +127,7 @@ public sealed class FunScriptPlayheadTests
         Assert.Matches(@"_player\.Play\(_media\);\s*(?:BeginEnhancement\(path\);\s*)?try\s*\{\s*CoreHaptics\.Service\?\.FunScript.OnVideoStarted\(path\)", player);
         // The teardown stops the native player through the playback seam (IMandatoryPlayback.Stop).
         var stopHook = player.IndexOf("FunScript.OnVideoStopped()", System.StringComparison.Ordinal);
-        Assert.True(stopHook >= 0 && stopHook < player.IndexOf("_playback.Stop()", System.StringComparison.Ordinal));
+        Assert.True(stopHook >= 0 && stopHook < player.IndexOf("playback.Stop()", System.StringComparison.Ordinal));
     }
 
     private static string Src(params string[] p) =>
