@@ -3642,11 +3642,11 @@ namespace ConditioningControlPanel
 #if DEBUG
                 if (Services.Dares.PreviewDaresService.Enabled)
                 {
-                    _daresPreview = Services.Dares.PreviewDaresService.CreateForApp(out dareMeter);
+                    _daresPreview = Services.Dares.PreviewDaresService.Create(UserDataPath, new Services.Dares.AppDareHost(), () => Friends, out dareMeter);
                     Dares = _daresPreview;
                     _daresPreview.Changed += () => _dareHooks?.Wake();
                     _daresPreview.CameraProbe = () => _dareHooks?.CameraState ?? Services.Dares.DareCameraState.Idle;
-                    _daresPreview.Start();
+                    _daresPreview.Start(new Services.Friends.FriendsServiceApp.Timer());
                 }
                 else
 #endif

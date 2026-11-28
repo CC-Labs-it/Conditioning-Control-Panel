@@ -58,11 +58,11 @@ public class PreviewDaresCoreTests : IDisposable
         Assert.False(PreviewDaresService.EnabledFor(null));
     }
 
-    private static string AppRoot()
+    private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Services"))) dir = dir.Parent;
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel");
+        return dir!.FullName;
     }
 
     [Theory]
@@ -75,13 +75,15 @@ public class PreviewDaresCoreTests : IDisposable
     public void The_preview_never_touches_the_real_wallet_the_tab_or_the_network(string banned)
     {
         foreach (var name in new[] { "PreviewDaresService.cs", "PreviewFriendsService.cs" })
-            Assert.DoesNotContain(banned, File.ReadAllText(Path.Combine(AppRoot(), "Services", "Dares", name)));
+            Assert.DoesNotContain(banned, File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "Dares", name)));
     }
 
-    [Fact]
-    public void App_reaches_the_preview_only_inside_if_DEBUG()
+    [Theory]
+    [InlineData("ConditioningControlPanel/App.xaml.cs", 3)]
+    [InlineData("CCP.Avalonia/App.axaml.cs", 2)]
+    public void App_reaches_the_preview_only_inside_if_DEBUG(string app, int least)
     {
-        var lines = File.ReadAllLines(Path.Combine(AppRoot(), "App.xaml.cs"));
+        var lines = File.ReadAllLines(Path.Combine(RepoRoot(), app));
         var depth = 0;
         var stack = new System.Collections.Generic.Stack<bool>();
         var callers = 0;
@@ -93,9 +95,9 @@ public class PreviewDaresCoreTests : IDisposable
             if (line.StartsWith("#endif")) { if (stack.Count > 0 && stack.Pop()) depth--; continue; }
             if (line.StartsWith("//") || !(line.Contains("PreviewDaresService.") || line.Contains("new Services.Dares.PreviewFriendsService"))) continue;
             callers++;
-            Assert.True(depth > 0, "App.xaml.cs reaches the dares preview outside #if DEBUG: " + line);
+            Assert.True(depth > 0, app + " reaches the dares preview outside #if DEBUG: " + line);
         }
-        Assert.True(callers >= 3);
+        Assert.True(callers >= least);
     }
 
     [Fact]

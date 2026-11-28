@@ -226,7 +226,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>The one session runner (WPF MainWindow._sessionEngine), or null on the headless render path.</summary>
         internal static SessionRunner? Sessions { get; set; }
-        internal static Services.Dares.IDaresService? Dares => Platform.DareHead.Service;
+        internal static Services.Dares.IDaresService? Dares => (Services.Dares.IDaresService?)Platform.DareHead.Preview ?? Platform.DareHead.Service;
         /// <summary>The app-lifetime media recap (WPF App.MediaHistory), or null on the headless render path.</summary>
         internal static MediaHistoryService? MediaHistory { get; set; }
         /// <summary>The tube the countdown speaks through. Test seam: a headless app cannot swap its lifetime after init.</summary>
@@ -1239,6 +1239,10 @@ namespace ConditioningControlPanel.Avalonia
                     if (friends != null)
                     {
                         Platform.FriendsHead.Service = friends;
+#if DEBUG
+                        // WPF App.xaml.cs:3287: CCP_DARES_PREVIEW=1 shows three fake friends while the real list is empty or signed out.
+                        if (Services.Dares.PreviewDaresService.Enabled) Platform.FriendsHead.Service = new Services.Dares.PreviewFriendsService(friends);
+#endif
                         // WPF App.xaml.cs:2979: the feed listens to the service from startup on.
                         try { Platform.FriendsHead.Feed = global::ConditioningControlPanel.Services.Friends.FriendsFeed.CreateForApp(friends, () => Platform.FriendsHead.Identity()?.UnifiedId); }
                         catch (Exception exFeed) { Serilog.Log.Debug("[Friends] feed failed to start: {E}", exFeed.Message); }
@@ -1423,7 +1427,12 @@ namespace ConditioningControlPanel.Avalonia
                     Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"), Environment.GetEnvironmentVariable(Platform.FriendsHead.EnvVar));
                 // WPF App.xaml.cs:462 StakeAppHooks.Seed: the stakes' Chaster gate, loss row and wallet (the wire rides the invites door above).
                 Platform.StakeHead.Seed();
-                try { if (Sessions != null) Platform.DareHead.Start(); }
+                // WPF App.xaml.cs:3642: the local preview only in a DEBUG build started with CCP_DARES_PREVIEW=1.
+                var daresPreview = false;
+#if DEBUG
+                daresPreview = Services.Dares.PreviewDaresService.Enabled;
+#endif
+                try { if (Sessions != null) Platform.DareHead.Start(daresPreview); }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Dares startup failed"); Platform.DareHead.Shutdown(); }
                 CoreProgression.TrackBubbleCountResultProvider = correct => Achievements?.TrackBubbleCountResult(correct);
                 CoreProgression.TrackBubbleCountGameStartedProvider = () => Achievements?.TrackBubbleCountGameStarted();
