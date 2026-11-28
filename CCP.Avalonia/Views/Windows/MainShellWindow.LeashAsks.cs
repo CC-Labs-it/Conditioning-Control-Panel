@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -22,8 +23,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 public partial class MainShellWindow
 {
     private ILeashService? _askService;
-    private readonly HashSet<string> _seenLeashOffers = new();
-    private readonly List<LeashOffer> _waitingLeashAsks = new();
+    // WPF LeashSurfaces.cs:26 keeps one process-wide SeenOffers per bound service; every shell shares it so a
+    // shell that rebinds later (its two-second tick) never re-queues an offer another shell already asked.
+    private static readonly ConditionalWeakTable<ILeashService, HashSet<string>> SeenLeashOffers = new();
+    private static readonly ConditionalWeakTable<ILeashService, List<LeashOffer>> WaitingLeashAsks = new();
+    private HashSet<string> _seenLeashOffers = new();
+    private List<LeashOffer> _waitingLeashAsks = new();
     private readonly List<LeashEvent> _heldLeashNotices = new();
 
     private void InitializeLeashAsks()
@@ -34,9 +39,9 @@ public partial class MainShellWindow
         {
             LeashAskWindow.CurrentClosed -= OnLeashAskClosed;
             LeashAskWindow.OfferShown -= OnLeashOfferShown;
+            ReleaseWaitingLeashAsks();
             if (_askService != null) { _askService.SnapshotChanged -= OnLeashAskSnapshot; _askService.EventArrived -= OnLeashEvent; }
             _askService = null;
-            _waitingLeashAsks.Clear();
             _heldLeashNotices.Clear();
             StopLeashTug();
         };
@@ -51,8 +56,9 @@ public partial class MainShellWindow
         {
             if (_askService != null) { _askService.SnapshotChanged -= OnLeashAskSnapshot; _askService.EventArrived -= OnLeashEvent; }
             _askService = next;
-            _seenLeashOffers.Clear();
-            _waitingLeashAsks.Clear();
+            ReleaseWaitingLeashAsks();
+            _seenLeashOffers = next == null ? new() : SeenLeashOffers.GetValue(next, _ => new());
+            _waitingLeashAsks = next == null ? new() : WaitingLeashAsks.GetValue(next, _ => new());
             _heldLeashNotices.Clear();
             if (next != null)
             {
@@ -75,7 +81,7 @@ public partial class MainShellWindow
         }
         foreach (var offer in snap.Offers)
         {
-            if (!_seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds())) continue;
+            if (!_seenLeashOffers.Add(OfferKey(offer))) continue;
             _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id);
             _waitingLeashAsks.Add(offer);
         }
@@ -85,14 +91,18 @@ public partial class MainShellWindow
 
     // WPF LeashSurfaces.cs:117-125, :230-255 drains waiting asks when an overlay closes.
     // A manual Look has already shown this offer, but other queued offers still wait.
-    // WPF binds the one static service up front; here Look can beat the two-second rebind, so bind first,
-    // then consume the offer (seen + unqueued) so neither that rebind nor a late snapshot reopens it.
     private void OnLeashOfferShown(LeashOffer offer)
     {
         if (!ReferenceEquals(_askService, LeashHead.Service)) RebindLeashAsks();
-        _seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds());
+        // Another shell may show the offer before this shell receives the same snapshot.
+        _seenLeashOffers.Add(OfferKey(offer));
         _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());
     }
+
+    // Drop this shell's reference; other shells can still present the service's pending offers.
+    private void ReleaseWaitingLeashAsks() => _waitingLeashAsks = new();
+
+    private static string OfferKey(LeashOffer offer) => offer.From.Id + "@" + offer.At.ToUnixTimeSeconds();
 
     private void OnLeashAskClosed() => Dispatcher.UIThread.Post(TryShowLeashAsk);
 

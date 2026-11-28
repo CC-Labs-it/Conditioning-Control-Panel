@@ -10,7 +10,7 @@ using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 {
-    // WPF EmiDeskWindow.Bubble.cs:40-493. Voice remains missing; the book dodge is WPF :346-361.
+    // WPF EmiDeskWindow.Bubble.cs:40-493; the book dodge is WPF :346-361.
     public partial class EmiDeskWindow
     {
         private static readonly IBrush BubbleFill = new ImmutableSolidColorBrush(Color.FromRgb(0x18, 0x18, 0x32));
@@ -30,6 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private EmiLineEngine? _askEngine;
         internal bool AskLive => _ask != null;
         private DispatcherTimer? _askTimer;
+        internal TimeSpan? AskPendingHold => AskLive ? _askTimer?.Interval : null;
+        internal void AdvanceAsk() { if (AskLive) AdvanceAskTimer(); }
         private Action? _askTimerStep;
         private int _askStage;
         // The same one-shot timer is stepped by the headless tests.
@@ -62,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             StopAskTimer();
             CancelChain();
             CancelHold();
+            ClearAsk();
             CloseGlass();
             StopIdleBeats();
             EnsureBubble();
@@ -83,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 case 1: ShowBubble(".."); StartAskTimer(420, AskCadenceStep); return;
                 case 2: ShowBubble("..."); StartAskTimer(520, AskCadenceStep); return;
             }
+            _voxMood = EmiChains.FrameForFace(string.IsNullOrEmpty(ask.Face) ? "^_^" : ask.Face);
             DrawFace(string.IsNullOrEmpty(ask.Face) ? "^_^" : ask.Face);
             ShowBubble(ask.Question);
             _askChips!.Children.Clear();
@@ -201,6 +205,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
         private void ShowBubble(string text)
         {
+            Vox(text);
             EnsureBubble();
             if (_bubble == null || _bubbleText == null) return;
             _bubbleText.Text = text;
@@ -213,6 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void HideBubble()
         {
+            try { _vox?.Stop(); } catch { }
             if (_bubble != null) _bubble.IsVisible = false;
             if (_bubbleTail != null) _bubbleTail.IsVisible = false;
         }

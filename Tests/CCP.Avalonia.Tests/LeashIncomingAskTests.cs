@@ -74,6 +74,49 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void TwoShellsDoNotRequeueAnOfferAlreadyShownByAnotherShell() =>
+        LeashGateCardTests.Run(false, (shell, launcher, _) =>
+        {
+            var seen = new List<string>();
+            var stale = new MainShellWindow(); // Still bound to the gate's service until its two-second tick.
+            var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me", reportSeen: seen.Add);
+            LeashHead.Service = svc;
+            shell.RebindLeashAsks();
+            var other = new MainShellWindow();
+            bool otherClosed = false;
+            other.Closed += (_, _) => otherClosed = true;
+            other.RebindLeashAsks();
+            try
+            {
+                launcher.Show();
+                svc.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+                var first = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:juno", first.Card.Tag);
+                first.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                var second = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:vex", second.Card.Tag);
+                second.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+                stale.RebindLeashAsks(); // A later-binding shell must not ask the same offers again.
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+                Assert.Equal(new[] { First, Second }, seen);
+            }
+            finally
+            {
+                stale.Close();
+                other.Close();
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.True(otherClosed);
+        });
+
+    [Fact]
     public void UnopenedShellDoesNotQueueDuplicateIncomingOffers() =>
         LeashGateCardTests.Run(false, (shell, launcher, _) =>
         {
@@ -151,24 +194,38 @@ public sealed class LeashIncomingAskTests
             }
         });
 
-    [Fact]
-    public void GateTimerPicksUpAReplacementServiceAndItsWaitingOffer() =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GateTimerPicksUpAReplacementServiceAndItsWaitingOffer(bool closeHidden) =>
         LeashGateCardTests.Run(false, (shell, _, _) =>
         {
             var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
             replacement.ApplyBlock(Block((First, "juno")));
             LeashHead.Service = replacement;
+            var hidden = new MainShellWindow();
+            hidden.RebindLeashAsks(); // Another shell sees the offer while no owner is visible.
+            if (closeHidden) hidden.Close();
+            LeashHead.Service = null;
             shell.Show();
             try
             {
                 Assert.Null(LeashAskWindow.Current);
-                // The WPF gate timer also rebinds the surfaces every two seconds.
-                System.Threading.Thread.Sleep(TimeSpan.FromMilliseconds(2200));
-                Dispatcher.UIThread.RunJobs();
-                Assert.Equal("leash-ask:juno", LeashAskWindow.Current!.Card.Tag);
+                LeashHead.Service = replacement;
+                // Pump the real two-second timer until it presents the offer, including a delayed tick.
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (LeashAskWindow.Current == null && deadline.Elapsed < TimeSpan.FromSeconds(10))
+                {
+                    System.Threading.Thread.Sleep(10);
+                    Dispatcher.UIThread.RunJobs();
+                }
+                var shown = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:juno", shown.Card.Tag);
+                Assert.Same(shell, shown.Owner);
             }
             finally
             {
+                hidden.Close();
                 LeashHead.Service = null;
                 shell.RebindLeashAsks();
                 LeashAskWindow.CloseCurrent();

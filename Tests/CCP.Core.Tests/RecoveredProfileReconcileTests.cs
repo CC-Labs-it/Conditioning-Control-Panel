@@ -84,6 +84,7 @@ public class RecoveredProfileReconcileTests
         }
         finally
         {
+            settings.SealForReset();
             sync.Reset(); CoreSettings.ServiceProvider = oldSettings; CoreAccount.IsLoggedInProvider = oldLogin;
             // The push arms a 500 ms debounced save on the shared settings.json; left armed it lands
             // after this restore, inside whichever test runs next (SessionRunnerTests' ledger read).

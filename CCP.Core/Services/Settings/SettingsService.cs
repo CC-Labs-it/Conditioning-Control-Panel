@@ -22,12 +22,11 @@ namespace ConditioningControlPanel.Services
         // settings.json aside. See that method for why nothing may write after it.
         private volatile bool _sealed;
 
-        // Serializes the rotate+write half of SaveImmediate. Without it two overlapping saves
-        // (debounce timer thread + a direct UI-thread call) could File.Move each other's
-        // half-written temp over settings.json (#761). Never taken while _timerLock is held,
-        // and never held across the UI-thread serialize hop — both would deadlock the shutdown
-        // path, where SaveImmediate runs ON the UI thread.
+        // Per-instance write lock lets reset wait for this instance's in-flight save. The shared
+        // file lock also protects other instances' recovery and reads from a live publication.
+        // Neither lock is held across the UI-thread serialize hop or while _timerLock is held.
         private readonly object _saveLock = new();
+        private static readonly object _settingsFileLock = new();
         // A second SettingsService can load while this instance is publishing. Recovery must not
         // delete that live write's temp file, even after its write stream has been closed.
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> ActiveTempFiles =
@@ -82,6 +81,7 @@ namespace ConditioningControlPanel.Services
 
         // Per-instance seam for deterministic lifecycle proofs; production keeps the 500ms default.
         internal int SaveDebounceDueTimeMilliseconds { get; set; } = 500;
+        internal Action? BeforePublishForTest { get; set; }
         internal Action<bool>? DebouncedSaveCompletedForTest { get; set; }
 
         public AppSettings Current { get; private set; }
@@ -201,14 +201,21 @@ namespace ConditioningControlPanel.Services
                 // per-write temp name now, so glob (the legacy fixed settings.json.tmp matches too)
                 // and only adopt a candidate that still parses — a truncated temp must never be
                 // promoted to settings.json.
-                RecoverAndCleanTempFiles();
-
-                if (File.Exists(_settingsPath))
+                string? json;
+                lock (_settingsFileLock)
                 {
-                    using var stream = OpenSettingsRead(_settingsPath);
-                    using var reader = new StreamReader(stream);
-                    var json = reader.ReadToEnd();
+                    RecoverAndCleanTempFiles();
+                    if (File.Exists(_settingsPath))
+                    {
+                        using var stream = OpenSettingsRead(_settingsPath);
+                        using var reader = new StreamReader(stream);
+                        json = reader.ReadToEnd();
+                    }
+                    else json = null;
+                }
 
+                if (json != null)
+                {
                     // Use explicit settings to ensure lists are REPLACED, not merged with defaults.
                     // Error handler makes the load RESILIENT: a single unparseable member (e.g. an
                     // enum value renamed/removed in a new release, which StringEnumConverter throws
@@ -973,6 +980,7 @@ namespace ConditioningControlPanel.Services
                 Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
 
                 lock (_saveLock)
+                lock (_settingsFileLock)
                 {
                     // Sealed while this snapshot was being serialized: the reset owns the file now.
                     if (_sealed) return false;
@@ -1006,6 +1014,7 @@ namespace ConditioningControlPanel.Services
                             writer.Flush();
                             stream.Flush(true);
                         }
+                        BeforePublishForTest?.Invoke();
                         BeforeAtomicPublishForTests?.Invoke(tempPath);
                         PublishAtomicFile(tempPath);
                     }

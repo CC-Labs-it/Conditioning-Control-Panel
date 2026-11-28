@@ -31,7 +31,11 @@ public sealed class RemoteMoreSignalTests
                 Signals.Add(JObject.Parse(await request.Content!.ReadAsStringAsync(ct)));
                 var gate = NextSignalGate;
                 NextSignalGate = null;
-                if (gate != null) await gate.Task;
+                if (gate != null)
+                {
+                    await gate.Task;
+                    await Task.Delay(1000, ct); // The relay can finish after the dispatcher has yielded.
+                }
             }
             var body = path == "/v2/remote/start" ? "{\"code\":\"ABC123\"}"
                 : path == "/v2/remote/poll" ? "{\"controller_connected\":true}" : "{}";

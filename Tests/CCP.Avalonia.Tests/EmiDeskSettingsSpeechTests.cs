@@ -124,6 +124,181 @@ public sealed class EmiDeskSettingsSpeechTests
         }
     });
 
+    private sealed class AskBarkClock : TimeProvider
+    {
+        public DateTimeOffset Now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    [Fact]
+    public Task StartingAskHoldsTheAvatarBarkGap() => InDesk(desk =>
+    {
+        var oldBark = ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine;
+        var settings = CoreSettings.Current;
+        var oldSettings = (settings.AvatarEnabled, settings.MasterVolume, settings.BarkChatSuppressionMs);
+        var clock = new AskBarkClock();
+        var rule = new ConditioningControlPanel.Services.Bark.BarkRule
+        {
+            Id = "ask-gap-test", Trigger = "AskGapTest",
+            VariantPool = new() { new ConditioningControlPanel.Services.Bark.BarkVariant("hello") }
+        };
+        var bark = new ConditioningControlPanel.Services.Bark.BarkEngine(
+            () => new ConditioningControlPanel.Services.Bark.BarkRuleSet(new[] { rule }))
+            { Clock = clock, Speak = _ => { } };
+        try
+        {
+            (settings.AvatarEnabled, settings.MasterVolume, settings.BarkChatSuppressionMs) = (true, 50, 0);
+            bark.Start();
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = bark;
+            Assert.True(bark.Raise("AskGapTest"));
+            clock.Now = clock.Now.AddMinutes(2);
+            var reply = new LineDraw("reply", "", "yes", "^_^", null, 1, false, 0);
+            var ask = new AskDraw("gap", "test", "hello?", "^_^", new[] { "yes", "no" }, reply, reply, "", null);
+            desk.Window!.ShowAsk(ask, EmiLineEngine.FromJson(Lines));
+            Assert.Equal(".", desk.Window.BubbleText);
+            Assert.False(bark.Raise("AskGapTest"));
+            clock.Now = clock.Now.AddMilliseconds(60000);
+            Assert.True(bark.Raise("AskGapTest"));
+            desk.Window.CancelAsk();
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = oldBark;
+            settings.BarkVariantRotation.Remove(rule.Id);
+            (settings.AvatarEnabled, settings.MasterVolume, settings.BarkChatSuppressionMs) = oldSettings;
+        }
+        return Task.CompletedTask;
+    });
+
+    private sealed class AskVoice : IEmiVox
+    {
+        public int Ticks, Stops, Disposals;
+        public string? Line, Mood;
+        public bool Speaking;
+        public bool Tick() { Ticks++; return true; }
+        public bool Speak(string? text, string? mood) { Line = text; Mood = mood; Speaking = true; return true; }
+        public void Stop() { Stops++; Speaking = false; }
+        public void Dispose() => Disposals++;
+    }
+
+    [Fact]
+    public Task AskCadenceTicksLandsAndCancels() => InDesk(desk =>
+    {
+        var window = desk.Window!;
+        window.CancelChain();
+        window._vox?.Dispose();
+        var voice = new AskVoice();
+        window._vox = voice;
+        var reply = new LineDraw("reply", "", "yes", "^_^", null, 1, false, 0);
+        var ask = new AskDraw("cadence", "test", "hello?", ">_<", new[] { "yes", "no" }, reply, reply, "", null);
+        var engine = EmiLineEngine.FromJson(Lines);
+        window.ShowAsk(ask, engine);
+        var border = window.BubbleHost.Children.OfType<Border>().Single();
+        var chips = Assert.IsType<StackPanel>(Assert.IsType<StackPanel>(border.Child).Children[1]);
+        Assert.True(window.AskLive);
+        Assert.Equal(".", window.BubbleText);
+        Assert.Equal(TimeSpan.FromMilliseconds(420), window.AskPendingHold);
+        Assert.Equal(1, voice.Ticks);
+        Assert.Null(voice.Line);
+        Assert.False(chips.IsVisible);
+        window.CancelChain(); // A chain clear must not erase an active question.
+        Assert.Equal(".", window.BubbleText);
+        window.AdvanceAsk();
+        Assert.Equal("..", window.BubbleText);
+        Assert.Equal(TimeSpan.FromMilliseconds(420), window.AskPendingHold);
+        Assert.Equal(2, voice.Ticks);
+        window.AdvanceAsk();
+        Assert.Equal("...", window.BubbleText);
+        Assert.Equal(TimeSpan.FromMilliseconds(520), window.AskPendingHold);
+        Assert.Equal(3, voice.Ticks);
+        Assert.Null(voice.Line);
+        window.AdvanceAsk();
+        Assert.Null(window.AskPendingHold);
+        Assert.Equal("hello?", window.BubbleText);
+        Assert.Equal("hello?", voice.Line);
+        Assert.Equal(EmiChains.FrameForFace(">_<"), voice.Mood);
+        Assert.True(chips.IsVisible);
+        Assert.Equal(2, chips.Children.Count);
+        int stops = voice.Stops;
+        window.CancelAsk();
+        Assert.Null(window.BubbleText);
+        Assert.True(voice.Stops > stops);
+        window.ShowAsk(ask, engine);
+        window.AdvanceAsk();
+        var ticks = voice.Ticks;
+        window.CancelAsk();
+        window.AdvanceAsk();
+        Assert.Null(window.AskPendingHold);
+        Assert.Null(window.BubbleText);
+        Assert.Equal(ticks, voice.Ticks);
+        window.ShowAsk(ask, engine);
+        window.ShutDown();
+        window.AdvanceAsk();
+        Assert.Null(window.AskPendingHold);
+        Assert.False(window.AskLive);
+        Assert.Equal(1, voice.Disposals);
+
+        var closed = new EmiDeskWindow();
+        var closeVoice = new AskVoice();
+        closed._vox = closeVoice;
+        closed.Show();
+        var closeEngine = EmiLineEngine.FromJson(Lines);
+        closeEngine.NoteAskIgnored();
+        closeEngine.NoteAskIgnored();
+        closed.ShowAsk(ask, closeEngine);
+        Assert.NotNull(closed.AskPendingHold);
+        Assert.False(closeEngine.AsksExhausted);
+        closed.Close();
+        closed.AdvanceAsk();
+        Assert.Null(closed.AskPendingHold);
+        Assert.False(closed.AskLive);
+        Assert.True(closeEngine.AsksExhausted);
+        Assert.Equal(1, closeVoice.Disposals);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PresentationCancelsQuestionAndVoice(bool landed) => InDesk(desk =>
+    {
+        var window = desk.Window!;
+        window.CancelChain();
+        window._vox?.Dispose();
+        var voice = new AskVoice();
+        window._vox = voice;
+        var reply = new LineDraw("reply", "", "yes", "^_^", null, 1, false, 0);
+        var ask = new AskDraw("presentation", "test", "hello?", ">_<", new[] { "yes", "no" }, reply, reply, "", null);
+        var engine = EmiLineEngine.FromJson(Lines);
+        engine.NoteAskIgnored();
+        engine.NoteAskIgnored();
+        window.ShowAsk(ask, engine);
+        if (landed) for (int i = 0; i < 3; i++) window.AdvanceAsk();
+        Assert.True(window.AskLive);
+        Assert.Equal(landed ? "hello?" : ".", window.BubbleText);
+        Assert.Equal(landed, voice.Speaking);
+        if (!landed) Assert.NotNull(window.AskPendingHold);
+        var ticks = voice.Ticks;
+        var stops = voice.Stops;
+        window.BeginPresentation(() => { });
+        Assert.True(window.PresentationActive);
+        Assert.False(window.AskLive);
+        Assert.Null(window.AskPendingHold);
+        Assert.Null(window.BubbleText);
+        Assert.True(voice.Stops > stops);
+        Assert.False(voice.Speaking);
+        Assert.True(engine.AsksExhausted);
+        window.AdvanceAsk();
+        Assert.Equal(ticks, voice.Ticks);
+        Assert.Null(window.BubbleText);
+        window.EndPresentation();
+        window.ShowAsk(ask, EmiLineEngine.FromJson(Lines));
+        Assert.True(window.AskLive);
+        Assert.Equal(".", window.BubbleText);
+        window.CancelAsk();
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task NoChipRunsItsOwnEffect() => InDesk(async desk =>
     {
