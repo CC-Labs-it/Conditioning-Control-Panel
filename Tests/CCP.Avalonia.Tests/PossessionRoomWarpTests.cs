@@ -9,7 +9,9 @@ using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Possession;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Possession;
+using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -91,6 +93,127 @@ public class PossessionRoomWarpTests
         var midway = Run(false, PossessionRung.Collapse, early: true);
         Assert.Equal(0.25, midway.sag, 6);
         Assert.Equal(0.0025, midway.wash, 6);
+    });
+
+    [Theory]
+    [InlineData("en", "the room")]
+    [InlineData("de", "der Raum")]
+    [InlineData("es", "la habitación")]
+    [InlineData("fr", "la pièce")]
+    [InlineData("it", "la stanza")]
+    [InlineData("ja", "その部屋")]
+    [InlineData("ko", "그 방")]
+    [InlineData("pt-BR", "o quarto")]
+    [InlineData("ru", "комната")]
+    [InlineData("zh-CN", "这个房间")]
+    public void OnlyOneRoomCanBeWarpedAndItIsNamed(string language, string expected) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        var canvas = new Grid { Width = 800, Height = 600 };
+        var layer = new Canvas { Width = 800, Height = 600 };
+        var window = new Window { Width = 800, Height = 600, Content = new Viewbox { Child = canvas } };
+        var otherCanvas = new Grid { Width = 800, Height = 600 };
+        var otherWindow = new Window { Width = 800, Height = 600, Content = new Viewbox { Child = otherCanvas } };
+        var host = new Host { PossessionWindow = window, GhostLayer = layer };
+        var otherHost = new Host { PossessionWindow = otherWindow, GhostLayer = new Canvas() };
+        string? name = null;
+        PossessionContext Context(Host h) => new() { Host = h, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+            Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(7), ElapsedFraction = 0, Remaining = TimeSpan.Zero,
+            Name = (_, n) => name = n };
+        var firstContext = Context(host);
+        var secondContext = Context(otherHost);
+        var first = new RoomWarpEffect();
+        var second = new RoomWarpEffect();
+        window.Show(); otherWindow.Show();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout(); otherWindow.UpdateLayout();
+        try
+        {
+            loc.SetLanguage(language);
+            Assert.True(first.CanApply(firstContext, null));
+            Assert.True(second.CanApply(secondContext, null));
+            first.ApplyAsync(firstContext, null, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.Equal(expected, name);
+            Assert.False(second.CanApply(secondContext, null));
+            second.ApplyAsync(secondContext, null, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.False(second.IsLive);
+            first.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            Assert.True(second.CanApply(secondContext, null));
+        }
+        finally
+        {
+            first.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            second.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            window.Close(); otherWindow.Close();
+            loc.SetLanguage(previous);
+        }
+    });
+
+    [Theory]
+    [InlineData("finish")]
+    [InlineData("panic")]
+    [InlineData("director")]
+    [InlineData("detach")]
+    public Task ReassemblyEasesHomeAndStopsStillEndWithinTheReturnBound(string stop) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var canvas = new Grid { Width = 800, Height = 600 };
+        var layer = new Canvas { Width = 800, Height = 600 };
+        var window = new Window { Width = 800, Height = 600, Content = new Viewbox { Child = canvas } };
+        var host = new Host { PossessionWindow = window, GhostLayer = layer };
+        var context = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+            Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(7),
+            ElapsedFraction = 0, Remaining = TimeSpan.Zero, Name = (_, _) => { } };
+        var effect = new RoomWarpEffect();
+        using var lockdown = new LockdownService();
+        using var director = new PossessionDirector(lockdown, Array.Empty<IPossessionEffect>(), PossessionAvaloniaHead.CreateDirectorHead());
+        director.AttachHost(host);
+        window.Show();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        try
+        {
+            Assert.True(effect.CanApply(context, null));
+            await effect.ApplyAsync(context, null, CancellationToken.None);
+            host.Frames.Frame(TimeSpan.Zero);
+            host.Frames.Frame(TimeSpan.FromMilliseconds(900));
+            var group = Assert.IsType<TransformGroup>(canvas.RenderTransform);
+            var sag = group.Children.OfType<TranslateTransform>().Single();
+            var rotate = group.Children.OfType<RotateTransform>().Single();
+            var angle = rotate.Angle;
+            var wash = Assert.IsType<Border>(Assert.Single(layer.Children));
+            Assert.Equal(4, sag.Y, 6);
+            var returning = effect.UndoAsync(TimeSpan.FromMilliseconds(600));
+            Assert.False(returning.IsCompleted);
+            host.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+            host.Frames.Frame(TimeSpan.FromMilliseconds(1300));
+            Assert.Equal(2, sag.Y, 6);
+            Assert.Equal(angle / 2, rotate.Angle, 6);
+            Assert.Equal(0.02, wash.Opacity, 6);
+            if (stop != "finish")
+            {
+                // WPF PossessionEffectBase.cs:195 and RoomWarpEffect.cs:107-140: a released return is not cut short.
+                if (stop == "panic") PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+                else if (stop == "director") director.UndoAll();
+                else director.DetachHost(host);
+                Assert.False(returning.IsCompleted);
+                Assert.Same(wash, Assert.Single(layer.Children));
+                Assert.Equal(2, sag.Y, 6);
+                Assert.Equal(1, host.Frames.Count);
+                // With no more frames, the wall-clock bound (600 + 100 ms) still ends the return.
+                await returning.WaitAsync(TimeSpan.FromSeconds(3));
+            }
+            else
+                host.Frames.Frame(TimeSpan.FromMilliseconds(1600));
+            await returning;
+            Assert.Empty(layer.Children);
+            Assert.Equal(Matrix.Identity, canvas.RenderTransform?.Value ?? Matrix.Identity);
+            Assert.Equal(0, host.Frames.Count);
+            Assert.False(effect.IsLive);
+            host.Frames.Frame(TimeSpan.FromMilliseconds(2000));
+            Assert.Empty(layer.Children);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
     });
 
     [Fact]

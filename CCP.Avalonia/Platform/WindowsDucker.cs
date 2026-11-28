@@ -60,12 +60,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <summary>The app's ducker: WASAPI sessions, WPF's journal under <paramref name="userData"/>, after the launch recovery.</summary>
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-        internal static WindowsDucker ForApp(string userData) => new(body =>
+        internal static WindowsDucker ForApp(string userData) => ForApp(userData, body =>
             {
                 using var scope = WasapiSessions.Collect();
                 return body(scope.Sessions);
-            }, ProcessName, userData,
-            () => CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true, Environment.ProcessId, DuckRecovery.LaunchRecovery);
+            }, ProcessName);
+
+        /// <summary>The app's policy over any sessions. WPF AudioService.cs:1030-1031: a browser video session's
+        /// sound comes out of WebView2 and is the app's own, so it is never ducked whatever the setting.</summary>
+        internal static WindowsDucker ForApp(string? userData, Func<Func<IReadOnlyList<DuckSession>, int>, int> sweep, Func<int, string> nameOf) =>
+            new(sweep, nameOf, userData, () => (CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true) || BrowserVideoSurface.SessionActive,
+                Environment.ProcessId, DuckRecovery.LaunchRecovery);
 
         internal long Generation { get { lock (_lock) return _generation; } }
         internal bool IsDucked { get { lock (_lock) return _ducked; } }

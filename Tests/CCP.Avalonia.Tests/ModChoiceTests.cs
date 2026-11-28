@@ -31,6 +31,25 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class ModChoiceTests
 {
+    [Fact]
+    public Task FirstRunTracksExternalPackEventsAndDetachesOnClose() => Run(async (shell, svc, server) =>
+    {
+        var wizard = Wizard(shell);
+        var card = Card(wizard, BuiltInMods.BambiSleepId);
+        var progress = typeof(ReleaseContentService).GetField("PackProgressChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var availability = typeof(CoreMods).GetField("ModAvailabilityChanged", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        ((EventHandler<PackProgressEventArgs>)progress.GetValue(svc)!).Invoke(svc, new PackProgressEventArgs { PackId = "mod-bambi", Percent = 43 });
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(43, card.Percent);
+        ((EventHandler<string>)availability.GetValue(null)!).Invoke(null, BuiltInMods.BambiSleepId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(card.IsInstalled);
+        wizard.Close();
+        Assert.DoesNotContain(((Delegate?)progress.GetValue(svc))?.GetInvocationList() ?? Array.Empty<Delegate>(), d => d.Target == wizard);
+        Assert.DoesNotContain(((Delegate?)availability.GetValue(null))?.GetInvocationList() ?? Array.Empty<Delegate>(), d => d.Target == wizard);
+        await Task.CompletedTask;
+    });
+
     // Restack b164 (#4129): WPF MainWindow.xaml.cs:2455-2458, the support card names the active takeover.
     [Fact]
     public Task AccountSupportCopyTracksTakeoverName() => Run(async (shell, svc, server) =>
