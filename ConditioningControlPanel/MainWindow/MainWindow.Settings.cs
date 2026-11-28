@@ -703,6 +703,7 @@ namespace ConditioningControlPanel
         {
             MainTutorialOverlay.Visibility = Visibility.Collapsed;
             if (SettingsTab.BrowserContainer != null) SettingsTab.BrowserContainer.Visibility = Visibility.Visible;
+            if (ModCreatorWindow.BringOpenToFront()) return;
             var modCreator = new ModCreatorWindow(startWithTutorial: true) { Owner = this };
             modCreator.Show();
         }

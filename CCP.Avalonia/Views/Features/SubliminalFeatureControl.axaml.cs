@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         public SubliminalFeatureControl()
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
+            SuperBoxMain.Body = global::ConditioningControlPanel.Avalonia.Controls.Super.SuperPageRows.Afterglow();   // the gold box's own rows (WPF SuperRows)
 
             PopulateFonts();
             // WPF FontPickerHelper.cs:246: preview the selected face in the closed picker.

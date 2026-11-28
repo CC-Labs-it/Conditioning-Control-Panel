@@ -5,6 +5,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:ConditioningControlPanel.Views.Controls.Companion"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d"
              d:DesignWidth="1240" d:DesignHeight="560">
 
@@ -52,7 +54,7 @@
     </UserControl.Resources>
 
     <Border Style="{StaticResource CmpVioletCardStyle}">
-        <StackPanel>
+        <StackPanel rows:RowHue.Hue="{StaticResource CmpPurpleColor}">
 
             <!-- ========== hero header ==========
                  Kept, and kept mod-aware: lab_aimemory_hero.png is a labHeroMap row
@@ -170,12 +172,11 @@
                             <StackPanel>
                                 <TextBlock Text="{loc:Str label_effect_permissions}"
                                            Foreground="{StaticResource CmpDangerBrush}" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="{loc:Str label_max_haptic_intensity}"
-                                               Foreground="{StaticResource CmpTextBrush}" FontSize="13" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="TxtMaxHapticIntensity" x:FieldModifier="internal" Text="60%"
-                                               Foreground="{StaticResource CmpPinkBrush}" FontSize="13" FontWeight="SemiBold"
-                                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,8">
+                                    <rows:RowLabel Text="{loc:Str label_max_haptic_intensity}" Emblem="Most" HorizontalAlignment="Left"
+                                                   Value="{Binding Value, ElementName=SliderMaxHapticIntensity}"/>
+                                    <rows:RowValue x:Name="TxtMaxHapticIntensity" x:FieldModifier="internal" Text="60%"
+                                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                 </Grid>
                                 <Slider x:Name="SliderMaxHapticIntensity" x:FieldModifier="internal" Style="{DynamicResource PinkSlider}"
                                         Minimum="0" Maximum="1" Value="0.6" Margin="0,0,0,10"
@@ -183,17 +184,17 @@
                                 <!-- Ten switches, one handler: each names its own setting through Tag, so
                                      re-ordering this grid can never remap a saved permission. -->
                                 <UniformGrid Columns="2" Rows="5">
-                                    <CheckBox x:Name="ChkAllowFlash" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Content="{loc:Str label_allow_flash}" Foreground="White" FontSize="13" Margin="0,2,4,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Flash"/>
-                                    <CheckBox x:Name="ChkAllowVideo" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Content="{loc:Str label_allow_video}" Foreground="White" FontSize="13" Margin="4,2,0,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Video"/>
-                                    <CheckBox x:Name="ChkAllowAudio" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Content="{loc:Str label_allow_audio}" Foreground="White" FontSize="13" Margin="0,2,4,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Audio"/>
-                                    <CheckBox x:Name="ChkAllowBubbles" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Content="{loc:Str label_allow_bubbles}" Foreground="White" FontSize="13" Margin="4,2,0,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Bubbles"/>
-                                    <CheckBox x:Name="ChkAllowSubliminal" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Content="{loc:Str label_allow_subliminal}" Foreground="White" FontSize="13" Margin="0,2,4,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Subliminal"/>
-                                    <CheckBox x:Name="ChkAllowOverlay" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Content="{loc:Str label_allow_overlay}" Foreground="White" FontSize="13" Margin="4,2,0,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Overlay"/>
-                                    <CheckBox x:Name="ChkAllowLockCard" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Content="{loc:Str label_allow_lockcard}" Foreground="White" FontSize="13" Margin="0,2,4,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="LockCard"/>
-                                    <CheckBox x:Name="ChkAllowBounce" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Content="{loc:Str label_allow_bounce}" Foreground="White" FontSize="13" Margin="4,2,0,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Bounce"/>
-                                    <CheckBox x:Name="ChkAllowHaptic" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Content="{loc:Str label_allow_haptic}" Foreground="White" FontSize="13" Margin="0,2,4,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Haptic"/>
+                                    <CheckBox x:Name="ChkAllowFlash" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Foreground="White" FontSize="13" Margin="0,2,4,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Flash" VerticalContentAlignment="Center"><rows:RowLabel Text="{loc:Str label_allow_flash}" Emblem="Many" Subject="Image" IsOn="{Binding IsChecked, ElementName=ChkAllowFlash}"/></CheckBox>
+                                    <CheckBox x:Name="ChkAllowVideo" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Foreground="White" FontSize="13" Margin="4,2,0,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Video" VerticalContentAlignment="Center"><rows:RowLabel Text="{loc:Str label_allow_video}" Emblem="Many" Subject="Video" IsOn="{Binding IsChecked, ElementName=ChkAllowVideo}"/></CheckBox>
+                                    <CheckBox x:Name="ChkAllowAudio" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Foreground="White" FontSize="13" Margin="0,2,4,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Audio" VerticalContentAlignment="Center"><rows:RowLabel Text="{loc:Str label_allow_audio}" Emblem="Loud" IsOn="{Binding IsChecked, ElementName=ChkAllowAudio}"/></CheckBox>
+                                    <CheckBox x:Name="ChkAllowBubbles" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Foreground="White" FontSize="13" Margin="4,2,0,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Bubbles" VerticalContentAlignment="Center"><rows:RowLabel Text="{loc:Str label_allow_bubbles}" Emblem="Many" Subject="Bubble" IsOn="{Binding IsChecked, ElementName=ChkAllowBubbles}"/></CheckBox>
+                                    <CheckBox x:Name="ChkAllowSubliminal" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Foreground="White" FontSize="13" Margin="0,2,4,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Subliminal" VerticalContentAlignment="Center"><rows:RowLabel Text="{loc:Str label_allow_subliminal}" Emblem="Words" IsOn="{Binding IsChecked, ElementName=ChkAllowSubliminal}"/></CheckBox>
+                                    <CheckBox x:Name="ChkAllowOverlay" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Foreground="White" FontSize="13" Margin="4,2,0,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Overlay" VerticalContentAlignment="Center"><rows:RowLabel Text="{loc:Str label_allow_overlay}" Emblem="Layers" IsOn="{Binding IsChecked, ElementName=ChkAllowOverlay}"/></CheckBox>
+                                    <CheckBox x:Name="ChkAllowLockCard" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Foreground="White" FontSize="13" Margin="0,2,4,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="LockCard" VerticalContentAlignment="Center"><rows:RowLabel Text="{loc:Str label_allow_lockcard}" Emblem="Card" IsOn="{Binding IsChecked, ElementName=ChkAllowLockCard}"/></CheckBox>
+                                    <CheckBox x:Name="ChkAllowBounce" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Foreground="White" FontSize="13" Margin="4,2,0,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Bounce" VerticalContentAlignment="Center"><rows:RowLabel Text="{loc:Str label_allow_bounce}" Emblem="Words" IsOn="{Binding IsChecked, ElementName=ChkAllowBounce}"/></CheckBox>
+                                    <CheckBox x:Name="ChkAllowHaptic" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Foreground="White" FontSize="13" Margin="0,2,4,2" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="Haptic" VerticalContentAlignment="Center"><rows:RowLabel Text="{loc:Str label_allow_haptic}" Emblem="Plug" IsOn="{Binding IsChecked, ElementName=ChkAllowHaptic}"/></CheckBox>
                                     <StackPanel Orientation="Horizontal" Margin="4,2,0,2">
-                                        <CheckBox x:Name="ChkAllowGetBackToMe" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Content="{loc:Str label_allow_get_back_to_me}" Foreground="White" FontSize="13" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="GetBackToMe"/>
+                                        <CheckBox x:Name="ChkAllowGetBackToMe" x:FieldModifier="internal" Style="{DynamicResource DotCheckBoxStyle}" Foreground="White" FontSize="13" Checked="ChkAllowEffect_Changed" Unchecked="ChkAllowEffect_Changed" Tag="GetBackToMe" VerticalContentAlignment="Center"><rows:RowLabel Text="{loc:Str label_allow_get_back_to_me}" Emblem="Bell" IsOn="{Binding IsChecked, ElementName=ChkAllowGetBackToMe}"/></CheckBox>
                                         <!-- Named: MainWindow.Presets.cs hangs the help-registry popup on it. -->
                                         <Button x:Name="HelpBtnGetBackToMe" x:FieldModifier="internal" Style="{DynamicResource HelpButtonStyle}" Tag="GetBackToMe"/>
                                     </StackPanel>
@@ -237,8 +238,8 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="{loc:Str label_chat_memory_title}"
-                                               Foreground="{StaticResource CmpVioletBrush}" FontSize="13" FontWeight="SemiBold"/>
+                                    <rows:RowLabel Text="{loc:Str label_chat_memory_title}" Emblem="Stay"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkChatMemoryEnabled}"/>
                                     <Button Style="{DynamicResource HelpButtonStyle}" ToolTip="{loc:Str tooltip_lab_ai_memory}"/>
                                 </StackPanel>
                                 <TextBlock Text="{loc:Str label_chat_memory_hint}"

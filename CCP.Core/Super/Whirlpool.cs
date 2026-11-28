@@ -29,6 +29,11 @@ public sealed class Whirlpool
     public const double Swirl = 0.75;
     /// <summary>How quickly the pool catches up with the cursor (1/s). Low on purpose: it trails.</summary>
     public const double Follow = 5;
+    /// <summary>Restless pool (ccp-bugs #1707): seconds of steady movement from nothing to full, and of
+    /// rest from full back to nothing. Quicker than the stock pool: mouse movement comes in bursts.</summary>
+    public const double RestlessGrowSeconds = 6, RestlessCalmSeconds = 10;
+    /// <summary>Restless pool: how much one click adds to <see cref="Size"/>.</summary>
+    public const double ClickKick = 0.08;
 
     public double X { get; private set; }
     public double Y { get; private set; }
@@ -40,7 +45,23 @@ public sealed class Whirlpool
     public double ShortSide { get; private set; } = 1080;
     private bool _placed;
 
-    public bool Live => Size > LiveSize;
+    /// <summary>
+    /// Big enough to act: pull, swirl the fog, eat, take words. A pool held up only by its
+    /// <see cref="Floor"/> is drawn but does not act (owner intent for ccp-bugs #1719 is "visible all
+    /// the time", not "pulls all the time"): it acts once it has grown <see cref="FloorLiveMargin"/>
+    /// past the floor. With no floor this is the shipped rule.
+    /// </summary>
+    public bool Live => Size > LiveThreshold;
+    /// <summary>How far past its <see cref="Floor"/> a pool must grow before it acts.</summary>
+    public const double FloorLiveMargin = 0.05;
+    private double LiveThreshold
+    {
+        get
+        {
+            double floor = Math.Clamp(Floor, 0, 1);
+            return floor > 0 ? Math.Max(LiveSize, floor + FloorLiveMargin) : LiveSize;
+        }
+    }
     public double Eased => Ease(Size);
     /// <summary>The player's "Pool size" as a share of the stock reach (<see cref="WhirlpoolOptions.ReachScale"/>). 1 = as shipped.</summary>
     public double ReachScale { get; set; } = 1;
@@ -51,6 +72,17 @@ public sealed class Whirlpool
     /// eaten again (tier-2 report, 7.3.3: "something was still popping my bubbles").
     /// </summary>
     public bool Eats { get; set; } = true;
+    /// <summary>
+    /// "Smallest size" (ccp-bugs #1719): the <see cref="Size"/> the pool never shrinks below, 0..1.
+    /// 0 = as shipped, the pool shrinks to nothing while the mouse moves. Under the floor (at start,
+    /// after a reset) it grows back at the rest pace whatever the mouse does, so it still fades in.
+    /// </summary>
+    public double Floor { get; set; }
+    /// <summary>
+    /// "Restless pool" (ccp-bugs #1707): the stock rule reversed. Movement and clicks
+    /// (<see cref="Kick"/>) grow the pool, rest calms it. False = as shipped.
+    /// </summary>
+    public bool Restless { get; set; }
     /// <summary>Reach in pixels: nothing outside it feels the pool.</summary>
     public double Radius => (MinReach + (MaxReach - MinReach) * Eased) * ShortSide * ReachScale;
     /// <summary>
@@ -88,12 +120,24 @@ public sealed class Whirlpool
         double k = 1 - Math.Exp(-Follow * dt);
         X += (cursorX - X) * k;
         Y += (cursorY - Y) * k;
-        double speedDip = cursorSpeedPx / Dip;
-        if (speedDip < RestSpeed) Size += dt / GrowSeconds;
-        else Size -= dt / ShrinkSeconds * Math.Clamp(speedDip / 500.0, 0.35, 1.6);
+        double speedDip = cursorSpeedPx / Dip, before = Size;
+        bool resting = speedDip < RestSpeed;
+        double pace = Math.Clamp(speedDip / 500.0, 0.35, 1.6);
+        if (Restless) Size += resting ? -dt / RestlessCalmSeconds : dt / RestlessGrowSeconds * pace;
+        else if (resting) Size += dt / GrowSeconds;
+        else Size -= dt / ShrinkSeconds * pace;
+        double floor = Math.Clamp(Floor, 0, 1);
+        // Under the floor it climbs at least at the rest pace, and faster when the rule above grew it faster.
+        if (Size < floor) Size = Math.Max(Size, Math.Min(floor, before + dt / GrowSeconds));
         Size = Math.Clamp(Size, 0, 1);
         Angle += dt * Spin * (gentle ? 0.5 : 1);
         if (Angle > 1e6) Angle -= 1e6;
+    }
+
+    /// <summary>A mouse click. Only a <see cref="Restless"/> pool feeds on it; the stock pool ignores it.</summary>
+    public void Kick()
+    {
+        if (Restless) Size = Math.Min(1, Size + ClickKick);
     }
 
     /// <summary>Drop to nothing at once (panic, switch off, base feature off).</summary>

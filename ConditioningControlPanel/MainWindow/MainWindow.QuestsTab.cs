@@ -185,6 +185,7 @@ namespace ConditioningControlPanel
             var desc = def.LocalizedDescription;
             if (string.IsNullOrWhiteSpace(desc) || desc.StartsWith("quest_", StringComparison.Ordinal))
                 desc = def.Description;
+            desc = Models.QuestVideoCopy.Describe(def.Category, desc, Loc.Get);
 
             bool canReroll = !quest.IsCompleted && rerollsLeft > 0;
 
@@ -194,6 +195,7 @@ namespace ConditioningControlPanel
                 Icon = def.Icon,
                 Name = App.Mods?.MakeModAware(name) ?? name,
                 Description = App.Mods?.MakeModAware(desc) ?? desc,
+                DescriptionTooltip = Models.QuestVideoCopy.Tooltip(def.Category, Loc.Get),
                 Current = quest.CurrentProgress,
                 Target = def.TargetValue,
                 IsCompleted = quest.IsCompleted,
@@ -320,8 +322,13 @@ namespace ConditioningControlPanel
             {
                 QuestsTab.TxtWeeklyQuestIcon.Text = weeklyDef.Icon;
                 QuestsTab.SetWeeklyNavigable(QuestDestinations.For(weeklyDef.Category) != null && !weeklyProgress.IsCompleted);
-                QuestsTab.TxtWeeklyQuestName.Text = App.Mods?.MakeModAware(weeklyDef.Name) ?? weeklyDef.Name;
-                QuestsTab.TxtWeeklyQuestDesc.Text = App.Mods?.MakeModAware(weeklyDef.Description) ?? weeklyDef.Description;
+                // Same localized-or-hardcoded pick as the daily cards, so the video hint never trails an English line.
+                var weeklyName = Models.QuestVideoCopy.LocalizedOr(weeklyDef.LocalizedName, weeklyDef.Name);
+                QuestsTab.TxtWeeklyQuestName.Text = App.Mods?.MakeModAware(weeklyName) ?? weeklyName;
+                var weeklyDesc = Models.QuestVideoCopy.Describe(weeklyDef.Category,
+                    Models.QuestVideoCopy.LocalizedOr(weeklyDef.LocalizedDescription, weeklyDef.Description), Loc.Get);
+                QuestsTab.TxtWeeklyQuestDesc.Text = App.Mods?.MakeModAware(weeklyDesc) ?? weeklyDesc;
+                QuestsTab.TxtWeeklyQuestDesc.ToolTip = Models.QuestVideoCopy.Tooltip(weeklyDef.Category, Loc.Get);
                 QuestsTab.TxtWeeklyProgress.Text = $"{weeklyProgress.CurrentProgress} / {weeklyDef.TargetValue}";
                 // Scaled XP through the same helper the daily cards and the header stamps use,
                 // which is the same maths CompleteQuest pays out with. This line used to carry its
@@ -394,6 +401,7 @@ namespace ConditioningControlPanel
                 QuestsTab.TxtWeeklyQuestIcon.Text = "✅";
                 QuestsTab.TxtWeeklyQuestName.Text = Loc.Get("quest_weekly_done_name");
                 QuestsTab.TxtWeeklyQuestDesc.Text = Loc.Get("quest_weekly_done_desc");
+                QuestsTab.TxtWeeklyQuestDesc.ToolTip = null;
                 QuestsTab.TxtWeeklyProgress.Text = "";
                 QuestsTab.TxtWeeklyXP.Text = "";
                 QuestsTab.TxtWeeklyStreakBonus.Visibility = Visibility.Collapsed;

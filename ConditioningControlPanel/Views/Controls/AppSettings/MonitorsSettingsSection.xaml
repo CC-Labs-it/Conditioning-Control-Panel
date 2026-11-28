@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
              mc:Ignorable="d" d:DesignWidth="760">
 
@@ -25,7 +27,7 @@
         <TextBlock Text="{loc:Str settings_section_monitors}" Style="{StaticResource SectionHeader}"/>
 
         <Border Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,10"
-                BorderBrush="{StaticResource SectionHueDevicesBorderBrush}">
+                BorderBrush="{StaticResource SectionHueDevicesBorderBrush}" rows:RowHue.Hue="{StaticResource SectionHueDevices}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueDevicesWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -35,49 +37,45 @@
                     <feat:MonitorTargetPicker x:Name="ContentMonitorPicker" x:FieldModifier="internal"/>
 
                     <!-- Depends on the picker, so it stays indented. -->
-                    <Grid MinHeight="34" Margin="16,0,0,0" ToolTip="{loc:Str tooltip_fill_all_monitors_video}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="16,0,0,0" ToolTip="{loc:Str tooltip_fill_all_monitors_video}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}" Text="{loc:Str setting_fill_all_monitors_video}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_fill_all_monitors_video}" Emblem="Screens" IsOn="{Binding IsChecked, ElementName=ChkFillAllMon}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkFillAllMon" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkFillAllMon_Changed" Unchecked="ChkFillAllMon_Changed"/>
                     </Grid>
 
-                    <Grid MinHeight="34" ToolTip="{loc:Str tooltip_force_video_gpu_decode}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_force_video_gpu_decode}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}" Text="{loc:Str setting_force_video_gpu_decode}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_force_video_gpu_decode}" Emblem="Perf" IsOn="{Binding IsChecked, ElementName=ChkVideoGpuDecode}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkVideoGpuDecode" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkVideoGpuDecode_Changed" Unchecked="ChkVideoGpuDecode_Changed"/>
                     </Grid>
 
-                    <Grid MinHeight="34" ToolTip="{loc:Str tooltip_blurred_video_background}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_blurred_video_background}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}" Text="{loc:Str setting_blurred_video_background}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_blurred_video_background}" Emblem="Colour" IsOn="{Binding IsChecked, ElementName=ChkVideoBlurBg}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkVideoBlurBg" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkVideoBlurBg_Changed" Unchecked="ChkVideoBlurBg_Changed"/>
                     </Grid>
 
-                    <Grid MinHeight="34" ToolTip="{loc:Str tooltip_browser_video_engine}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_browser_video_engine}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}" Text="{loc:Str setting_browser_video_engine}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_browser_video_engine}" Emblem="Perf" IsOn="{Binding IsChecked, ElementName=ChkBrowserVideoEngine}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkBrowserVideoEngine" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkBrowserVideoEngine_Changed" Unchecked="ChkBrowserVideoEngine_Changed"/>

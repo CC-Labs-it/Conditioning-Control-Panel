@@ -30,6 +30,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\ConditioningControlPanel\ConditioningControlPanel.csproj" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
+    <Compile Include="..\CCP.Core.Tests\FlickerDeckTests.cs" Link="FlickerDeckTests.cs" />
+    <Compile Include="..\CCP.Core.Tests\FlickerDeckJuiceTests.cs" Link="FlickerDeckJuiceTests.cs" />
+    <Compile Include="..\CCP.Core.Tests\FlickerShatterTests.cs" Link="FlickerShatterTests.cs" />
   </ItemGroup>
 
 </Project>

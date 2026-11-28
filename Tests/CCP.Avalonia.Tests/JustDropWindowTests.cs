@@ -249,6 +249,32 @@ public sealed class JustDropWindowTests
         Assert.True(replay.IsVisible);
     });
 
+    // WPF JustDropHostService.cs:101,285 -> ChaosWebViewHost.FocusWeb (:877-883): the page gets the keyboard.
+    [Fact]
+    public void RefocusAndReplayDuckFocusThePage() => Run(shell =>
+    {
+        var focused = new System.Collections.Generic.List<GameWindow>();
+        GameWindow.JustDropFocusPageForTests = focused.Add;
+        try
+        {
+            JustDropService.SetServerEnabledForTests(true);
+            shell.ShowTab("justdrop");
+            var shop = Open()!;
+            focused.Clear();
+            shell.ShowTab("justdrop");
+            Assert.Same(shop, Assert.Single(focused));
+            focused.Clear();
+            Assert.Same(shop, GameWindow.LaunchJustDropReplay("kept-order", shell));
+            Assert.Same(shop, Assert.Single(focused));
+            shop.Close();
+            Dispatcher.UIThread.RunJobs();
+            focused.Clear();
+            var replay = GameWindow.LaunchJustDropReplay("kept-order", shell)!;
+            Assert.Same(replay, Assert.Single(focused));
+        }
+        finally { GameWindow.JustDropFocusPageForTests = null; }
+    });
+
     [Fact]
     public void BrowserFailureClosesShopAndReplayAndRestoresThePanel() => Run(shell =>
     {
@@ -525,20 +551,21 @@ public sealed class JustDropWindowTests
         finally { w.Close(); Directory.Delete(root, true); }
     });
 
+    /// <summary>Declutter wave 2 (2026-11-15): Just Drop left Studio's strip for the launcher's Tools door.
+    /// No pill is drawn any more; the key still opens the shop and leaves the page on screen alone.</summary>
     [Fact]
-    public void TheStripPillOpensTheShopOnlyAfterOpenIt() => Run(shell =>
+    public void TheStripDrawsNoPillAndTheKeyStillOpensTheShop() => Run(shell =>
     {
         JustDropService.SetServerEnabledForTests(true);
         shell.ShowTab("presets");
+        Dispatcher.UIThread.RunJobs();
         var strip = shell.PageStrip!;
-        strip.PillFor("justdrop")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        Assert.NotNull(strip.PillFor("presets"));
+        Assert.Null(strip.PillFor("justdrop"));
+        Assert.Null(Open());
+        shell.ShowTab("justdrop");                        // ShowTab -> OpenJustDrop -> GameWindow.Launch
         Dispatcher.UIThread.RunJobs();
-        Assert.Null(Open());                              // the pill only asks
-        var yes = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(strip.ConfirmationCard!)
-            .OfType<global::Avalonia.Controls.Button>().Single(b => b.Name == "NavOpenWindowYes");
-        yes.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
-        Dispatcher.UIThread.RunJobs();
-        Assert.NotNull(Open());                           // Open it -> ShowTab -> OpenJustDrop -> GameWindow.Launch
+        Assert.NotNull(Open());
         Assert.Equal("presets", shell.CurrentTab);
     });
 

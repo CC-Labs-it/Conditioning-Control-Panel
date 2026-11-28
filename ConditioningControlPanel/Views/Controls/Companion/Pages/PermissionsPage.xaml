@@ -1,7 +1,8 @@
 <UserControl x:Class="ConditioningControlPanel.Views.Controls.Companion.Pages.PermissionsPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:loc="clr-namespace:ConditioningControlPanel.Localization">
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows">
     <!-- Companion > Permissions: the one list of what the AI may do (AiPermissionsGrid, the live
          control the room and the v2 "Allowed" sheet used). Takeover keeps its own effect list and
          points here; this page points back to it. -->
@@ -12,7 +13,7 @@
             <ContentControl x:Name="PermissionsHost" Focusable="False"/>
             <!-- The v2 Settings sheet holding this switch has been unreachable since the nav rework. -->
             <CheckBox x:Name="ChkAsks" Click="ChkAsks_Click" Margin="0,14,0,0" Foreground="{DynamicResource TextLightBrush}" ToolTip="{loc:Str companion_asks_toggle_hint}">
-                <TextBlock Text="{loc:Str companion_asks_toggle}" Foreground="{DynamicResource TextLightBrush}"/>
+                <rows:RowLabel Text="{loc:Str companion_asks_toggle}" Emblem="Bell" IsOn="{Binding IsChecked, ElementName=ChkAsks}"/>
             </CheckBox>
             <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,14,0,0">
                 <Run Text="{loc:Str companion_page_permissions_takeover}"/>

@@ -2072,11 +2072,18 @@ namespace ConditioningControlPanel.Services
                     // via window.LayerItem (fade, GIF frames, gaze dwell).
                     // Flashes v2: a hydra child inherits the parent's kind (its own start state
                     // is rolled at spawn); an original resolves the picker through ownership and
-                    // MotionLevel. The classic and solid paths never move.
-                    window.MotionStyle = imageData.BubbleOriginPx != null ? FlashMotionStyle.Still : imageData.PreviewV2
+                    // MotionLevel. The classic and solid paths never move. A picture a bubble
+                    // delivered rolls its motion like the rest of the burst (ccp-bugs #1716: it was
+                    // forced Still, so the first flash of a Flash Images bubble never moved); the
+                    // layer holds that motion until the entrance from the bubble has landed.
+                    window.MotionStyle = imageData.PreviewV2
                         ? FlashMotion.Resolve(FlashMotionStyle.DriftBounce,
                             true, true, MotionFx.Level, _random)
                         : ResolveMotionStyle(settings, inheritMotion);
+                    // A Pendulum hangs tilted from its rope: the fly-out from the bubble cannot land on
+                    // that pose without a jump, so a delivered picture drifts instead (review of #1716).
+                    if (imageData.BubbleOriginPx != null && window.MotionStyle == FlashMotionStyle.Pendulum)
+                        window.MotionStyle = FlashMotionStyle.DriftBounce;
                     SpawnLayerVisual(window, imageData, monitor,
                         layerGlowColor, layerGlowRadius, layerGlowOpacity, luckyFx, window.MotionStyle,
                         roundedWpf && ownsFlashV2);
@@ -2734,8 +2741,9 @@ namespace ConditioningControlPanel.Services
                     dragOwnedOn: s?.FlashDraggable == true && owned,
                     shatterOwnedOn: s?.FlashShatterEnabled == true && owned))
                 return;
-            // Flips to break (DeckOptions): the stock 4 rolls 3..5, exactly as before it had options.
-            var (breakMin, breakMax) = SuperCore.DeckOptions.BreakRange(s?.DeckFlips ?? SuperCore.DeckOptions.FlipsDefault);
+            // Fewest / Most flips (DeckOptions): unset ends follow the older single slider, so the stock 4 rolls 3..5 as before.
+            var (breakMin, breakMax) = SuperCore.DeckOptions.BreakRange(s?.DeckFlips ?? SuperCore.DeckOptions.FlipsDefault,
+                s?.DeckFlipsFewest ?? 0, s?.DeckFlipsMost ?? 0);
             item.Deck = FlickerDeck.Create(_deckIndex++ % 8, _random, breakMin, breakMax);
             item.OnDeckRaise = _ => RaiseDeckWindow(window);
             item.OnDeckSwap = _ => ApplyDeckSwap(window);

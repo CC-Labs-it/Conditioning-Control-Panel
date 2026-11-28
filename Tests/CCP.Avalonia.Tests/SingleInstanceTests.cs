@@ -289,6 +289,31 @@ namespace CCP.Avalonia.Tests
             }
         }
 
+        /// <summary>A queued sender must not hand the send gate on while the primary still holds its connection:
+        /// the next sender's one connect second would then include the primary's way to Disconnect.</summary>
+        [Fact]
+        public async Task SenderKeepsTheQueueUntilThePrimaryDropsItsConnection()
+        {
+            var name = "ccp_drain_test_" + Guid.NewGuid().ToString("N");
+            await using var server = new NamedPipeServerStream(name, PipeDirection.InOut, 1,
+                PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+            bool dropped = false;
+            var primary = Task.Run(async () =>
+            {
+                await server.WaitForConnectionAsync();
+                var request = new byte[2];
+                await server.ReadExactlyAsync(request);            // length 1, then the payload byte
+                await server.WriteAsync(new byte[] { 1 });
+                await server.ReadExactlyAsync(new byte[1]);        // the client's receipt
+                await Task.Delay(1500);                             // a slow hop to Disconnect
+                Volatile.Write(ref dropped, true);
+                server.Disconnect();
+            });
+            Assert.True(SingleInstance.RequestShow(name, "x"));
+            Assert.True(Volatile.Read(ref dropped));
+            await primary.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
         [Fact]
         public async Task AcknowledgementIsKeptUntilClientConfirmsReceipt()
         {

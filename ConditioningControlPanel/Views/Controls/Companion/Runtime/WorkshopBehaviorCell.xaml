@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d" d:DesignWidth="312">
 
     <!-- ================================================================
@@ -26,10 +28,10 @@
 
     <StackPanel>
         <!-- idle interval -->
-        <Grid>
-            <TextBlock Text="{loc:Str label_idle_giggle_interval}" Style="{StaticResource CmpCellLabelStyle}"/>
-            <TextBlock x:Name="TxtIdleIntervalCompanion" x:FieldModifier="internal" Text="{loc:Str label_120s}"
-                       Style="{StaticResource CmpCellValueStyle}"/>
+        <Grid Style="{StaticResource OptionRow}">
+            <rows:RowLabel Text="{loc:Str label_idle_giggle_interval}" Emblem="Often" HorizontalAlignment="Left"/>
+            <rows:RowValue x:Name="TxtIdleIntervalCompanion" x:FieldModifier="internal" Text="{loc:Str label_120s}"
+                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
         </Grid>
         <Slider x:Name="SliderIdleIntervalCompanion" x:FieldModifier="internal" Style="{DynamicResource PinkSlider}"
                 Minimum="20" Maximum="300" Value="120" Margin="0,4,0,2"
@@ -40,10 +42,10 @@
                    Margin="0,0,0,9"/>
 
         <!-- bubble duration -->
-        <Grid>
-            <TextBlock Text="{loc:Str label_bubble_duration}" Style="{StaticResource CmpCellLabelStyle}"/>
-            <TextBlock x:Name="TxtBubbleDurationCompanion" x:FieldModifier="internal" Text="2s"
-                       Style="{StaticResource CmpCellValueStyle}"/>
+        <Grid Style="{StaticResource OptionRow}">
+            <rows:RowLabel Text="{loc:Str label_bubble_duration}" Emblem="Long" HorizontalAlignment="Left"/>
+            <rows:RowValue x:Name="TxtBubbleDurationCompanion" x:FieldModifier="internal" Text="2s"
+                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
         </Grid>
         <Slider x:Name="SliderBubbleDurationCompanion" x:FieldModifier="internal" Style="{DynamicResource PinkSlider}"
                 Minimum="1" Maximum="10" Value="2" Margin="0,4,0,9"
@@ -53,10 +55,10 @@
 
         <!-- voice level (7.1.8): the voice's own level on top of master. 80 = the loudness from
              before the slider. In the open on purpose: people tune it. -->
-        <Grid>
-            <TextBlock Text="{loc:Str label_companion_voice_level}" Style="{StaticResource CmpCellLabelStyle}"/>
-            <TextBlock x:Name="TxtVoiceLevelCompanion" x:FieldModifier="internal" Text="80"
-                       Style="{StaticResource CmpCellValueStyle}"/>
+        <Grid Style="{StaticResource OptionRow}">
+            <rows:RowLabel Text="{loc:Str label_companion_voice_level}" Emblem="Loud" HorizontalAlignment="Left" Value="{Binding Value, ElementName=SliderVoiceLevelCompanion}"/>
+            <rows:RowValue x:Name="TxtVoiceLevelCompanion" x:FieldModifier="internal" Text="80"
+                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
         </Grid>
         <Slider x:Name="SliderVoiceLevelCompanion" x:FieldModifier="internal" Style="{DynamicResource PinkSlider}"
                 Minimum="0" Maximum="100" Value="80" Margin="0,4,0,2"
@@ -96,7 +98,7 @@
         <!-- the two switches -->
         <Grid Margin="0,0,0,6">
             <StackPanel Margin="0,0,44,0">
-                <TextBlock Text="{loc:Str label_mute_whispers}" Style="{StaticResource CmpCellLabelStyle}"/>
+                <rows:RowLabel Text="{loc:Str label_mute_whispers}" Emblem="Loud" IsOn="{Binding IsChecked, ElementName=ChkMuteWhispersCompanion}"/>
                 <TextBlock Text="{loc:Str label_mute_subliminal_audio}" Style="{StaticResource CmpCellHintStyle}"/>
             </StackPanel>
             <CheckBox x:Name="ChkMuteWhispersCompanion" x:FieldModifier="internal" Style="{DynamicResource ToggleStyle}"
@@ -105,7 +107,7 @@
         </Grid>
         <Grid Margin="0,0,0,6">
             <StackPanel Margin="0,0,44,0">
-                <TextBlock Text="{loc:Str label_pause_browser}" Style="{StaticResource CmpCellLabelStyle}"/>
+                <rows:RowLabel Text="{loc:Str label_pause_browser}" Emblem="Loud" IsOn="{Binding IsChecked, ElementName=ChkPauseBrowserCompanion}"/>
                 <TextBlock Text="{loc:Str label_pause_embedded_browser_audio}" Style="{StaticResource CmpCellHintStyle}"/>
             </StackPanel>
             <CheckBox x:Name="ChkPauseBrowserCompanion" x:FieldModifier="internal" Style="{DynamicResource ToggleStyle}"
@@ -117,7 +119,7 @@
              polarity as its two neighbors. -->
         <Grid>
             <StackPanel Margin="0,0,44,0">
-                <TextBlock Text="{loc:Str label_mute_voice_lines}" Style="{StaticResource CmpCellLabelStyle}"/>
+                <rows:RowLabel Text="{loc:Str label_mute_voice_lines}" Emblem="Mic" IsOn="{Binding IsChecked, ElementName=ChkVoiceLinesCompanion}"/>
                 <TextBlock Text="{loc:Str label_mute_voice_lines_hint}" Style="{StaticResource CmpCellHintStyle}"/>
             </StackPanel>
             <CheckBox x:Name="ChkVoiceLinesCompanion" x:FieldModifier="internal" Style="{DynamicResource ToggleStyle}"
@@ -145,7 +147,7 @@
              another window while this cell is sitting here. -->
         <Grid Margin="0,6,0,0">
             <StackPanel Margin="0,0,44,0">
-                <TextBlock Text="{loc:Str tube_midnight_setting}" Style="{StaticResource CmpCellLabelStyle}"/>
+                <rows:RowLabel Text="{loc:Str tube_midnight_setting}" Emblem="Colour" IsOn="{Binding IsChecked, ElementName=ChkTubeMidnightGlass}"/>
                 <TextBlock Text="{loc:Str tube_midnight_setting_hint}" Style="{StaticResource CmpCellHintStyle}"/>
             </StackPanel>
             <CheckBox x:Name="ChkTubeMidnightGlass" x:FieldModifier="internal" Style="{DynamicResource ToggleStyle}"

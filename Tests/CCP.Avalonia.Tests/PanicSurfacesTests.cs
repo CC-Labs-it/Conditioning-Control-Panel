@@ -17,6 +17,42 @@ namespace CCP.Avalonia.Tests;
 /// capture, a player or a host is in that registry (or allowlisted with the reason it needs no entry).</summary>
 public sealed class PanicSurfacesTests
 {
+    internal sealed class CountHost : ConditioningControlPanel.Services.IBubbleCountHost
+    {
+        public Action<bool>? Done;
+        public double LastVideoDurationSeconds => 60;
+        public void Show(string path, int difficulty, bool strict, Action<bool> done) => Done = done;
+        public void ShowMessage(string text, int ms, Action then) { }
+        public void CloseAll() { }
+    }
+
+    [Fact]
+    public void EnginePanicSuppressesLateBubbleCountResults() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var clock = new BubbleCountQueueTests.Clock(); var host = new CountHost();
+        var previous = CoreEngine.BubbleCount;
+        using var game = new ConditioningControlPanel.Services.BubbleCountScheduler(host, clock, () => new[] { "/test.mp4" });
+        int events = 0; game.GameCompleted += () => events++; game.GameFailed += () => events++;
+        CoreEngine.BubbleCount = game;
+        try
+        {
+            game.Trigger(true); clock.Advance(ConditioningControlPanel.Services.BubbleCountScheduler.LeadIn);
+            Assert.NotNull(host.Done);
+            PanicSurfaces.All.Single(s => s.Id == "engine").Stop(null!);
+            host.Done!(true); host.Done!(false);
+            Assert.False(game.IsBusy); Assert.Equal(0, events);
+        }
+        finally { game.ForceCleanup(); CoreEngine.BubbleCount = previous; }
+    });
+
+    [Fact]
+    public void Remote_haptics_panic_surface_invalidates_pending_remote_commands()
+    {
+        var generation = ConditioningControlPanel.Services.RemoteCommands.PanicGeneration;
+        PanicSurfaces.All.Single(s => s.Id == "remote-haptics").Stop(null);
+        Assert.NotEqual(generation, ConditioningControlPanel.Services.RemoteCommands.PanicGeneration);
+    }
+
     [Fact]
     public void Bubble_surface_clears_variant_bubbles_on_panic() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -46,6 +82,36 @@ public sealed class PanicSurfacesTests
             field.Bubbles.AddRange(savedBubbles);
             foreach (var (key, value) in savedFaces) faces[key] = value;
             foreach (var (list, items) in lists) { list.Clear(); foreach (var item in items) list.Add(item); }
+        }
+    });
+
+    /// <summary>Every Lights Down dim window is gone before the engine stops (folded from #5343): the dim
+    /// never outlives the video it sits under on a panic.</summary>
+    [Fact]
+    public void StopAllClosesEveryLightsDownWindowBeforeEngine() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var video = new global::Avalonia.Controls.Window();
+        var prev = PanicSurfaces.All;
+        var lights = prev.Single(s => s.Id == "lights-down");
+        var engine = prev.Single(s => s.Id == "engine");
+        try
+        {
+            Assert.Contains("lights-down", engine.After!);
+            for (var i = 0; i < 2; i++)
+                Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.TryOpen(video,
+                    new PixelRect(0, 0, 100, 100), 1, _ => true, _ => true, _ => true, (_, _) => true));
+            var countAtEngine = -1;
+            PanicSurfaces.All = new[] { lights, new PanicSurfaces.Surface("engine", _ =>
+                countAtEngine = ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.Count) };
+            PanicSurfaces.StopAll("test", aftermathArmed: true);
+            Assert.Equal(0, countAtEngine);
+            Assert.Equal(0, ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.Count);
+        }
+        finally
+        {
+            PanicSurfaces.All = prev;
+            ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.CloseAll();
+            video.Close();
         }
     });
 
@@ -166,6 +232,7 @@ public sealed class PanicSurfacesTests
     /// ordering pairs below retain both lanes' safety contracts.</summary>
     private static readonly string[] SafetyCritical =
     {
+        "lights-down",
         "emergency-exit",
         "companion-audio",
         "audio-playlist",
@@ -176,13 +243,16 @@ public sealed class PanicSurfacesTests
         "event-fx",
         "perfect-week-bonus",
         "brain-drain-audio",
+        "undertow",
         "roster-personality",
         "intake",
         "leash-task",
         "personality-studio",
+        "deeper-editor-error",
         "deeper-tutorial",
         "workshop-trigger-editor",
         "awareness-companion",
+        "awareness-observer",
         "tour",
         "games",
         "upgrade-intro",
@@ -239,6 +309,8 @@ public sealed class PanicSurfacesTests
         "scheduler",
         "engine",
         "bubble-host",
+        "super-stage",
+        "brain-drain",
         "flash",
         "pink-rush",
         "corner-gif",
@@ -366,6 +438,7 @@ public sealed class PanicSurfacesTests
         "intake>voice-capture",
         "leash-task>engine",
         "leash-task>lock-cards",
+        "lights-down>engine",
         "mantra>engine",
         "remote-haptics>engine",
         "scheduler>engine",

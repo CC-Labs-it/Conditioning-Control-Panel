@@ -11,6 +11,15 @@ namespace ConditioningControlPanel.Tests;
 /// <summary>The chess wardrobe (7.2 shop, lane B3-C1): grants, clamps, frames and the /v2/equip sync rule.</summary>
 public class PbpLookRulesTests
 {
+    [Theory]
+    [InlineData("back", true)]
+    [InlineData("wear", true)]
+    [InlineData("panic", false)]
+    [InlineData("app-exit", false)]
+    [InlineData("failed", false)]
+    public void CounterHandsFocusBack(string reason, bool expected)
+        => Assert.Equal(expected, PbpLookRules.CounterHandsFocusBack(reason));
+
     private static readonly string[] All =
     {
         "cos.chess.set.royal-capes", "cos.chess.set.velvet-court", "cos.chess.banner.house-pink", "cos.chess.banner.crest",
@@ -24,6 +33,30 @@ public class PbpLookRulesTests
         Assert.Equal("owned", (string?)f["type"]);
         Assert.Equal(new[] { "cos.chess.insignia.star", "cos.prime.banner.arena" }, f["grants"]!.Values<string>().ToArray());
         Assert.Empty(PbpLookRules.ChessGrants(null));
+    }
+
+    [Fact]
+    public void Stock_frame_carries_the_chess_tabs_back_dates_only()
+    {
+        // A /v2/shop/state body as CCP-Server shop.js answers it with `later` (ccp-bugs #1738).
+        var state = JObject.Parse(@"{ ""ok"": true, ""tabs"": [
+            { ""id"": ""kart"", ""shelves"": [], ""later"": [ { ""id"": ""kart.body.x"", ""from"": ""2026-11-30"" } ] },
+            { ""id"": ""chess"", ""shelves"": [], ""later"": [
+                { ""id"": ""chess.banner.crest"", ""from"": ""2026-11-30"" },
+                { ""id"": ""chess.insignia.heart"", ""from"": ""next week"" },
+                { ""id"": ""rain.hat"", ""from"": ""2026-11-30"" },
+                { ""id"": 7, ""from"": ""2026-11-30"" } ] } ] }");
+        var f = PbpLookRules.StockFrame(state);
+        Assert.Equal("pbp:stock", (string?)f["type"]);
+        var later = (JArray)f["later"]!;
+        Assert.Single(later);
+        Assert.Equal("chess.banner.crest", (string?)later[0]["id"]);
+        Assert.Equal("2026-11-30", (string?)later[0]["from"]);
+        // An older server (no `later`), a refusal or junk: an empty list, never a throw.
+        Assert.Empty((JArray)PbpLookRules.StockFrame(JObject.Parse(@"{ ""ok"": true, ""tabs"": [ { ""id"": ""chess"", ""shelves"": [] } ] }"))["later"]!);
+        Assert.Empty((JArray)PbpLookRules.StockFrame(JObject.Parse(@"{ ""ok"": false, ""reason"": ""no_account"" }"))["later"]!);
+        Assert.Empty((JArray)PbpLookRules.StockFrame(new JArray())["later"]!);
+        Assert.Empty((JArray)PbpLookRules.StockFrame(null)["later"]!);
     }
 
     [Fact]

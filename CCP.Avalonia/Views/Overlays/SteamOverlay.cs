@@ -41,6 +41,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The fog is what the tint windows draw right now.</summary>
         internal static bool On { get; private set; }
 
+        /// <summary>The Gentle visuals fade in, 0..1 (1 while Gentle is off): a fresh fog rises from
+        /// nothing over <see cref="GentleVisuals.FadeSeconds"/>, as WPF SteamLayer (GentleFades). Off and
+        /// panic cut, as the Whirlpool does here: the Core stage drops the fog field the moment Steam goes off.</summary>
+        internal static double ShowAlpha { get; private set; } = 1;
+
         /// <summary>The filter's own colour and strength, as of the last tick.</summary>
         internal static (byte R, byte G, byte B, double Opacity) Look { get; private set; }
 
@@ -53,13 +58,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static DispatcherTimer? _timer;
         private static long _last;
         private static double _poolAge = 1e9;
-        private static bool _seeded;
 
-        /// <summary>Called once at startup, before anything can light a Super effect.</summary>
+        /// <summary>Called once at startup, before anything can light a Super effect. No latch: every
+        /// call seeds again, so a seam put back by the test isolation never stays unseeded.</summary>
         internal static void Seed()
         {
-            if (_seeded) return;
-            _seeded = true;
             SuperStageHost.PostToUi = a =>
             {
                 if (Dispatcher.UIThread.CheckAccess()) a();
@@ -67,28 +70,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             // This head has no compositor engine: a Super surface is up when its base overlay is.
             SuperStageHost.EngineUp = () => PinkFilterOverlay.IsShowing || SpiralOverlay.IsShowing;
-            SuperStageHost.CursorProvider = () => X11Pointer.Read() is { } p ? (p.At.X, p.At.Y) : null;
+            // WPF SuperStageWpf.cs: the cursor and the restless pool's click, Win32 or X11.
+            SuperStageHost.CursorProvider = SuperPointer.Cursor;
+            SuperStageHost.ClickProvider = SuperPointer.Click;
             SuperStageHost.SteamSurface = Set;
-            SuperAccess.TierEventsHook = raiseAll =>
-            {
-                var patreon = AccountSeed.Patreon;
-                if (patreon == null) return false;
-                patreon.TierChanged += (_, _) => raiseAll();
-                if (AccountSeed.SubscribeStar is { } substar) substar.TierChanged += (_, _) => raiseAll();
-                return true;
-            };
+            // WPF App.xaml.cs MotionFx.Level: the worn fog mix, the step-aside fade and the worn
+            // word motion read the player's motion level (capped by the OS and Gentle visuals).
+            SuperStepAside.LevelProvider = () => global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level;
+            // WPF FontPickerHelper.BundledFaceStream: "Fredoka (bundled)" off the app's own asset
+            // (the Bold static cut, as the subliminal card draws it), for the Afterglow line's face.
+            global::ConditioningControlPanel.Services.Compositor.SubliminalLayer.BundledFaceStream ??= BundledFace;
+            // The tier-events hook (a lapse tears every Super effect down) is AccountSeed's: it binds
+            // the providers it creates and the identity change, and rebinds them on a re-seed.
+        }
+
+        /// <summary>The bundled Fredoka file for the picker's sentinel name, or null for any other name.</summary>
+        internal static System.IO.Stream? BundledFace(string name)
+        {
+            if (!string.Equals(name, "Fredoka (bundled)", StringComparison.OrdinalIgnoreCase)) return null;
+            try { return AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/fonts/fredoka/Fredoka-Bold.ttf")); }
+            catch (Exception ex) { Log.Debug("Steam: bundled Fredoka: {E}", ex.Message); return null; }
         }
 
         /// <summary>The stage's Steam surface switch. UI thread. Idempotent: it also dresses tint
-        /// windows that were opened since the last call.</summary>
+        /// windows that were opened since the last call. Off (the fog going off, the Creep star going
+        /// off, panic through Core <c>SuperStageHost.Stop</c>) also forgets the Afterglow line, as WPF
+        /// <c>SteamLayer.Hide</c> does.</summary>
         private static void Set(bool on)
         {
             On = on;
+            if (!on) AfterglowLineOverlay.ClearFogLine();
             foreach (var w in PinkFilterOverlay.Shown) w.SetSteam(on);
             if (on)
             {
                 if (_timer != null) return;
                 _last = 0;
+                ShowAlpha = GentleVisuals.On ? 0 : 1;
                 ReadLook();
                 _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(33), DispatcherPriority.Render, Tick);
                 _timer.Start();
@@ -108,6 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 double dt = _last == 0 ? 0 : Math.Min((now - _last) / (double)Stopwatch.Frequency, 0.1);
                 _last = now;
                 _poolAge += dt;
+                if (ShowAlpha < 1) ShowAlpha = GentleVisuals.On ? Math.Min(1, ShowAlpha + dt / GentleVisuals.FadeSeconds) : 1;
                 if (_poolAge > 50) ReadPool();
                 ReadLook();
                 lock (Gate)
@@ -123,7 +141,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void ReadLook()
         {
             var (r, g, b) = PinkFilterOverlay.EffectiveColor();
-            Look = (r, g, b, PinkFilterOverlay.PaintedOpacity);
+            // The painted strength: the Accessibility limit already applied (WPF PinkTintLayer.LastLook).
+            Look = (r, g, b, PinkComfortLimit.Apply(PinkFilterOverlay.PaintedOpacity));
         }
 
         private static void ReadPool()
@@ -151,6 +170,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly SteamWords _words = new();
         private readonly SteamWordsDraw _wordsDraw = new();
         private string[]? _poolSeen;
+
+        /// <summary>This monitor's fog words (tests read the Afterglow line slot).</summary>
+        internal SteamWords Words => _words;
         private double _lastT = -1;
         private bool _gone;
 
@@ -162,6 +184,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _scale = scale > 0 ? scale : 1;
             IsHitTestVisible = false;
         }
+
+        /// <summary>--render-all only (RenderProof builds every view with no arguments): one
+        /// 1280x720 monitor at scale 1. Internal, so no production caller ships the sample.</summary>
+        internal SteamCanvas() : this(new PixelRect(0, 0, 1280, 720), 1) { }
 
         public override void Render(DrawingContext context)
             => context.Custom(new Op(this, new Rect(Bounds.Size)));
@@ -200,7 +226,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                 // The base filter's own colour and strength: thicker than the flat tint, never opaque.
                 var look = SteamOverlay.Look;
-                double strength = Math.Clamp(0.3 + look.Opacity * 1.6, 0.3, 0.82);
+                // The fog is drawn thicker than the tint, so with the Accessibility limit on its peak alpha is
+                // held to the limit as well (WPF SteamLayer; limit off = unchanged). SteamOptions.Strength is the
+                // WPF curve (thins linearly below the 10% default, 7.3.4 tier-2 round); this head had the old 0.3 floor.
+                double strength = PinkComfortLimit.FogStrength(SteamOptions.Strength(look.Opacity)) * SteamOverlay.ShowAlpha;
                 var colour = new SKColor(look.R, look.G, look.B);
                 var bounds = new SKRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
                 double t = SteamOverlay.T;
@@ -214,8 +243,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                     double dt = _lastT < 0 ? 0 : Math.Clamp(t - _lastT, 0, 0.1);
                     _lastT = t;
+                    // A finished Afterglow line, written across the middle where its band was remembered.
+                    _words.Line = AfterglowLineOverlay.FogLine;
                     _words.Step(field, dt, GentleVisuals.On, set.SteamWordsInFog);
-                    _wordsDraw.Draw(canvas, bounds, field, _words, colour, Face);
+                    // WPF SteamLayer: the subliminal face (AfterglowLineLayer.FaceNow) and the worn word style.
+                    _wordsDraw.Draw(canvas, bounds, field, _words, colour, AfterglowLineDraw.FaceFor(CoreSettings.Current.SubliminalFont),
+                        ConditioningControlPanel.Services.Looks.WornWordStyle.Current, ConditioningControlPanel.Services.Looks.WornWordStyle.Motion);
                 }
                 finally { canvas.Restore(); }
                 field.ClearDirty();

@@ -56,6 +56,31 @@ internal static class PbpLookRules
     public static JObject OwnedFrame(IEnumerable<string>? grants)
         => new() { ["type"] = OwnedType, ["grants"] = ChessGrants(grants) };
 
+    public const string StockType = "pbp:stock";
+
+    /// <summary>host -&gt; page <c>{ type: 'pbp:stock', later: [{ id, from: 'YYYY-MM-DD' }] }</c>: the chess rows on
+    /// sale but out of this week's Prize Counter stock, with the Monday they are back, read from a
+    /// <c>/v2/shop/state</c> body's chess tab <c>later</c> (CCP-Server shop.js, ccp-bugs #1738). Anything that is
+    /// not a chess id with a plain date is dropped; an older server (no <c>later</c>) gives an empty list.</summary>
+    public static JObject StockFrame(JToken? shopState)
+    {
+        var later = new JArray();
+        var tabs = shopState is JObject s ? s["tabs"] as JArray : null;
+        var chess = tabs?.OfType<JObject>().FirstOrDefault(t => t["id"]?.Type == JTokenType.String && (string?)t["id"] == CounterTab);
+        if (chess?["later"] is JArray rows)
+        {
+            foreach (var row in rows.OfType<JObject>())
+            {
+                var id = row["id"]?.Type == JTokenType.String ? (string?)row["id"] : null;
+                var from = row["from"]?.Type == JTokenType.String ? (string?)row["from"] : null;
+                if (id == null || id.Length > 80 || !id.StartsWith("chess.", StringComparison.Ordinal)) continue;
+                if (from == null || !System.Text.RegularExpressions.Regex.IsMatch(from, @"^\d{4}-\d{2}-\d{2}$")) continue;
+                later.Add(new JObject { ["id"] = id, ["from"] = from });
+            }
+        }
+        return new JObject { ["type"] = StockType, ["later"] = later };
+    }
+
     /// <summary>Any token to a whole look: unknown ids, wrong slots and junk become null.</summary>
     public static ChessLook Normal(JToken? raw)
     {
@@ -94,6 +119,10 @@ internal static class PbpLookRules
         var tab = m?["tab"]?.Type == JTokenType.String ? (string?)m["tab"] : null;
         return tab is "chess" or "prime" ? tab : CounterTab;
     }
+
+    public static bool CounterHandsFocusBack(string reason)
+        => reason != PrizeCounter.PrizeCounterRules.ClosePanic && reason != PrizeCounter.PrizeCounterRules.CloseAppExit
+           && reason != PrizeCounter.PrizeCounterRules.CloseFailed;
 
     // ---------------------------------------------------------------- the stored copy
 
