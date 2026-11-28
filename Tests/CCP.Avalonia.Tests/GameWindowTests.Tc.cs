@@ -76,7 +76,7 @@ public sealed partial class GameWindowTests
         Assert.Equal("desktop", (string?)caps["platform"]);
         Assert.False((bool)caps["saveSlot"]!);
         Assert.Null(caps["expo"]);
-        Assert.Null(caps["ownMedia"]);   // this head cannot answer own-media-list yet (s20-tc-media)
+        Assert.True((bool)caps["ownMedia"]!["library"]!);   // Use local files = the ticked library (7c9a76bca3)
         Assert.False((bool)caps["toys"]!);
         Assert.False((bool)caps["sparkles"]!);
         Assert.True(w.IsReady);
