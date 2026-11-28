@@ -140,7 +140,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return mod != english ? mod : Loc.Get(key);
             }
 
-            TxtBambiTakeoverHeader.Text = CoreMods.Service?.GetTakeoverLabel() ?? Loc.Get("tab_takeover");
+            var takeoverLabel = CoreMods.Service?.GetTakeoverLabel() ?? Loc.Get("tab_takeover");
+            TxtBambiTakeoverHeader.Text = takeoverLabel;
+            TxtTakeoverLocked.Kind = IconKind.Bot;
+            TxtTakeoverLocked.Text = takeoverLabel;
+            ToolTip.SetTip(BtnAutonomyStartStop, Loc.GetF("tooltip_start_stop_takeover", takeoverLabel));
             TxtAutoFlash.Text = Label("Flashes", "tab_flashes");
             TxtAutoVideo.Text = Label("Videos", "tab_videos");
             TxtAutoSubliminal.Text = Label("Subliminals", "tab_subliminals");

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -53,12 +54,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal bool IsPlaying => _player?.IsPlaying == true;
         internal long Time => _player?.Time ?? -1;
         internal int FrameCount => _sink?.FrameCount ?? 0;
+        internal VlcFrameSink? SinkForTest => _sink;
         /// <summary>Position (0-0.5) applied on the first Playing event; null = start at 0.</summary>
         internal float? StartOffset { get; }
         /// <summary>UI thread, per blitted frame: lets tests wait on frames, not on a clock.</summary>
         internal event Action? FrameShown;
         /// <summary>Players created and not yet disposed, process-wide: the leak check.</summary>
         internal static int LivePlayers;
+        internal static Action<MediaPlayer> StopPlayer = player => player.Stop();
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
@@ -102,7 +105,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 var player = new MediaPlayer(vlc) { EnableHardwareDecoding = true };
                 _player = player;
                 System.Threading.Interlocked.Increment(ref LivePlayers);
-                _sink = new VlcFrameSink(player, () => _media, bmp => Source = bmp, () => { InvalidateVisual(); FrameShown?.Invoke(); });
+                _sink = new VlcFrameSink(player, () => ReferenceEquals(_player, player) ? _media : null,
+                    bmp => { if (ReferenceEquals(_player, player)) Source = bmp; },
+                    () => { if (ReferenceEquals(_player, player)) { InvalidateVisual(); FrameShown?.Invoke(); } });
                 // EndReached re-play is WPF's fallback in case :input-repeat isn't honoured.
                 if (Loops) player.EndReached += OnEndReached;
                 if (StartOffset != null) player.Playing += OnFirstPlaying;
@@ -143,23 +148,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         /// <summary>Stop joins the decoder thread, so after it no callback touches the frame buffer
         /// (the BubbleCountWindow / MiniPlayerWindow teardown order).</summary>
-        private void Teardown()
+        private void Teardown() => Teardown(synchronous: true);
+
+        // Gaze rounds release their players off the dispatcher. The sink stays alive until Stop
+        // has returned, even if the native stop exceeds WPF's 500 ms wait limit.
+        internal Task Teardown(bool synchronous)
         {
             var player = _player;
+            var media = _media;
+            var sink = _sink;
             _player = null;
+            _media = null;
+            _sink = null;
+            Source = null;
             if (player != null)
             {
                 player.EndReached -= OnEndReached;
                 player.Playing -= OnFirstPlaying;
-                try { player.Stop(); } catch { }
-                try { player.Dispose(); } catch { }
-                System.Threading.Interlocked.Decrement(ref LivePlayers);
             }
-            try { _media?.Dispose(); } catch { }
-            _media = null;
-            Source = null;
-            _sink?.Free();
-            _sink = null;
+
+            void StopAndDispose()
+            {
+                if (player != null)
+                {
+                    try { StopPlayer(player); } catch { }
+                    try { player.Dispose(); } catch { }
+                    System.Threading.Interlocked.Decrement(ref LivePlayers);
+                }
+                try { media?.Dispose(); } catch { }
+            }
+
+            if (synchronous)
+            {
+                StopAndDispose();
+                sink?.Free();
+                return Task.CompletedTask;
+            }
+            if (player == null && media == null && sink == null) return Task.CompletedTask;
+            // No dispatcher hop: app exit waits for this while the UI thread is blocked or stopped.
+            return Task.Run(() => { StopAndDispose(); sink?.Free(); });
         }
     }
 }

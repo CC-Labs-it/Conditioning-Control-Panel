@@ -120,6 +120,10 @@ namespace ConditioningControlPanel.Features
             {
                 if (!(bool)element.GetValue(ToolTipSavedProperty))
                 {
+                    // A row combo may wear RowComboFit's full-value tip: give the box its own tip back
+                    // first, so the box's own tip is what gets saved (7.4 review, wave 8).
+                    if (element is ComboBox fit) Controls.Rows.RowComboFit.ReleaseTip(fit);
+
                     // Prefer the Binding over the BindingExpression: the markup object is a plain
                     // reusable object and can be re-applied later, the expression cannot even be
                     // stored (trap 2). Falls back to ReadLocalValue for a literal tooltip, which
@@ -152,7 +156,13 @@ namespace ConditioningControlPanel.Features
             element.ClearValue(SavedToolTipProperty);
             element.ClearValue(ToolTipSavedProperty);
             element.ClearValue(ToolTipService.ShowOnDisabledProperty);
+
+            // A row combo whose value is trimmed right now shows it whole again over its own tip.
+            if (element is ComboBox fitted) Controls.Rows.RowComboFit.Refresh(fitted);
         }
+
+        /// <summary>True while a lock has borrowed this element's tool tip (RowComboFit stands aside).</summary>
+        internal static bool HoldsToolTip(DependencyObject element) => (bool)element.GetValue(ToolTipSavedProperty);
 
         /// <summary>Depth ceiling. Purely a cycle/pathology guard - real popups nest ~8 deep.</summary>
         private const int MaxDepth = 64;

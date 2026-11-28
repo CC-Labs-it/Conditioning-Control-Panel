@@ -20,6 +20,9 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.Compositor;
+using ConditioningControlPanel.Services.Super;
+using ConditioningControlPanel.SuperCore;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -29,7 +32,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Core <see cref="AmbientBubbleField"/> moves and scores, this draws. WPF's default render is
     /// the shared host (one click-through surface, pops from a hook); here that is one override-
     /// redirect window per targeted screen whose X11 input region is exactly the live bubbles'
-    /// hit discs, so the desktop stays clickable everywhere else. Reached through
+    /// hit discs, so the desktop stays clickable everywhere else. With the unified host on, the
+    /// drawing moves to the shared stage (WPF BubbleService.cs:2353, :3544) and this window keeps
+    /// only the input region (WPF :3033 hook-pop contract). Reached through
     /// <see cref="CoreBubbles"/>, which App seeds.
     ///
     /// <para>Hot path is allocation-free: one cached frame delegate, one Render pass over the
@@ -54,6 +59,74 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly List<BubbleOverlayWindow> Windows = new();
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
+        internal static Func<SuperEffect, bool> FrothEffectOn = SuperAccess.IsOn;
+        private static bool _frothHooked, _frothStar;
+        private static long _frothAsked;
+        private static double FrothFresh => BubbleSizing.Scale((BubbleSizing.BaseMinDip + BubbleSizing.BaseMaxDip) / 2,
+            CoreSettings.Current.BubblesSize, (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale) * FrothRules.GlassOfSprite;
+        private static bool FrothOn => _running && !_chaosOpenedWindows && !_oneShotWindows && _chaosPopped == null && _frothStar;
+        private static void HookFroth()
+        {
+            if (_frothHooked) return;
+            _frothHooked = true;
+            SuperAccess.Changed += FrothChanged;
+            SuperStageHost.Stage.Blasted += FrothBlasted;
+            SuperStageHost.Stage.Swept += FrothSwept;
+        }
+        /// <summary>WPF OnStageSwept: the bouncing word pops the Froth bubbles under it (only with "Moving effects pop" on).</summary>
+        private static void FrothSwept(double left, double top, double right, double bottom)
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => FrothSwept(left, top, right, bottom)); return; }
+            if (FrothOn) Field.FrothSweep(ScaleFor, left, top, right, bottom, Pop);
+        }
+        // One step's read of the cursor and the push option, so the per-bubble force allocates nothing.
+        private static (double X, double Y)? _frothCursor;
+        private static double _frothPush, _frothFreshNow;
+        /// <summary>WPF StepFroth :149-162: the pool's pull (and eye) and the cursor's push. Every stage read
+        /// holds <see cref="SteamOverlay.Gate"/>; the pop of an eaten bubble happens outside it.</summary>
+        private static readonly Func<AmbientBubble, FrothPush> FrothForceOf = b =>
+        {
+            lock (SteamOverlay.Gate)
+                return AmbientBubbleField.FrothForce(SuperStageHost.Stage, b, ScaleFor(b), _frothCursor, _frothFreshNow, _frothPush);
+        };
+        private static void StepFrothNow(double dt)
+        {
+            var s = CoreSettings.Current;
+            bool on = FrothOn;
+            if (on)
+            {
+                _frothFreshNow = FrothFresh;
+                _frothPush = FrothOptions.PushFactor(s.FrothCursorPush);
+                (int X, int Y)? cur = null;
+                try { cur = SuperStageHost.CursorProvider(); } catch (Exception ex) { Log.Debug("Froth cursor: {E}", ex.Message); }
+                _frothCursor = cur is { } c ? (c.X, c.Y) : null;
+            }
+            Field.StepFroth(on, dt, on ? _frothFreshNow : FrothFresh, s.FrothMaxSize, Pop, on ? FrothForceOf : null);
+        }
+        private static void FrothChanged(SuperEffect effect)
+        {
+            if (effect != SuperEffect.InnerBloom) return;
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => FrothChanged(effect)); return; }
+            RefreshFroth();
+            foreach (var w in Windows) w.Sync();
+        }
+        private static void RefreshFroth()
+        {
+            _frothAsked = Environment.TickCount64;
+            _frothStar = FrothEffectOn(SuperEffect.InnerBloom);
+            Field.StepFroth(FrothOn, 0, FrothFresh, CoreSettings.Current.FrothMaxSize, Pop);
+        }
+        private static void FrothBlasted(Blast blast)
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => FrothBlasted(blast)); return; }
+            if (!FrothOn || blast.ReachPx <= 0) return;
+            for (int i = 0; i < Windows.Count; i++)
+            {
+                double scale = Windows[i].Scaling;
+                Field.FrothBlast(i, blast.X / scale, blast.Y / scale, blast.ReachPx / scale, FrothFresh);
+            }
+        }
+
         private static bool _running, _oneShotWindows;
         internal static bool SkipPlatformChecksForTests;
         private static TimeSpan? _lastStep;
@@ -171,7 +244,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The ambient game is running (windows opened only for a Chaos run do not count).</summary>
         internal static void RaiseAll(Action<Window> raise)
         {
-            foreach (var window in Windows) if (window.IsVisible) raise(window);
+            foreach (var window in Windows)
+            {
+                if (window.StageWindow is { IsVisible: true } stage) raise(stage);   // drawing under its input window
+                if (window.IsVisible) raise(window);
+            }
         }
 
         // WPF BubbleService.cs:3428-3435: flash uses the base image; sweepers try their own art first.
@@ -224,11 +301,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     return;
                 }
                 w.Show();
+                w.TryHost(s.UnifiedOverlayHost, sc.Bounds);
                 Windows.Add(w);
                 Targets.Add(sc);
             }
             _running = true;
+            HookFroth();
             _lastStep = null;
+            RefreshFroth();
             if (ambient) StartSpawning(frequency);
         }
 
@@ -265,6 +345,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ChaosResidues.Clear();
             _oneShotWindows = false;
             _running = false;
+            Field.StepFroth(false, 0, FrothFresh, CoreSettings.Current.FrothMaxSize, Pop);
             _pending = false;
             _spawnTimer?.Stop();
             _spawnTimer = null;
@@ -654,6 +735,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _chaosPopped = onPop;
             _chaosBoundEnraged = onBoundEnraged;
+            Field.StepFroth(false, 0, FrothFresh, CoreSettings.Current.FrothMaxSize, Pop);
             _chaosCanChannel = canChannel;
             _chaosTeaseTouched = onTeaseTouched;
             Field.ChaosTeaseDenied = onTeaseDenied == null ? null : b => { AnchorPop(b); onTeaseDenied(b); };
@@ -706,6 +788,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.ClearFreezeVisuals();
             ChaosRipples.Clear();
             ChaosResidues.Clear();   // WPF EndChaosMode :2069
+            RabbitTrails.Clear();
+            RabbitTrailSteps.Clear();
             ChaosRunHost.ClearBodyBuzzHops();
             _hoverScreen = -1;
             _chaosPopped = null;
@@ -861,9 +945,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 AnchorPop(b);
                 // WPF BubbleService.cs:4686-4688: a live snap is a bigger release, in SnapColor at 1.3,
                 // burst before the defuse callback can clear the field.
-                var snapScale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
-                ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * snapScale, b.CenterY * snapScale),
-                    Color.FromRgb(0x7A, 0xE0, 0xFF), 1.3);
+                SnapBurst(b);
                 Field.ChaosDefused?.Invoke(b);
                 RequestFrame();
                 return;
@@ -876,7 +958,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * scaling, b.CenterY * scaling),
                 b.Spec.IsLive ? Color.FromRgb(0x7A, 0xE0, 0xFF) : Color.FromUInt32(b.Spec.Tint),
                 b.Spec.IsLive ? 1.3 : 1.0);
-            PlayChaosCue(b.Spec.IsFreeze ? "freeze_catch" : null, b.Spec.IsFreeze ? 0.6f : 1f);
+            // WPF BubbleService.cs:1614-1616: the darter and freeze pickups have their own catch cue.
+            PlayChaosCue(b.Spec.IsFreeze ? "freeze_catch" : b.Spec.IsDarter ? "rabbit_catch" : null, b.Spec.IsFreeze || b.Spec.IsDarter ? 0.6f : 1f);
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }
@@ -896,10 +979,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (IsShielded(b)) { BounceShield(b); continue; }
                 if (b.IsLiveThreat)
                 {
-                    if (b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
+                    // WPF ChaosDvdOverlay.cs:390 -> BubbleService.cs:4696: a swept live snap bursts too.
+                    if (b.Snap()) { SnapBurst(b); Field.ChaosDefused?.Invoke(b); RequestFrame(); }
                 }
                 else PopChaos(b);
             }
+        }
+
+        /// <summary>WPF BubbleService.cs:4686-4696: live snap burst in SnapColor at 1.3.</summary>
+        static void SnapBurst(AmbientBubble b)
+        {
+            var snapScale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+            ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * snapScale, b.CenterY * snapScale),
+                Color.FromRgb(0x7A, 0xE0, 0xFF), 1.3);
         }
 
         /// <summary>WPF BubbleService.AnyDarterIntersects (:1963): a live rabbit's box touches <paramref name="rect"/>
@@ -932,26 +1024,71 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (b.Popping) return;   // WPF BubbleService.cs:4647 rejects an already popping bubble.
             if (b.Spec != null && !b.AmbientTrigger) { PopChaos(b); return; }
             var s = CoreSettings.Current;
+            bool guardStop = _running && FrothOn;
+            bool Stopped() => guardStop && !_running;
+            var parts = Field.FrothTakeParts(b);
             var paid = Field.Pop(b, s);
+            if (Stopped()) return;
             // WPF BubbleService.cs:1111, :4456-4472: a paid lucky pop with perk visuals gets a gold glow,
             // skipped on the Performance tier and capped by it otherwise, sampled once at the pop.
             var tier = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier;
             if (b.Lucky && PerkEffectsRules.ShowsVisuals(s.PerkEffects) && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowGlow(tier))
                 b.LuckyGlowBlur = Math.Min(50, global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MaxGlowBlurRadius(tier));
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
+            if (Stopped()) return;
             if (b.AmbientTrigger && b.Spec?.Payload is { } payload) BubblePayloadHost.Run(payload);
+            if (Stopped()) return;
             XpBudgetChanged?.Invoke();
+            if (Stopped()) return;
             App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles);   // WPF OnBubblePopped
+            if (Stopped()) return;
             var master = s.MasterVolume / 100f;
             var vol = (float)Math.Pow(master * (s.BubblesVolume / 100f), 1.5);
             var (path, chime) = ResolvePopSound(b.Lucky, s.SuppressPerkNotifications, Field.Random);
             if (chime) vol *= 0.35f;
             if (File.Exists(path)) CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
             App.Achievements?.TrackBubblePopped();   // WPF BubbleService.cs:1117
+            if (Stopped()) return;
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
+            if (Stopped()) return;
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
+            if (Stopped()) return;
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
             ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Note("pop");
+            if (Stopped()) return;
+            // WPF BubbleService.Froth.cs:185-245 pays the carrier first, then each part.
+            // A pop callback can close the host; never launch another part after that stop.
+            int flashes = b.AmbientTrigger && b.Spec?.Payload != null ? 1 : 0;
+            foreach (var part in parts)
+            {
+                int partPaid = Field.Pop(part, s);
+                if (Stopped()) return;
+                if (partPaid > 0) CoreProgression.AddXP(partPaid, "Bubble");
+                if (Stopped()) return;
+                if (part.AmbientTrigger && part.Spec?.Payload is { } partPayload && flashes++ < FrothRules.MaxPictures)
+                    BubblePayloadHost.Run(partPayload);
+                if (Stopped()) return;
+                XpBudgetChanged?.Invoke();
+                if (Stopped()) return;
+                App.Achievements?.TrackBubblePopped();
+                try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("Froth quest credit: {E}", ex.Message); }
+                if (Stopped()) return;
+                try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("Froth popped handler: {E}", ex.Message); }
+                ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Note("pop");   // WPF: OnBubblePopped once per part
+                if (Stopped()) return;
+            }
+            if (FrothOn && (b.Spec == null || (b.AmbientTrigger && b.Spec.VariantId == "flash")))
+            {
+                double scale = ScaleFor(b), radius = b.FrothRadius * scale, fresh = FrothFresh * scale;
+                double reach = FrothRules.Chains(radius, fresh) ? FrothRules.Reach(radius) * FrothOptions.ReachFactor(s.FrothPopReach) : 0;
+                try
+                {
+                    lock (SteamOverlay.Gate)
+                        SuperStageHost.Stage.Blast(new Blast(b.CenterX * scale, b.CenterY * scale, reach,
+                            radius * FrothRules.HoleRadii, FrothRules.Ripe(radius, fresh) ? BlastKind.RipePop : BlastKind.BubblePop));
+                }
+                catch (Exception ex) { Log.Debug("Froth blast: {E}", ex.Message); }   // WPF OnFrothPopped
+            }
         }
 
         // WPF BubbleService.cs:2191-2236: mod audio, perk opt-out and missing-chime fallback.
@@ -975,8 +1112,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // time so a late frame drops rather than bursting catch-up steps.
             if (_lastStep is not { } last || (now - last).TotalMilliseconds >= AmbientBubbleField.StepMs)
             {
+                double frothDt = _lastStep is { } previous ? (now - previous).TotalSeconds : AmbientBubbleField.StepMs / 1000;
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
+                if (Environment.TickCount64 - _frothAsked >= 1000) RefreshFroth();
+                StepFrothNow(frothDt);
                 StepChaosField();
                 PruneTeaseFaces();
                 TickChaosRipples();
@@ -1001,6 +1141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Step();
             TickBoundPairs();
             if (Field.HoldChaos) return;
+            StepRabbitTrails();
             foreach (var b in Field.Bubbles)
             {
                 if (b.Spec is not { IsEscort: true } || b.Popping || b.OrbitFrames == 0 || b.OrbitFrames % 7 != 0 || b.OrbitTarget is not { Popping: false } live) continue;
@@ -1011,6 +1152,51 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.TrailDot(p, 0.35);
                 else ChaosFieldFxOverlay.TrailDot(p, 0.35);
             }
+        }
+
+        /// <summary>Per-rabbit trails (WPF Bubble._trailPts).</summary>
+        internal static readonly Dictionary<AmbientBubble, ChaosRabbitTrails> RabbitTrails = new();
+        /// <summary>Per darter: its age in field steps (WPF _telegraphRemainingMs: no trail while telegraphing).</summary>
+        internal static readonly Dictionary<AmbientBubble, int> RabbitTrailSteps = new();
+
+        /// <summary>WPF BubbleService.cs:4126-4153: every rabbit records a point each ~40 DIPs (22 under Skia)
+        /// while Tail-Plug holds, GG sweepers always (amber, min 0.5 s); each point is mirrored as a trail spark;
+        /// silent while telegraphing or popping, held while the field is frozen.
+        /// WPF :1763-1780: with Tail-Plug on, a treat or live bubble within 46 px of a trail point pops.</summary>
+        internal static void StepRabbitTrails()
+        {
+            if (Field.FreezeChaos) return;
+            double trailSec = ChaosRunHost.State?.RabbitTrailSec ?? 0;
+            var now = Field.Clock();
+            bool skia = ChaosSkiaFxOverlay.Enabled;
+            foreach (var b in Field.Bubbles)
+            {
+                if (b.Spec is not { IsDarter: true } spec) continue;
+                if (!RabbitTrails.TryGetValue(b, out var trail)) RabbitTrails[b] = trail = new ChaosRabbitTrails();
+                int steps = RabbitTrailSteps.TryGetValue(b, out var n) ? n + 1 : 1;
+                RabbitTrailSteps[b] = steps;
+                var p = CenterPx(b);
+                double life = spec.IsSweeper ? Math.Max(0.5, trailSec) : trailSec;
+                bool telegraphing = steps * AmbientBubbleField.StepMs < spec.TelegraphMs;
+                if (trail.Step(p.X, p.Y, ScaleFor(b), trailSec, spec.IsSweeper, telegraphing, b.Popping, skia, now) is not { } d) continue;
+                if (skia) ChaosSkiaFxOverlay.TrailDot(p, life, spec.IsSweeper, d.X, d.Y);
+                else ChaosFieldFxOverlay.TrailDot(p, life, warm: spec.IsSweeper);
+            }
+            foreach (var gone in RabbitTrails.Keys.Where(k => !Field.Bubbles.Contains(k)).ToList()) { RabbitTrails.Remove(gone); RabbitTrailSteps.Remove(gone); }
+            if (trailSec <= 0) return;
+            const double r2 = 46 * 46;
+            var hits = new List<AmbientBubble>();
+            foreach (var (darter, trail) in RabbitTrails)
+            {
+                if (trail.Points.Count == 0) continue;
+                foreach (var b in Field.Bubbles)
+                {
+                    if (b.Popping || b.Spec is not { IsDarter: false, IsFreeze: false } || ReferenceEquals(b, darter) || hits.Contains(b)) continue;
+                    var c = CenterPx(b);
+                    if (trail.Points.Any(t => (t.X - c.X) * (t.X - c.X) + (t.Y - c.Y) * (t.Y - c.Y) <= r2)) hits.Add(b);
+                }
+            }
+            foreach (var b in hits) PopChaos(b);
         }
 
         private static void Sample(double ms)
@@ -1092,6 +1278,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal PixelRect[] Rects = new PixelRect[64];
         internal int InputRectCount { get; private set; }
         private int _lastCount = -1;
+        private readonly Layer _layer;
+        private SharedOverlayHost.Lease? _stage;
+        internal Window? StageWindow { get; private set; }
         /// <summary>Cached (no per-frame closure); a closed window's late frame is ignored.</summary>
         internal readonly Action<TimeSpan> FrameCallback;
 
@@ -1106,6 +1295,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 300, Y = 250, Size = 200, Angle = 20 });
                 BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 750, Y = 300, Size = 240, Popping = true, Scale = 1.4, Fade = 0.5 });
+                // Super Froth: two that touched became one ripe bubble with its gold rim.
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 950, Y = 330, Size = 180 });
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 1010, Y = 360, Size = 180 });
+                for (var i = 0; i < 40; i++) BubbleOverlay.Field.StepFroth(true, 0.03, 45, FrothOptions.MaxSizeDefault, _ => { });
             }
         }
 
@@ -1121,7 +1314,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
-            Content = new Layer(this);
+            Content = _layer = new Layer(this);
+            Closed += (_, _) => ReleaseStage(restore: false);
             FrameCallback = now => { if (BubbleOverlay.IsFrameOwner(this)) BubbleOverlay.OnFrame(now); };
             PointerPressed += OnPressed;
             PointerEntered += (_, e) => UpdateHover(e);
@@ -1134,6 +1328,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 if (BubbleOverlay.Field.Held) BubbleOverlay.PointerHold(false, BubbleOverlay.Field.CursorX, BubbleOverlay.Field.CursorY);
             };
+        }
+
+        /// <summary>WPF BubbleService.cs:3544: under the unified host the drawing rides the shared stage at
+        /// <see cref="CompositorLayers.Bubbles"/>; this window keeps its native input region and pointer
+        /// capture. Off, a stage for another rect, a refused stage: the classic drawing stays here.</summary>
+        internal bool TryHost(bool enabled, PixelRect stageBounds)
+        {
+            if (!enabled || stageBounds != Bounds || _stage != null) return false;
+            var lease = SharedOverlayHost.Acquire(stageBounds);
+            if (lease == null) return false;
+            if (TopLevel.GetTopLevel(lease.Canvas) is not Window stage) { lease.Dispose(); return false; }
+            Content = null;
+            _layer.ZIndex = CompositorLayers.Bubbles;
+            lease.Canvas.Children.Add(_layer);
+            (_stage, StageWindow) = (lease, stage);
+            stage.Closed += StageClosed;
+            return true;
+        }
+
+        private void StageClosed(object? sender, EventArgs e) => ReleaseStage(restore: true);
+
+        /// <summary>Stage closed under a live run: draw classically again. Own close: drop only this lease.</summary>
+        private void ReleaseStage(bool restore)
+        {
+            if (_stage is not { } lease) return;
+            StageWindow!.Closed -= StageClosed;
+            (_stage, StageWindow) = (null, null);
+            lease.Canvas.Children.Remove(_layer);
+            if (restore) { Content = _layer; _layer.InvalidateVisual(); }
+            lease.Dispose();
         }
 
         /// <summary>Global bubble DIPs (screen px / scaling) to this window's DIPs.</summary>
@@ -1185,7 +1409,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // physical pixel row, clipped to this screen. Keep the buffer across frames.
                 var cx = b.CenterX * Scaling - Bounds.X;
                 var cy = b.CenterY * Scaling - Bounds.Y;
-                var r = b.HitSize * Scaling / 2;   // WPF hit disc, not the sprite (#3500)
+                var r = b.HitSize * b.FrothShown * Scaling / 2;   // WPF hit disc, not the sprite (#3500); a merged bubble's grown disc
                 var first = Math.Max(0, (int)Math.Ceiling(cy - r));
                 var last = Math.Min(Bounds.Height - 1, (int)Math.Floor(cy + r));
                 for (var y = first; y <= last; y++)
@@ -1217,7 +1441,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var drawn = HasBubbles();
             if (!drawn && _lastCount == 0) return;   // stayed empty: region already empty, nothing to repaint
             X11Overlay.SetInputRects(this, Rects, InputRectCount);
-            (Content as Control)?.InvalidateVisual();
+            _layer.InvalidateVisual();
             _lastCount = drawn ? 1 : 0;
         }
 
@@ -1291,9 +1515,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     if (b.Screen != _w.Index) continue;
                     var variantImage = BubbleOverlay.VariantImage(b.Spec);
                     var img = variantImage ?? BubbleOverlay.Image;
-                    double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
+                    double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale * b.FrothScale;
+                    // WPF SyncFrothItem: the merge wobble draws it q wide and 2 - q tall (1 = round; Gentle shallower).
+                    double q = b.FrothSquash(ConditioningControlPanel.Services.Safety.GentleVisuals.On);
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
-                          * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
+                          * Matrix.CreateScale(s * q, s * (2 - q)) * Matrix.CreateTranslation(cx, cy);
                     var glow = LuckyGlow(dc, b, cx, cy, size, s, k, ox, oy);
                     try
                     {
@@ -1312,6 +1538,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             }
                             if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                             else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                            if (b.FrothRim > 0)
+                            {
+                                // WPF DrawFrothRim: a soft 7 px band at 35% under a 3 px gold line, eased in over 400 ms.
+                                using (dc.PushOpacity(b.FrothRim * 235 / 255.0))
+                                {
+                                    double rr = size * FrothRules.GlassOfSprite;
+                                    dc.DrawEllipse(null, FrothRimHalo, new Point(cx, cy), rr, rr);
+                                    dc.DrawEllipse(null, FrothRimPen, new Point(cx, cy), rr, rr);
+                                }
+                            }
                             if (HasChaosShine(b, variantImage != null))
                                 dc.DrawEllipse(ChaosShine, null, new Point(cx, cy), size / 2, size / 2);
                             if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face)) using (dc.PushTransform(m.TryInvert(out var inverse) ? inverse : Matrix.Identity))
@@ -1389,6 +1625,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
                 return dc.PushEffect(effect, new Rect(left, top, right - left, bottom - top));
             }
+            private static readonly IPen FrothRimPen = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(255, 215, 0)), 3);
+            private static readonly IPen FrothRimHalo = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(89, 255, 215, 0)), 7);
             private static readonly IBrush GoldSparkle = new ImmutableSolidColorBrush(Color.FromUInt32(0xFFFFD700));
             private static readonly IBrush PinkSparkle = new ImmutableSolidColorBrush(Color.FromUInt32(0xFFFF69B4));
         }

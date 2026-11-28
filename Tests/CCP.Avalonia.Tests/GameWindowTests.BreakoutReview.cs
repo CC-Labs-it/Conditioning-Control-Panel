@@ -195,7 +195,8 @@ public sealed partial class GameWindowTests
         sent.Clear();
         Request("c", "bundled");
         Assert.Equal("bundled", (string?)sent[0]["source"]);
-        Assert.Empty(sent[0]["gifs"]!);
+        Assert.Equal(4, sent[0]["gifs"]!.Count());
+        Assert.All(sent[0]["gifs"]!, gif => Assert.Equal("fallback", (string?)gif["src"]));
         sent.Clear();
         s.RemoteMediaConsented = false;
         Request("d", "mixed");

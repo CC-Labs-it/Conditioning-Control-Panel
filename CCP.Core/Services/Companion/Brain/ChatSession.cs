@@ -255,13 +255,38 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             var picked = new List<CompanionTurn>();
             int tokens = 0, barkEchoes = 0, dialogue = 0, ambient = 0;
 
+            // A tube line is an app-started AI line (awareness v2, a video or lock card reaction that
+            // no brain turn holds): it rides under the same ambient cap as a brain reaction
+            // (ccp-bugs #1717), so the player can answer it and the conversation is never pushed out.
             static bool IsAmbient(CompanionTurn t) =>
-                t.Kind is TurnKind.AmbientEvent or TurnKind.AmbientReply;
+                t.Kind is TurnKind.AmbientEvent or TurnKind.AmbientReply or TurnKind.TubeLine;
+
+            // An ambient reply never rides without its event: a reply answers the nearest event
+            // before it (the brain's gate keeps them in order; tube lines can land between them).
+            // When the cap has room for only one of the pair, both are left out.
+            var eventOf = new Dictionary<CompanionTurn, CompanionTurn>(ReferenceEqualityComparer.Instance);
+            var skippedEvents = new HashSet<CompanionTurn>(ReferenceEqualityComparer.Instance);
 
             for (int i = source.Count - 1; i >= 0; i--)
             {
                 var turn = source[i];
-                if (turn.Kind is TurnKind.SystemNote or TurnKind.TubeLine) continue;
+                if (turn.Kind == TurnKind.SystemNote) continue;
+                if (skippedEvents.Contains(turn)) continue;
+
+                if (turn.Kind == TurnKind.AmbientReply)
+                {
+                    var j = i - 1;
+                    while (j >= 0 && source[j].Kind != TurnKind.AmbientEvent) j--;
+                    if (j >= 0)
+                    {
+                        eventOf[turn] = source[j];
+                        if (ambient + 2 > spec.MaxAmbientTurns)
+                        {
+                            skippedEvents.Add(source[j]);
+                            continue;
+                        }
+                    }
+                }
 
                 if (turn.Kind == TurnKind.BarkEcho)
                 {
@@ -290,13 +315,20 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             }
 
             picked.Reverse();
+            // A walk stopped by the message or token cap can still cut between a reply and its event.
+            if (eventOf.Count > 0)
+            {
+                var kept = new HashSet<CompanionTurn>(picked, ReferenceEqualityComparer.Instance);
+                picked.RemoveAll(t => t.Kind == TurnKind.AmbientReply
+                    && eventOf.TryGetValue(t, out var ev) && !kept.Contains(ev));
+            }
             return picked;
         }
 
         /// <summary>Maps a window onto transport messages, preserving order.</summary>
         public static IReadOnlyList<ChatMessage> ToMessages(IEnumerable<CompanionTurn> turns) =>
             (turns ?? Enumerable.Empty<CompanionTurn>())
-                .Where(t => t != null && t.Kind is not (TurnKind.SystemNote or TurnKind.TubeLine))
+                .Where(t => t != null && t.Kind != TurnKind.SystemNote)
                 .Select(t => t.ToMessage())
                 .ToList();
 
@@ -319,6 +351,28 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                     && string.Equals(Squash(t.Text), words, StringComparison.Ordinal)) return false;
             }
             return true;
+        }
+
+        /// <summary>
+        /// True when the newest AI line recorded with the same words as <paramref name="text"/> was
+        /// asked for under a stamp other than <paramref name="currentStamp"/>: an in-flight line that
+        /// landed after a fence. A line with no record (scripted, or reworded by its caller) is
+        /// judged as current. Pure so it can be tested.
+        /// </summary>
+        public static bool IssuedUnderAnotherStamp(IReadOnlyList<(string Text, string Stamp)>? issued, string? text, string currentStamp)
+        {
+            var words = Squash(text);
+            if (words.Length == 0 || issued == null) return false;
+            for (int i = issued.Count - 1; i >= 0; i--)
+            {
+                var asked = Squash(issued[i].Text);
+                if (asked.Length == 0) continue;
+                var same = string.Equals(asked, words, StringComparison.Ordinal)
+                    || (Math.Min(asked.Length, words.Length) >= 12
+                        && (asked.Contains(words, StringComparison.Ordinal) || words.Contains(asked, StringComparison.Ordinal)));
+                if (same) return !string.Equals(issued[i].Stamp, currentStamp, StringComparison.Ordinal);
+            }
+            return false;
         }
 
         private static string Squash(string? text) =>

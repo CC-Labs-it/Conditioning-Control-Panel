@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Services;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -158,17 +160,19 @@ internal static class X11Overlay
         {
             if (!EnsureDisplay()) return false;
 
+            _xErrored = false;
             var region = IntPtr.Zero;             // None
             if (clickThrough)
                 region = XFixesCreateRegion(_display, IntPtr.Zero, 0);
 
+            if (clickThrough && region == IntPtr.Zero) return false;
             XFixesSetWindowShapeRegion(_display, xid, ShapeInput, 0, 0, region);
 
             if (region != IntPtr.Zero)
                 XFixesDestroyRegion(_display, region);
 
-            XFlush(_display);
-            return true;
+            XSync(_display, false); // apply the input shape before Avalonia can map the window
+            return !_xErrored;
         }
     }
 
@@ -272,8 +276,7 @@ internal static class X11Overlay
     /// configured the real one - measured on XWayland: 537x358 overlays on the non-primary
     /// screens in 14 of 25 runs, 0 of 25 with this order. So override-redirect goes on before
     /// any geometry, and geometry is set here so no caller can get the order wrong. Width/Height
-    /// use the window's own scaling after the move, i.e. the exact factor Avalonia multiplies back
-    /// by in Show().</para></summary>
+    /// use the target screen scaling, including when it differs from the initial window monitor.</para></summary>
     /// <param name="bounds">Where the overlay goes, in screen pixels (e.g. <c>Screen.Bounds</c>).
     /// Applied on every platform; only the override-redirect part is X11-only.</param>
     /// <returns>False when the platform cannot do this (no XID, no display, not 64-bit) or the server refused it.</returns>
@@ -285,8 +288,11 @@ internal static class X11Overlay
         var ok = SetOverrideRedirect(window, passive, topmost);
         window.WindowStartupLocation = WindowStartupLocation.Manual;
         window.Position = bounds.Position;
-        window.Width = bounds.Width / window.DesktopScaling;
-        window.Height = bounds.Height / window.DesktopScaling;
+        var center = new PixelPoint(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
+        var screen = ScreenList.Enumerate(window).FirstOrDefault(s => s.Bounds.Contains(center));
+        var scale = screen is { Scaling: > 0 } ? screen.Scaling : window.DesktopScaling;
+        window.Width = bounds.Width / scale;
+        window.Height = bounds.Height / scale;
         return ok;
     }
 
@@ -742,6 +748,38 @@ internal static class X11Overlay
         }
     }
 
+    /// <summary>Lights Down (floating): keep the dim <paramref name="window"/> under every one of
+    /// <paramref name="above"/> in the WM's stacking list (<c>_NET_CLIENT_LIST_STACKING</c>, bottom to top).
+    /// Wrong = the dim sat over one of them, and a restack under the lowest was asked (the WM answers
+    /// asynchronously, so the next check tells); Unknown = the order cannot be read, so nobody can promise
+    /// it (the caller refuses). Core <c>LightsDownStackGuard</c> decides; this only reads and asks.</summary>
+    internal static ConditioningControlPanel.SuperCore.LightsDownStack StackUnder(TopLevel window, IReadOnlyList<TopLevel> above)
+    {
+        const ConditioningControlPanel.SuperCore.LightsDownStack unknown = ConditioningControlPanel.SuperCore.LightsDownStack.Unknown;
+        if (!TryGetXid(window, out var xid)) return unknown;
+        var want = new List<IntPtr>();
+        foreach (var a in above) if (TryGetXid(a, out var x)) want.Add(x);
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return unknown;
+            var atom = XInternAtom(_display, "_NET_CLIENT_LIST_STACKING", false);
+            if (XGetWindowProperty(_display, XDefaultRootWindow(_display), atom, 0L, 4096L, false, (IntPtr)33, out _, out var format,
+                out ulong count, out ulong remaining, out var data) != 0 || data == IntPtr.Zero) return unknown;
+            var list = new List<IntPtr>();
+            try
+            {
+                if (format != 32 || remaining != 0) return unknown;
+                for (int i = 0; i < (int)count; i++) list.Add(Marshal.ReadIntPtr(data, i * IntPtr.Size));
+            }
+            finally { XFree(data); }
+            var at = new List<int>(want.Count);
+            foreach (var w in want) at.Add(list.IndexOf(w));
+            var order = ConditioningControlPanel.SuperCore.LightsDownStackGuard.Order(list.IndexOf(xid), at, out var lowest);
+            if (order == ConditioningControlPanel.SuperCore.LightsDownStack.Wrong) RestackXid(xid, list[lowest], Below);
+            return order;
+        }
+    }
+
     private static bool RestackXid(IntPtr xid, IntPtr siblingXid, int detail = Above)
     {
         lock (Gate)
@@ -804,19 +842,7 @@ internal static class X11Overlay
                 if (i < 0) { i = monitors.Count; monitors.Add(bounds); }
                 return new IntPtr(i + 1);
             }
-            // Managed video windows can be reparented into WM frames; stack the root children.
-            IntPtr RootChild(IntPtr h)
-            {
-                for (var i = 0; i < 32; i++)
-                {
-                    if (XQueryTree(_display, h, out _, out var parent, out var children, out _) == 0) return IntPtr.Zero;
-                    if (children != IntPtr.Zero) XFree(children);
-                    if (parent == root) return h;
-                    if (parent == IntPtr.Zero || parent == h) return IntPtr.Zero;
-                    h = parent;
-                }
-                return IntPtr.Zero;
-            }
+            IntPtr RootChild(IntPtr h) => RootChildOf(h, root);
             var clips = new List<(IntPtr, IntPtr)>();
             foreach (var v in videos)
                 if (v.IsVisible && TryGetXid(v, out var h)) clips.Add((RootChild(h), Monitor(v)));
@@ -836,6 +862,50 @@ internal static class X11Overlay
             return !_xErrored;
         }
     }
+    /// <summary>WPF OverlayService.ReassertOne PinBelowVideo (#497, #1016): put an override-redirect overlay
+    /// directly below the anchor on its own screen, else below the first visible anchor. Native Win32/X11 only.</summary>
+    internal static bool StackBelow(Window window, IReadOnlyList<Window> anchors)
+    {
+        var bounds = window.Screens.ScreenFromWindow(window)?.Bounds;
+        Window? anchor = null;
+        foreach (var a in anchors)
+        {
+            if (!a.IsVisible) continue;
+            if (a.Screens.ScreenFromWindow(a)?.Bounds == bounds) { anchor = a; break; }
+            anchor ??= a;
+        }
+        if (anchor == null) return true;
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            return TryGet(anchor, OverlayBackend.Win32, out var anchorHwnd) && Win32Overlay.StackBelow(hwnd, anchorHwnd);
+        if (!TryGetXid(window, out var xid) || !TryGetXid(anchor, out var anchorXid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            var root = XDefaultRootWindow(_display);
+            var (self, sibling) = (RootChildOf(xid, root), RootChildOf(anchorXid, root));
+            if (self == IntPtr.Zero || sibling == IntPtr.Zero || self == sibling) return false;
+            var changes = new StackChanges { Sibling = sibling, StackMode = 1 /* Below */ };
+            XConfigureWindow(_display, self, (1u << 5) | (1u << 6), ref changes);
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
+
+    // Managed video windows can be reparented into WM frames; stack the root children. Caller holds Gate.
+    private static IntPtr RootChildOf(IntPtr h, IntPtr root)
+    {
+        for (var i = 0; i < 32; i++)
+        {
+            if (XQueryTree(_display, h, out _, out var parent, out var children, out _) == 0) return IntPtr.Zero;
+            if (children != IntPtr.Zero) XFree(children);
+            if (parent == root) return h;
+            if (parent == IntPtr.Zero || parent == h) return IntPtr.Zero;
+            h = parent;
+        }
+        return IntPtr.Zero;
+    }
+
     private static List<IntPtr> QueryChildren(IntPtr root)
     {
         var result = new List<IntPtr>();

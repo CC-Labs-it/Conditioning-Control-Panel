@@ -166,10 +166,34 @@
                 </Border>
 
                 <!-- Content Area -->
-                <ScrollViewer Grid.Column="1" x:Name="ContentScroll"
-                              VerticalScrollBarVisibility="Auto" Padding="20,10,20,10">
-                    <StackPanel x:Name="ContentPanel"/>
-                </ScrollViewer>
+                <DockPanel Grid.Column="1">
+                    <!-- Restore draft strip (ccp-bugs #1667): shown on open when a draft is newer than the last export -->
+                    <Border x:Name="DraftStrip" DockPanel.Dock="Top" Visibility="Collapsed"
+                            Background="#2E2A4A" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
+                            CornerRadius="8" Margin="20,10,20,0" Padding="14,8">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="DraftStripShift"/>
+                        </Border.RenderTransform>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="TxtDraftStrip" Foreground="White" FontSize="13"
+                                       TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button x:Name="BtnDraftRestore" Content="{loc:Str btn_mod_draft_restore}"
+                                        Style="{StaticResource ActionButton}" Click="BtnDraftRestore_Click" Margin="0,0,8,0"/>
+                                <Button x:Name="BtnDraftDiscard" Content="{loc:Str btn_mod_draft_discard}"
+                                        Style="{StaticResource SecondaryButton}" Click="BtnDraftDiscard_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <ScrollViewer x:Name="ContentScroll"
+                                  VerticalScrollBarVisibility="Auto" Padding="20,10,20,10">
+                        <StackPanel x:Name="ContentPanel"/>
+                    </ScrollViewer>
+                </DockPanel>
             </Grid>
 
             <!-- Bottom Bar -->

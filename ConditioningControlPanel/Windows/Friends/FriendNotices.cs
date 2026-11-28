@@ -41,7 +41,7 @@ internal sealed class NoticeLook
 
 /// <summary>
 /// The corner notifications: one small non-activating window in the bottom-right of the work area
-/// (above the taskbar) of the monitor the anchor is on, holding up to three notices newest on top,
+/// (above the taskbar) of the monitor the anchor is on, holding up to two notices newest on top (owner 2026-11-22),
 /// "+N more" under them. The stack rules live in <see cref="FriendNoticeStack"/>; this draws them,
 /// runs the lifetime bars, pauses on hover and closes itself when the last notice leaves.
 /// </summary>
