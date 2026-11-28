@@ -89,7 +89,7 @@ public class LobbyDepthSeamTests
     [Fact]
     public void WashFeedsTheExistingRailAndQuestsPainters() => WithShell(w =>
     {
-        foreach (var tab in new[] { "play", "quests" })
+        foreach (var tab in new[] { "playeyes", "quests" })   // "play" opens the launcher Games door (declutter wave 2)
         {
             w.ShowTab(tab); Dispatcher.UIThread.RunJobs();
             var hue = Color.FromUInt32(NavStripTable.AccentRgb(NavSections.SectionForTab(tab)!) | 0xFF000000);
