@@ -556,7 +556,8 @@ namespace ConditioningControlPanel.Services
             var stats = (reply["user"] as JObject)?["stats"] as JObject;
             var force = reply["force_streak_override"]?.Type == JTokenType.Boolean && reply.Value<bool>("force_streak_override");
             var streak = force ? reply["streak_stats"] as JObject : null;
-            if (stats == null && streak == null) return;
+            var spent = reply["lifetime_points_spent"]?.Type == JTokenType.Integer ? reply.Value<long?>("lifetime_points_spent") : null;
+            if (stats == null && streak == null && spent == null) return;
             CoreDispatch.Post(() =>
             {
                 if ((!Loaded && !allowUnread) || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
@@ -564,6 +565,8 @@ namespace ConditioningControlPanel.Services
                 var quests = StatsQuests?.Invoke();
                 try
                 {
+                    // WPF ProfileSyncService.cs:1919-1922: reconcile before raw stats adoption.
+                    if (spent.HasValue) engine.ReconcileLifetimePointsSpent(spent.Value);
                     if (streak != null)
                     {
                         Log.Information("V2 Sync: Force streak override - adopting server streak values");
@@ -583,7 +586,7 @@ namespace ConditioningControlPanel.Services
                         quests?.Save();
                     }
                     if (lifted) StatsDayLog?.Invoke()?.Rebaseline("v2 cloud merge");
-                    if (Loaded) _knownProgress |= SyncBody.Field.Stats;
+                    if (Loaded && (stats != null || streak != null)) _knownProgress |= SyncBody.Field.Stats;
                 }
                 catch (Exception ex) { Log.Debug("V2 Sync: stats merge failed: {Error}", ex.Message); }
             });
