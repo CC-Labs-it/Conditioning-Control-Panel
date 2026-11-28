@@ -293,10 +293,10 @@ public sealed class LeashHolderCard : Border
         var row = new WrapPanel();
         foreach (var (id, seed) in R.Stickers.Select((id, i) => (id, i)))
         {
-            var disc = LeashSelfCard.StickerDisc(id, seed, 32); disc.Margin = new Thickness(0);
+            var disc = LeashSelfCard.StickerDisc(id, seed, 36); disc.Margin = new Thickness(0);
             var button = LeashCardUi.Action("", "leash-reward:sticker:" + id, () => Reward(RewardKind.Sticker, id));
             button.Content = disc; button.Background = Brushes.Transparent; button.BorderBrush = Brushes.Transparent;
-            button.Padding = new Thickness(2); button.CornerRadius = new CornerRadius(18); button.Margin = new Thickness(0, 0, 6, 0);
+            button.Padding = new Thickness(2); button.CornerRadius = new CornerRadius(18); button.Margin = new Thickness(0, 0, 3, 0);
             ToolTip.SetTip(button, Loc.Get("leash_rew_sticker_" + id)); row.Children.Add(button);
         }
         return row;

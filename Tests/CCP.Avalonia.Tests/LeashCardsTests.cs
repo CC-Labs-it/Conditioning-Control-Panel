@@ -346,12 +346,31 @@ public sealed class LeashCardsTests
             Click(card, "leash-btn:reward"); var button = Find<Button>(card, "leash-reward:sticker:" + id);
             Assert.Equal(Loc.Get("leash_rew_sticker_" + id), ToolTip.GetTip(button));
             var disc = Assert.IsType<Grid>(button.Content); Assert.Equal("leash-sticker:" + id, disc.Tag);
-            Assert.Equal(32, disc.Width); Assert.Equal(32, disc.Height);
+            Assert.Equal(36, disc.Width); Assert.Equal(36, disc.Height);
             Assert.Contains(disc.Children, c => c is global::Avalonia.Controls.Shapes.Ellipse);
             if (id is "star" or "heart") Assert.Contains(disc.Children, c => c is IconGlyph);
             else Assert.Contains(disc.Children, c => c is TextBlock t && t.Text == id.ToUpperInvariant());
             Click(card, "leash-reward:sticker:" + id); Assert.Equal("reward:Sticker:" + id + ":", svc.Calls.Last());
         }
+    });
+    [Fact] // WPF LeashHolderCard.cs:614-621, LeashSelfCard.cs:258, LeashLook.cs:383.
+    public void StickersUseReadableDiscsOnShelfAndRewardRow() => Run(() =>
+    {
+        var self = new LeashSelfCard(Me(), () => null);
+        var shelf = Find<StackPanel>(self, "leash-shelf");
+        var shelfDisc = Assert.Single(shelf.GetLogicalDescendants().OfType<Grid>().Where(c => (string?)c.Tag == "leash-sticker:star"));
+        Assert.Equal(36, shelfDisc.Width);
+        Assert.Equal(36, shelfDisc.Height);
+
+        var card = new LeashHolderCard(Held(), () => new Service());
+        Click(card, "leash-btn:reward");
+        var button = Find<Button>(card, "leash-reward:sticker:good");
+        Assert.IsType<WrapPanel>(button.Parent);
+        Assert.Equal(new Thickness(0, 0, 3, 0), button.Margin);
+        var disc = Assert.IsType<Grid>(button.Content);
+        Assert.Equal(36, disc.Width);
+        Assert.Equal(36, disc.Height);
+        Assert.Equal(10.8, Assert.Single(disc.Children.OfType<TextBlock>()).FontSize, 5);
     });
     [Fact]
     public void PageKeepsHeldCardsAndSheetsAcrossPollsAndReceipts_AndFoldsOnHide() => Run(() =>

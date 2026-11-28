@@ -96,8 +96,10 @@ public sealed class LeashPageTests
                 .Select(i => new Sticker(ids[i % ids.Length], new LeashPerson("from-" + i, "Sender " + i, null), DateTimeOffset.UtcNow)).ToArray() });
             var words = page.GetLogicalDescendants().OfType<TextBlock>().ToArray();
             if (hint)
-                Assert.Contains(words, t => t.Text == ConditioningControlPanel.Localization.Loc.GetF("leash_self_hold_hint",
-                    LeashHoldToCut.KeyLabel(ConditioningControlPanel.CoreSettings.Current.PanicKey)));
+                // A Wayland desktop gets the button hint instead (LeashSelfCard.cs:109, as LeashPunishTests.cs:42).
+                Assert.Contains(words, t => t.Text == (LeashHead.WaylandSession ? ConditioningControlPanel.Localization.Loc.Get("leash_self_cut_wayland")
+                    : ConditioningControlPanel.Localization.Loc.GetF("leash_self_hold_hint",
+                        LeashHoldToCut.KeyLabel(ConditioningControlPanel.CoreSettings.Current.PanicKey))));
             else
             {
                 var wrap = Assert.Single(page.GetLogicalDescendants().OfType<WrapPanel>());
@@ -116,7 +118,8 @@ public sealed class LeashPageTests
                     };
                     var disc = discs[i];
                     Assert.Equal("leash-sticker:" + id, disc.Tag);
-                    Assert.Equal(26, disc.Width); Assert.Equal(26, disc.Height);
+                    // WPF LeashSelfCard.cs:258: 36 DIP shelf discs (ccp-bugs #1685).
+                    Assert.Equal(36, disc.Width); Assert.Equal(36, disc.Height);
                     Assert.Equal(new Thickness(0, 0, 5, 5), disc.Margin);
                     Assert.Equal(((i * 37) % 21) - 10, Assert.IsType<RotateTransform>(disc.RenderTransform).Angle);
                     Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("leash_sticker_from", "Sender " + source), ToolTip.GetTip(disc));
@@ -130,7 +133,7 @@ public sealed class LeashPageTests
                         var icon = Assert.IsType<IconGlyph>(disc.Children[1]);
                         Assert.Equal(id == "star" ? IconKind.Star : IconKind.Heart, icon.Kind);
                         Assert.Equal(IconVariant.Filled, icon.Variant);
-                        Assert.Equal(13, icon.Size);
+                        Assert.Equal(18, icon.Size);
                         Assert.Equal(Color.Parse("#1B1026"), Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
                         continue;
                     }
@@ -138,7 +141,7 @@ public sealed class LeashPageTests
                     Assert.Equal(word, face.Text);
                     Assert.Equal(Color.Parse("#1B1026"), Assert.IsAssignableFrom<ISolidColorBrush>(face.Foreground).Color);
                     Assert.Equal(FontWeight.Bold, face.FontWeight);
-                    Assert.Equal(word.Length > 1 ? 26 * 0.26 : 26 * 0.5, face.FontSize);
+                    Assert.Equal(word.Length > 1 ? 36 * 0.3 : 36 * 0.5, face.FontSize);
                 }
                 wrap.Measure(new Size(70, double.PositiveInfinity));
                 wrap.Arrange(new Rect(0, 0, 70, wrap.DesiredSize.Height));
