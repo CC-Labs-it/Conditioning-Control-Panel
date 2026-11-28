@@ -159,7 +159,8 @@ internal sealed class FriendLeashOffer : StackPanel
         }
         // The face moves onto the coloured ledge when pressed or already sent/held.
         var chip = Tile(content, edge, done, "leash-offer", word);
-        chip.Opacity = state == LeashUiRules.OfferChip.Greyed ? 0.5 : 1;
+        // WPF DareLook.Bare fades every disabled tile; only a done tile is forced back to full strength.
+        if (done) chip.Opacity = 1;
         chip.IsEnabled = !_sending && !_pending.Contains(_friend.Id) && _error == null && state == LeashUiRules.OfferChip.Offer;
         if (state == LeashUiRules.OfferChip.Greyed) ToolTip.SetTip(chip, Loc.Get("leash_offer_greyed"));
         chip.Click += async (_, _) =>
@@ -182,7 +183,8 @@ internal sealed class FriendLeashOffer : StackPanel
     private static Button Tile(Control content, IBrush edge, bool done, string tag, string name)
     {
         var move = new TranslateTransform(0, done ? 3 : 0);
-        var face = new Border { Tag = "leash-tile-face", Background = done ? Brushes.White : new SolidColorBrush(Color.Parse("#F7EEF8")),
+        IBrush rest = done ? Brushes.White : new SolidColorBrush(Color.Parse("#F7EEF8"));
+        var face = new Border { Tag = "leash-tile-face", Background = rest,
             BorderBrush = new SolidColorBrush(Color.Parse(done ? "#3A1D78" : "#DCC6DD")), BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(7), Padding = new Thickness(6, 5, 7, 5), Margin = new Thickness(0, 0, 0, 4), Child = content, RenderTransform = move };
         var grid = new Grid();
@@ -191,9 +193,13 @@ internal sealed class FriendLeashOffer : StackPanel
         var button = FriendsDrawer.Pill(grid, Brushes.Transparent, Brushes.Transparent, tag);
         button.Padding = new Thickness(0); button.BorderThickness = new Thickness(0); button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         AutomationProperties.SetName(button, name);
+        // WPF DareLook.PressTile: the face itself lights up, so Fluent's hover and press plate stays off.
+        foreach (var plate in new[] { "PointerOver", "Pressed" })
+            (button.Resources["ButtonBackground" + plate], button.Resources["ButtonBorderBrush" + plate]) = (Brushes.Transparent, Brushes.Transparent);
+        button.PointerEntered += (_, _) => { if (button.IsEnabled) face.Background = Brushes.White; };
         button.AddHandler(InputElement.PointerPressedEvent, (_, e) => { if (button.IsEnabled && e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) move.Y = 3; }, RoutingStrategies.Tunnel, handledEventsToo: true);
         button.AddHandler(InputElement.PointerReleasedEvent, (_, _) => move.Y = done ? 3 : 0, RoutingStrategies.Tunnel, handledEventsToo: true);
-        button.PointerExited += (_, _) => move.Y = done ? 3 : 0;
+        button.PointerExited += (_, _) => { move.Y = done ? 3 : 0; face.Background = rest; };
         return button;
     }
 

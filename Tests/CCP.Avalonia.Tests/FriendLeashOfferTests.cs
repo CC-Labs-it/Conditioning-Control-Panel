@@ -104,6 +104,8 @@ public sealed class FriendLeashOfferTests
         Assert.Empty(sent);
         Assert.False(Button(card, "leash-offer").IsEnabled);
         Assert.Equal(Loc.Get("leash_res_failed"), Button(card, "leash-offer").GetLogicalDescendants().OfType<TextBlock>().Single().Text);
+        // No local Opacity, so the drawer's Pill:disabled style fades the error tile (WPF DareLook.Bare).
+        Assert.False(Button(card, "leash-offer").IsSet(Visual.OpacityProperty));
     });
     [Fact]
     public void SentReceiptAndHoldingStatesAreShown() => AvaloniaTestDispatcher.Run(() =>
@@ -188,7 +190,7 @@ public sealed class FriendLeashOfferTests
             var face = chip.GetLogicalDescendants().OfType<Border>().Single(x => (string?)x.Tag == "leash-tile-face");
             Assert.Equal(new CornerRadius(7), face.CornerRadius);
             Assert.Equal(sent ? 3 : 0, ((TranslateTransform)face.RenderTransform!).Y);
-            Assert.Equal(sent ? 1 : state == "greyed" ? 0.5 : 1, chip.Opacity);
+            Assert.Equal(sent, chip.IsSet(Visual.OpacityProperty)); Assert.Equal(1, chip.Opacity);
             var content = chip.GetLogicalDescendants().OfType<StackPanel>().Single();
             Assert.IsType<Border>(content.Children[0]);
             Assert.Equal(FontWeight.Bold, ((TextBlock)content.Children[1]).FontWeight);
@@ -209,11 +211,18 @@ public sealed class FriendLeashOfferTests
             window.Show(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
             var chip = Button(card, "leash-offer");
             var face = chip.GetLogicalDescendants().OfType<Border>().Single(x => (string?)x.Tag == "leash-tile-face");
-            var move = (TranslateTransform)face.RenderTransform!;
+            var move = (TranslateTransform)face.RenderTransform!; var rest = face.Background;
             var point = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), window)!.Value;
             window.MouseDown(point, MouseButton.Right); Assert.Equal(0, move.Y); window.MouseUp(point, MouseButton.Right);
             window.MouseDown(point, MouseButton.Left); Assert.Equal(3, move.Y);
             window.MouseUp(point, MouseButton.Left); Assert.Equal(0, move.Y);
+            Assert.Same(Brushes.Transparent, chip.Resources["ButtonBackgroundPointerOver"]); Assert.Same(Brushes.Transparent, chip.Resources["ButtonBackgroundPressed"]);
+            var help = Button(card, "leash-offer-help");
+            window.MouseMove(help.TranslatePoint(new Point(help.Bounds.Width / 2, help.Bounds.Height / 2), window)!.Value);
+            Assert.Same(rest, face.Background);
+            window.MouseMove(point); Assert.Same(Brushes.White, face.Background);
+            window.MouseMove(help.TranslatePoint(new Point(help.Bounds.Width / 2, help.Bounds.Height / 2), window)!.Value);
+            Assert.Same(rest, face.Background);
         }
         finally { card.Intro?.Close(); window.Close(); }
     });
