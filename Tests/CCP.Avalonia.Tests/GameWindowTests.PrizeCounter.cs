@@ -169,7 +169,7 @@ public sealed partial class GameWindowTests
 
         w.HandleMessage("{\"type\":\"request\",\"reqId\":\"r1\",\"op\":\"shop-state\"}");
         var state = AwaitReply(sent, "r1");
-        Assert.Equal("http://shop.test/v2/shop/state?unified_id=acct-1 tok", Assert.Single(wire.Urls));
+        Assert.Equal("http://shop.test/v2/shop/state?unified_id=acct-1&caps=" + ConditioningControlPanel.Services.PrizeCounter.PrizeCounterRelay.Caps + " tok", Assert.Single(wire.Urls));
         var tab = Assert.Single((JArray)state["tabs"]!);                   // the Rain tab gone, its row a hole
         Assert.Equal(("kart", JTokenType.Null), ((string?)tab["id"], tab["shelves"]![0]!["rows"]![0]!.Type));
 
@@ -224,7 +224,7 @@ public sealed partial class GameWindowTests
         Assert.Equal("acct-2", (string?)sent.Single(o => (string?)o["type"] == "init")["identity"]!["unifiedId"]);
         w.HandleMessage("{\"type\":\"request\",\"reqId\":\"r2\",\"op\":\"shop-state\"}");
         Assert.True((bool)AwaitReply(sent, "r2")["ok"]!);
-        Assert.Equal("http://shop.test/v2/shop/state?unified_id=acct-2 tok", Assert.Single(wire.Urls));
+        Assert.Equal("http://shop.test/v2/shop/state?unified_id=acct-2&caps=" + ConditioningControlPanel.Services.PrizeCounter.PrizeCounterRelay.Caps + " tok", Assert.Single(wire.Urls));
     });
 
     /// <summary>WPF CloseFor / NotifyOpeners: each opener hears back, panic or app-exit once; a throwing one starves none.</summary>

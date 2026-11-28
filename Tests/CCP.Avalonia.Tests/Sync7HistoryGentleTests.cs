@@ -30,7 +30,7 @@ public sealed class Sync7HistoryGentleTests
     }
 
     [Fact]
-    public Task AiTubeLinesReachThePageWithoutEnteringPromptsOrPersistence() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task AiTubeLinesReachThePageAndThePromptAsCompanionLines() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();
         var dir = Directory.CreateTempSubdirectory("tube-history-").FullName;
@@ -47,7 +47,11 @@ public sealed class Sync7HistoryGentleTests
             var turn = Assert.Single(brain.Session.Turns);
             Assert.Equal(TurnKind.TubeLine, turn.Kind);
             Assert.True(ConditioningControlPanel.Services.Companion.ConversationRules.Shows(turn.Kind));
-            Assert.Empty(ChatSession.ToMessages(brain.Session.Turns));
+            // ccp-bugs #1717 (WPF main, 7.4): a tube line rides in the prompt as the companion's own line, so the
+            // player can answer it (ChatSession.ToMessages keeps TubeLine, under the ambient cap).
+            var message = Assert.Single(ChatSession.ToMessages(brain.Session.Turns));
+            Assert.Equal("assistant", message.Role);
+            Assert.Equal("new thought", message.Content);
             Assert.False(turn.IsDialogue);
             tube.GigglePriority("new thought", playSound: false, aiGenerated: true);
             tube.GigglePriority("preset words", playSound: false, aiGenerated: false);
