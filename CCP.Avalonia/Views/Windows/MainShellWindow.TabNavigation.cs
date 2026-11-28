@@ -285,6 +285,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "companionai":
                         Named<Controls.Companion.Pages.AiPage>("CompanionAiTab")?.OnShown(RoomView());
                         break;
+                    // WPF MainWindow.TabNavigation.cs:698-702 refreshes both on every visit.
+                    case "gradedintake":
+                        if (Named<Tabs.GradedIntakeTabView>("GradedIntakeTab") is { } intake)
+                        {
+                            intake.RefreshGradedIntakeGate();
+                            intake.RefreshPastQuizzes();
+                        }
+                        break;
                     case "lockdown": MaybeShowFeatureIntro("lockdown"); break;
                     case "blinktrainer":
                         // WPF refreshes on every ShowTab. Coming from another tab the view's own

@@ -386,6 +386,7 @@ public sealed class WebcamTrackerTests
             Assert.True(wedged.Blocked.Wait(TimeSpan.FromSeconds(20))); // a Read is now blocked
             WebcamTracker.Instance.Stop();                          // 5 s join times out
             Assert.False(WebcamTracker.Instance.IsRunning);
+            Assert.Equal(WebcamTrackingState.Error, WebcamTracker.Instance.State);
             Assert.False(wedged.Disposed);
 
             WebcamTracker.SourceFactory = () => next;

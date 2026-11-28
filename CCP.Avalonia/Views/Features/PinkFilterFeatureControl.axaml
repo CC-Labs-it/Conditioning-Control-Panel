@@ -16,6 +16,7 @@
        Checked/Unchecked/Click/...       -> wired in the constructor -->
 <UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:super="using:ConditioningControlPanel.Avalonia.Controls.Super"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -81,6 +82,9 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            <!-- Accessibility limit (Settings > Performance) holds this value back: say so. -->
+                            <TextBlock x:Name="TxtComfortClip" IsVisible="False" TextWrapping="Wrap"
+                                       FontSize="11" Margin="0,0,0,4" Foreground="{StaticResource TextMutedBrush}"/>
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
@@ -132,6 +136,9 @@
                         </StackPanel>
                     </Grid>
                 </Border>
+
+                <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
+                <super:SuperBox x:Name="SuperBoxMain" Kind="Creep"/>
             </StackPanel>
 
             <!-- SIDE ART. Background painted from code (ModArt.BindFeaturePlates); scrim kept verbatim. -->

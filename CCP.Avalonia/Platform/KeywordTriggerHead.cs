@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>Keyboard slice of WPF KeywordTriggerService: audio, visual effect, haptic, XP, Chaster and avatar
 /// comment actions, plus the OCR consumer and scan lifecycle (restack b220, #4299). The OCR engine itself
-/// uses the Windows OCR helper; the Brain Drain visual remains a follow-up.</summary>
+/// uses the Windows OCR helper. The Brain Drain visual fires the shared melt payload (BubblePayloadHost).</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -159,14 +159,21 @@ internal static class KeywordTriggerHead
             if (token.IsCancellationRequested) return false;
             var s = CoreSettings.Current;
             if (s.AwarenessIgnoreOwnUi) words = WithoutOwnWindows(words, OwnWindowRects());
-            var foreground = (Process: (string?)null, Own: false);
-            if (OperatingSystem.IsWindows() && KeywordMatchRules.NeedsForeground(s))
-            {
-                GetWindowThreadProcessId(GetForegroundWindow(), out var id);
-                foreground = Foreground(id);
-            }
+            var foreground = engine.NeedsForeground(DateTime.UtcNow) ? OcrForeground() : (null, false);
             return engine.CheckOcrWords(words, foreground.Process, foreground.Own);
         }).GetTask();
+
+    // WPF KeywordTriggerService.cs:763,679-700: the OCR app scope reads the foreground app; X11 off Windows.
+    internal static Func<string> LinuxForegroundSource = X11Windows.ForegroundProcess;
+    internal static (string? Process, bool Own) OcrForeground()
+    {
+        if (OperatingSystem.IsWindows()) { GetWindowThreadProcessId(GetForegroundWindow(), out var id); return Foreground(id); }
+        var name = LinuxForegroundSource();
+        if (string.IsNullOrEmpty(name)) return (null, false);
+        string self;
+        try { self = ConditioningControlPanel.Services.UI.DndProcessList.Normalize(Process.GetCurrentProcess().ProcessName); } catch { self = ""; }
+        return (name, name == self);
+    }
 
     internal static IReadOnlyList<ScreenOcrService.Word> WithoutOwnWindows(
         IReadOnlyList<ScreenOcrService.Word> words, IReadOnlyList<System.Drawing.Rectangle> own) =>
@@ -306,6 +313,7 @@ internal sealed class KeywordAudioRuntime
         return true;
     }
     internal string[] GetRecentForegroundApps() => _seenApps.ToArray();
+    internal void RestoreRecentAppsForTest(string[] apps) { _seenApps.Clear(); foreach (var a in apps) _seenApps.AddLast(a); }
     private void RememberSeenApp(string? process, bool own)
     {
         if (own || string.IsNullOrWhiteSpace(process)) return;
@@ -414,6 +422,7 @@ internal sealed class KeywordAudioRuntime
         var s = CoreSettings.Current;
         // WPF :716-743: a lapse or stop keeps the streak; an empty scan or a blocked app clears it.
         if (!IsActive || !HasAccess) return false;
+        if (words.Count > 0) RememberSeenApp(process, own);   // WPF :763 IsForegroundAppAllowed samples the chips
         if (words.Count == 0 || !KeywordMatchRules.AppAllowed(s, process, own)) { ClearOcr(); return false; }
         if (!s.KeywordTriggersEnabled || !s.ScreenOcrEnabled) return false;
         if (s.KeywordTriggers is not { Count: > 0 }) return false; // WPF :741-742 keeps the guards
@@ -653,6 +662,12 @@ internal sealed class KeywordAudioRuntime
                     break;
                 case KeywordVisualEffect.Bubbles:
                     BubbleEffect();
+                    break;
+                case KeywordVisualEffect.BrainDrain:
+                    // WPF KeywordTriggerService.cs:1872-1876: ten seconds of the Brain Drain melt (ccp-bugs #1214).
+                    // The payload stands down when a drain is already up or the blur dial is at 0
+                    // (BubblePayloadHost.BrainDrainMelt), so the keyword path needs no gate of its own.
+                    new ConditioningControlPanel.Services.Chaos.BrainDrainMeltPayload().Fire();
                     break;
             }
         }

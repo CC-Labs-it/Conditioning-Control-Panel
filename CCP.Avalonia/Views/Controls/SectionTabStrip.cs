@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // Declutter wave 1: the section word is the room title (larger, in the section hue).
         private readonly TextBlock _crumbSectionText = new() { FontSize = NavStripRules.CrumbTitleSize, FontWeight = FontWeight.ExtraBold };
-        private readonly TextBlock _crumbSep = new() { FontSize = NavStripRules.CrumbPageSize, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, Opacity = 0.6 };
+        private readonly TextBlock _crumbSep = new() { FontSize = NavStripRules.CrumbPageSize, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center };
         private readonly TextBlock _crumbPage = new() { FontSize = NavStripRules.CrumbPageSize, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         private readonly Button _crumbSection;
         private readonly StackPanel _crumbPanel;
@@ -71,8 +71,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private System.Threading.CancellationTokenSource? _crumbFadeRun;
         internal System.Threading.Tasks.Task CrumbFadeCompletion { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
         internal double CrumbOpacity => _crumbPanel.Opacity;
-        private readonly StackPanel _pillRow = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
+        // Gap 3, not WPF's PillGap 6: Skia lays Inter wider than WPF lays Segoe UI, and a free account's Companion
+        // tray (three locked pills with tier signs) ran 18 px under the help button at the default 1469 px strip
+        // once the room title crumb grew (NavRehomeShellTests.TheTrayEndsBeforeTheHelpButtonAt1469AndSettingsHidesIt).
+        private readonly StackPanel _pillRow = new() { Orientation = Orientation.Horizontal, Spacing = 3 };
         private readonly Border _track;
+        private readonly Panel _trayHost;
         private readonly Border _accentLine = new() { Height = 2, CornerRadius = new CornerRadius(1), Opacity = 0.85 };
         // WPF SectionTabStrip.xaml:78 MovedNote: non-modal, never hit-testable, column 2 of the header row.
         private readonly TextBlock _movedNoteText = new() { FontSize = 12.5, FontWeight = FontWeight.SemiBold };
@@ -125,10 +129,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal PillParts? Part(string key) => _pills.FirstOrDefault(p => p.Tab.Key == key);
         internal Border ActiveFill => _activeFill;
         internal Border Track => _track;
+        internal Panel TrayHost => _trayHost;
+        internal Button CrumbSection => _crumbSection;
+        internal TextBlock CrumbSeparator => _crumbSep;
+        internal TextBlock CrumbPage => _crumbPage;
         internal MotionLevel? MotionOverride { get; set; }
         private MotionLevel Level => MotionOverride ?? CoreSettings.Current.MotionLevel;
         internal string CrumbText => $"{_crumbSectionText.Text} {_crumbSep.Text} {_crumbPage.Text}".Trim();
-        internal bool PillsShown => _track.IsVisible && _track.Opacity > 0;
+        internal bool PillsShown => _trayHost.IsVisible && _trayHost.Opacity > 0;
 
         public SectionTabStrip()
         {
@@ -144,9 +152,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _crumbSection = new Button
             {
                 Content = _crumbSectionText, Padding = new Thickness(4, 1), Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0), Cursor = new Cursor(StandardCursorType.Hand),
-                VerticalAlignment = VerticalAlignment.Center, Template = PlainTemplate(),
+                BorderThickness = new Thickness(2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+                VerticalAlignment = VerticalAlignment.Center, Template = new FuncControlTemplate<Button>((b, _) => new ContentPresenter
+                {
+                    CornerRadius = new CornerRadius(6),
+                    [!ContentPresenter.ContentProperty] = b[!ContentControl.ContentProperty],
+                    [!ContentPresenter.PaddingProperty] = b[!TemplatedControl.PaddingProperty],
+                    [!ContentPresenter.BackgroundProperty] = b[!TemplatedControl.BackgroundProperty],
+                    [!ContentPresenter.BorderBrushProperty] = b[!TemplatedControl.BorderBrushProperty],
+                    [!ContentPresenter.BorderThicknessProperty] = b[!TemplatedControl.BorderThicknessProperty],
+                }),
             };
+            _crumbSection.PointerEntered += (_, _) => _crumbSection.Background = new SolidColorBrush(Color.Parse("#14FFFFFF"));
+            _crumbSection.PointerExited += (_, _) => _crumbSection.Background = Brushes.Transparent;
+            _crumbSection.GotFocus += (_, e) => { if (e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional) _crumbSection.BorderBrush = FocusRing; };
+            _crumbSection.LostFocus += (_, _) => _crumbSection.BorderBrush = Brushes.Transparent;
+            _crumbSep.Bind(TextBlock.ForegroundProperty, _crumbSep.GetResourceObservable("TextMutedBrush"));
+            _crumbPage.Bind(TextBlock.ForegroundProperty, _crumbPage.GetResourceObservable("TextLightBrush"));
             _crumbSection.Click += (_, e) => { e.Handled = true; if (_section != null) SectionRequested?.Invoke(_section); };
             // Right margin 5, not WPF's 9: Skia lays Companion's crumb + tray 2.5 px wider than WPF,
             // and at the default 1469 px strip the tray then ran under the help button
@@ -158,13 +180,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             };
             _track = new Border
             {
-                CornerRadius = new CornerRadius(21), Padding = new Thickness(4), MinHeight = 49,
+                CornerRadius = new CornerRadius(21), Padding = new Thickness(4), MinHeight = 50,
                 BorderThickness = new Thickness(1.5), BorderBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
                 Background = new SolidColorBrush(Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF)),
                 HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
                 Child = new Panel { Children = { _activeFill, _pillRow } },
             };
-            var trayHost = BuildDepthTray(_track);
+            var trayHost = _trayHost = BuildDepthTray(_track);
             _pillRow.LayoutUpdated += (_, _) => { if (IsVisible) PositionFill(animate: false, onlyIfMoved: true); };
             _pillRow.AddHandler(KeyDownEvent, PillRow_KeyDown, RoutingStrategies.Tunnel);
             // Declutter wave 1: ONE help button for the strip, in a last Auto column.
@@ -304,10 +326,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 FixCrumbWidth(section!);
                 BuildPills(section!);
             }
-            // Hidden, not collapsed: the track keeps the row's height, so Settings (no pills) has
+            // Hidden, not collapsed: the tray keeps the row's height, so Settings (no pills) has
             // the same header height as every other section.
-            _track.Opacity = _pills.Count > 0 ? 1 : 0;
-            _track.IsHitTestVisible = _pills.Count > 0;
+            _trayHost.Opacity = _pills.Count > 0 ? 1 : 0;
+            _trayHost.IsHitTestVisible = _pills.Count > 0;
             _trayFloor.IsVisible = _trayWellTop.IsVisible = _trayWellLeft.IsVisible = _trayWellFoot.IsVisible = _pills.Count > 0;
 
             var sectionLabel = SafeLoc(NavSections.Find(section)?.LabelKey, section ?? string.Empty);
@@ -494,8 +516,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 };
                 ToolTip.SetTip(pill, PillToolTip(section, tab, labelText, locked));
                 ToolTip.SetShowDelay(pill, 500);
-                global::Avalonia.Automation.AutomationProperties.SetHelpText(pill,
-                    $"{SafeLoc(NavSections.Find(section)?.LabelKey, section)} {SafeLoc("nav_crumb_sep", ">")} {labelText}");
+                global::Avalonia.Automation.AutomationProperties.SetHelpText(pill, CrumbFor(section, labelText));
                 global::Avalonia.Automation.AutomationProperties.SetName(pill, labelText);
                 global::Avalonia.Automation.AutomationProperties.SetAutomationId(pill, "NavPill_" + tab.Key);
                 pill.PointerEntered += (_, _) => FxHover(parts, true, animate: true);
@@ -520,12 +541,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             }
         }
 
+        internal static string CrumbFor(string section, string label) =>
+            $"{SafeLoc(NavSections.Find(section)?.LabelKey, section)} {SafeLoc("nav_crumb_sep", ">")} {label}";
+
         /// <summary>WPF PillToolTip: where it leads, what it does (HelpText), then the tier line for a locked page.</summary>
         internal static string PillToolTip(string section, NavTab tab, string label, bool locked)
         {
             var lines = new List<string>
             {
-                $"{SafeLoc(NavSections.Find(section)?.LabelKey, section)} {SafeLoc("nav_crumb_sep", ">")} {label}",
+                CrumbFor(section, label),
                 HelpText(tab),
             };
             if (locked && tab.Tier == 1) lines.Add(SafeLoc("nav_tag_premium_tip", string.Empty));
