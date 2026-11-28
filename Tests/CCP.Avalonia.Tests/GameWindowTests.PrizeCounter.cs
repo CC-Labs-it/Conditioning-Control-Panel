@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Services.Chaos;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -251,9 +252,12 @@ public sealed partial class GameWindowTests
     {
         var s = CoreSettings.Current;
         var oldOverride = s.PanicOverridesAll;
+        var metaProperty = typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!;
+        var oldMeta = ChaosMeta.State;
         var heard = new List<(string reason, bool held)>();
         try
         {
+            metaProperty.SetValue(null, new ChaosMetaState());
             s.PanicKey = "F8"; s.PanicKeyEnabled = true; s.PanicOverridesAll = false;
             ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.StartRun(new() { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
             ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.Overlay!.FinishCountdown();
@@ -274,8 +278,12 @@ public sealed partial class GameWindowTests
         }
         finally
         {
-            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
-            s.PanicOverridesAll = oldOverride;
+            try
+            {
+                ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
+                s.PanicOverridesAll = oldOverride;
+            }
+            finally { metaProperty.SetValue(null, oldMeta); }
         }
     });
 

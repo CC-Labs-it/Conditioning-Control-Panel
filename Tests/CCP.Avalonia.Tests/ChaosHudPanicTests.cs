@@ -48,6 +48,27 @@ public sealed class ChaosHudPanicTests
         finally { hud.Close(); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RunCompletionTestsPreserveExistingChaosMeta(bool counter)
+    {
+        var property = typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!;
+        var original = ChaosMeta.State;
+        var sentinel = new ChaosMetaState { RunsCompleted = 7, Gold = 73 };
+        sentinel.PurchasedUpgrades.Add("isolation-sentinel");
+        var before = Newtonsoft.Json.JsonConvert.SerializeObject(sentinel);
+        try
+        {
+            property.SetValue(null, sentinel);
+            if (counter) new GameWindowTests().PrizeCounter_ClosesBeforeChaosPanicHandoff();
+            else LadderPanicHoldsThenSurfacesAndStopPassClosesHeldRun();
+            Assert.Same(sentinel, ChaosMeta.State);
+            Assert.Equal(before, Newtonsoft.Json.JsonConvert.SerializeObject(sentinel));
+        }
+        finally { property.SetValue(null, original); }
+    }
+
     [Fact]
     public void LadderPanicHoldsThenSurfacesAndStopPassClosesHeldRun() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -55,8 +76,11 @@ public sealed class ChaosHudPanicTests
         var settings = CoreSettings.Current;
         var (enabled, key, overrides) = (settings.PanicKeyEnabled, settings.PanicKey, settings.PanicOverridesAll);
         var shell = new MainShellWindow();
+        var metaProperty = typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!;
+        var oldMeta = ChaosMeta.State;
         try
         {
+            metaProperty.SetValue(null, new ChaosMetaState());
             settings.PanicKeyEnabled = true; settings.PanicKey = "F8"; settings.PanicOverridesAll = false;
             shell.Show();
             void Start()
@@ -83,8 +107,12 @@ public sealed class ChaosHudPanicTests
         }
         finally
         {
-            ChaosRunHost.ForceShutdown(); shell.Close();
-            (settings.PanicKeyEnabled, settings.PanicKey, settings.PanicOverridesAll) = (enabled, key, overrides);
+            try
+            {
+                ChaosRunHost.ForceShutdown(); shell.Close();
+                (settings.PanicKeyEnabled, settings.PanicKey, settings.PanicOverridesAll) = (enabled, key, overrides);
+            }
+            finally { metaProperty.SetValue(null, oldMeta); }
         }
     });
 }
