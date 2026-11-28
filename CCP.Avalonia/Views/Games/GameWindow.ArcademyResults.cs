@@ -149,6 +149,7 @@ internal sealed partial class GameWindow
         bool levelUp = CoreSettings.Current.PlayerLevel > before;
         var (streak, perfect, classes, slips) = store.RecordAttendance(local, key);
         var punch = store.StampPunchCard(key, local, ArcademyEconomy.IsTokenGrade(grade, false));
+        ArcademyPresenceService.NoteClassEnd(key, grade);   // WPF ArcademyHostService.cs:3926, the host's clamped grade
         Post(store.SnapshotMessage());
         ArcademyPunch(key, "daily", punch);
 

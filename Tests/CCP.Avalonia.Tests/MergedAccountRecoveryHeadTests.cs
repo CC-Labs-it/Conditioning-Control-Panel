@@ -15,6 +15,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Arcademy;
 using Xunit;
 using App = ConditioningControlPanel.Avalonia.App;
 
@@ -54,6 +55,29 @@ public class MergedAccountRecoveryHeadTests
         Assert.Equal("u_canon123", settings.UnifiedId);
         Assert.False(sync.Loaded);
         Assert.Equal("u_canon123", stamped);
+    });
+
+    /// <summary>WPF App.xaml.cs:450: a merged reply to an Arcademy card, wallet or presence call starts the swap.</summary>
+    [Fact]
+    public void ArcademyReplyReachesRecovery() => AvaloniaTestDispatcher.Run(() =>
+    {
+        using var saved = new MergedRecoveryState();
+        string? token = "old";
+        CoreSecrets.RetrieveProvider = _ => token;
+        CoreSecrets.StoreProvider = (_, value) => token = value;
+        var settings = CoreSettings.Current;
+        settings.UnifiedId = "u_tombstone1";
+        settings.AuthToken = "old";
+        var sync = new SyncPush(() => null, () => false);
+        sync.MarkLoaded(null);
+        AccountSeed.Sync = sync;
+        MergedAccountRecovery.ResetForTest();
+        MergedAccountRecovery.SettingsForTest = () => settings;
+        MergedAccountRecoveryHead.Seed();
+        Assert.True(ArcademySyncService.MergedRecovery!(409, "{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}"));
+        MergedAccountRecovery.LastSwap.GetAwaiter().GetResult();
+        Assert.Equal("u_canon123", settings.UnifiedId);
+        Assert.False(sync.Loaded);
     });
 
     [Fact]
@@ -142,6 +166,7 @@ internal sealed class MergedRecoveryState : IDisposable
         { typeof(AccountSeed), typeof(MergedAccountRecovery), typeof(V2AuthService), typeof(AiService),
           typeof(ConditioningControlPanel.Services.BackRoom.BackRoomApi), typeof(AuthRecovery) }
         .SelectMany(t => t.GetFields(StaticFields)).Where(f => !f.IsInitOnly && !f.IsLiteral)
+        .Append(typeof(ArcademySyncService).GetField(nameof(ArcademySyncService.MergedRecovery))!)
         .Select(f => (f, f.GetValue(null))).ToArray();
     private readonly (FieldInfo Field, object? Value)[] _intake = App.IntakePass.GetType().GetFields(InstanceFields)
         .Where(f => f.Name is "_entitlementHooked" or "_entitlementHandler" or "_detachEntitlement")

@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Arcademy;
 
@@ -63,14 +64,15 @@ internal static class ArcademyPresenceService
     /// a body this class never asked for must not be read into memory unbounded.</summary>
     private const int MaxSnapshotChars = 4_000_000;
 
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
+    /// <summary>Settable so tests can answer without the network.</summary>
+    internal static HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
 
     static ArcademyPresenceService()
     {
         try
         {
-            Http.DefaultRequestHeaders.Add("X-Client-Version", UpdateService.AppVersion);
-            Http.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{UpdateService.AppVersion}");
+            Http.DefaultRequestHeaders.Add("X-Client-Version", CoreReleaseContent.AppVersion);
+            Http.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{CoreReleaseContent.AppVersion}");
         }
         catch { /* a header we could not set is not worth failing a static ctor over */ }
     }
@@ -244,14 +246,14 @@ internal static class ArcademyPresenceService
     {
         try
         {
-            var s = App.Settings?.Current;
+            var s = CoreSettings.Current;
             if (s == null || ReferenceEquals(s, _hookedSettings)) return;
             if (_hookedSettings != null) _hookedSettings.PropertyChanged -= OnSettingChanged;
             s.PropertyChanged += OnSettingChanged;
             _hookedSettings = s;
             _lastShare = Share();
         }
-        catch (Exception ex) { App.Logger?.Debug("ArcademyPresence.HookSettings: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ArcademyPresence.HookSettings: {E}", ex.Message); }
     }
 
     /// <summary>
@@ -293,7 +295,7 @@ internal static class ArcademyPresenceService
 
             if (Rank(now) == 0)
             {
-                App.Logger?.Information(
+                Log.Information(
                     "[ArcademyPresence] presence turned OFF - posting the revocation, which takes the"
                     + " account's prior 24h off the map at once");
                 // The one payload that leaves at the off rung, and it says so explicitly rather
@@ -302,19 +304,19 @@ internal static class ArcademyPresenceService
                 return;
             }
 
-            App.Logger?.Information("[ArcademyPresence] rung dropped {Was} -> {Now} - posting a leave to move consent",
+            Log.Information("[ArcademyPresence] rung dropped {Was} -> {Now} - posting a leave to move consent",
                 was, now);
             // Deliberately generation -1: this can fire long after the window closed, and it has
             // nothing to push back into the page.
             Emit("campus_leave", null, null, -1);
         }
-        catch (Exception ex) { App.Logger?.Debug("ArcademyPresence.OnSettingChanged: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ArcademyPresence.OnSettingChanged: {E}", ex.Message); }
     }
 
     /// <summary>The rung as stored, lowercased, with anything unreadable reading as <c>off</c>.</summary>
     private static string Share()
     {
-        try { return (App.Settings?.Current?.ArcademyPresenceShare ?? "off").Trim().ToLowerInvariant(); }
+        try { return (CoreSettings.Current.ArcademyPresenceShare ?? "off").Trim().ToLowerInvariant(); }
         catch { return "off"; }
     }
 
@@ -368,13 +370,13 @@ internal static class ArcademyPresenceService
 
             using var response = await Http.SendAsync(request).ConfigureAwait(false);
             var text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            MergedAccountRecovery.TryHandle((int)response.StatusCode, text);   // contract D
+            ArcademySyncService.MergedRecovery?.Invoke((int)response.StatusCode, text);   // contract D
             if (!response.IsSuccessStatusCode)
             {
                 // No retry ladder, and deliberately not even the one gentle re-arm the card mirror
                 // takes: a transition is a MOMENT. Re-sending it a minute later would write a
                 // ghost walking into a room it has already left, and the renderer would believe it.
-                App.Logger?.Information("[ArcademyPresence] {Kind} refused: {Status} {Body}",
+                Log.Information("[ArcademyPresence] {Kind} refused: {Status} {Body}",
                     kind, (int)response.StatusCode, Truncate(text));
                 return;
             }
@@ -383,14 +385,14 @@ internal static class ArcademyPresenceService
             if (string.IsNullOrWhiteSpace(self)) return;
             var known = Volatile.Read(ref _self);
             Volatile.Write(ref _self, self);
-            App.Logger?.Debug("ArcademyPresence: {Kind} logged", kind);
+            Log.Debug("ArcademyPresence: {Kind} logged", kind);
             // The FIRST id is worth a frame of its own: the page has probably already drawn a
             // snapshot that this account is standing in, and `self` is what removes it.
             if (known != self && !Retired(generation)) PushSelfOnly(generation);
         }
         catch (Exception ex)
         {
-            App.Logger?.Information("[ArcademyPresence] {Kind} failed: {E}", kind, ex.Message);
+            Log.Information("[ArcademyPresence] {Kind} failed: {E}", kind, ex.Message);
         }
     }
 
@@ -420,7 +422,7 @@ internal static class ArcademyPresenceService
                 }
                 _poll.Change(delay, Timeout.InfiniteTimeSpan);
             }
-            catch (Exception ex) { App.Logger?.Debug("ArcademyPresence.ArmPoll: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("ArcademyPresence.ArmPoll: {E}", ex.Message); }
         }
     }
 
@@ -457,13 +459,13 @@ internal static class ArcademyPresenceService
             var text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                App.Logger?.Debug("ArcademyPresence: snapshot {Status} {Body}",
+                Log.Debug("ArcademyPresence: snapshot {Status} {Body}",
                     (int)response.StatusCode, Truncate(text));
                 return;
             }
             if (text.Length > MaxSnapshotChars)
             {
-                App.Logger?.Information("[ArcademyPresence] snapshot is {N} chars - ignored", text.Length);
+                Log.Information("[ArcademyPresence] snapshot is {N} chars - ignored", text.Length);
                 return;
             }
 
@@ -475,7 +477,7 @@ internal static class ArcademyPresenceService
             if (snapshot == null) return;
             if ((int?)snapshot["v"] != 1 || snapshot["students"] is not JArray students)
             {
-                App.Logger?.Information("[ArcademyPresence] snapshot shape refused (v={V})",
+                Log.Information("[ArcademyPresence] snapshot shape refused (v={V})",
                     (string?)snapshot["v"] ?? "?");
                 return;
             }
@@ -484,13 +486,13 @@ internal static class ArcademyPresenceService
             Action<string?, JObject?>? cb;
             lock (Gate) cb = _onSnapshot;
             if (cb == null) return;
-            App.Logger?.Debug("ArcademyPresence: snapshot with {N} student(s)", students.Count);
+            Log.Debug("ArcademyPresence: snapshot with {N} student(s)", students.Count);
             try { cb(Volatile.Read(ref _self), snapshot); }
-            catch (Exception ex) { App.Logger?.Debug("ArcademyPresence.push: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("ArcademyPresence.push: {E}", ex.Message); }
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ArcademyPresence: snapshot failed: {E}", ex.Message);
+            Log.Debug("ArcademyPresence: snapshot failed: {E}", ex.Message);
         }
     }
 
@@ -505,7 +507,7 @@ internal static class ArcademyPresenceService
         lock (Gate) cb = _onSnapshot;
         if (cb == null || Retired(generation)) return;
         try { cb(Volatile.Read(ref _self), null); }
-        catch (Exception ex) { App.Logger?.Debug("ArcademyPresence.PushSelfOnly: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ArcademyPresence.PushSelfOnly: {E}", ex.Message); }
     }
 
     // ============================ small guards ============================
@@ -517,7 +519,7 @@ internal static class ArcademyPresenceService
         try
         {
             lock (Gate) { if (!_open) return false; }
-            return App.Settings?.Current?.OfflineMode != true;
+            return CoreSettings.Current.OfflineMode != true;
         }
         catch { return false; }
     }
@@ -533,9 +535,9 @@ internal static class ArcademyPresenceService
         token = string.Empty;
         try
         {
-            if (App.Settings?.Current?.OfflineMode == true) return false;
-            var id = App.Settings?.Current?.UnifiedId;
-            var auth = App.Settings?.Current?.AuthToken;
+            if (CoreSettings.Current.OfflineMode == true) return false;
+            var id = CoreSettings.Current.UnifiedId;
+            var auth = CoreSettings.Current.AuthToken;
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(auth)) return false;
             unifiedId = id;
             token = auth;
@@ -543,10 +545,13 @@ internal static class ArcademyPresenceService
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ArcademyPresence.Identity: {E}", ex.Message);
+            Log.Debug("ArcademyPresence.Identity: {E}", ex.Message);
             return false;
         }
     }
+
+    /// <summary>True between <see cref="Attach"/> and <see cref="Detach"/> (host tests read it).</summary>
+    internal static bool Attached { get { lock (Gate) return _open; } }
 
     private static bool Retired(int generation) =>
         generation >= 0 && Volatile.Read(ref _generation) != generation;
@@ -556,23 +561,34 @@ internal static class ArcademyPresenceService
     /// none of them may pay for the network or die of it (CLAUDE.md async rules 6-8).</summary>
     private static void Run(Func<Task> work, string what)
     {
+        Interlocked.Increment(ref _pending);
         try
         {
             _ = Task.Run(async () =>
             {
                 try { await work().ConfigureAwait(false); }
-                catch (Exception ex) { App.Logger?.Information("[ArcademyPresence] {What} failed: {E}", what, ex.Message); }
+                catch (Exception ex) { Log.Information("[ArcademyPresence] {What} failed: {E}", what, ex.Message); }
+                finally { Interlocked.Decrement(ref _pending); }
             });
         }
-        catch (Exception ex) { App.Logger?.Debug("ArcademyPresence.Run({What}): {E}", what, ex.Message); }
+        catch (Exception ex)
+        {
+            Interlocked.Decrement(ref _pending);
+            Log.Debug("ArcademyPresence.Run({What}): {E}", what, ex.Message);
+        }
     }
+
+    private static int _pending;
+
+    /// <summary>Requests started by <see cref="Run"/> and not yet finished (tests wait for zero before restoring <see cref="Http"/>).</summary>
+    internal static int Pending => Volatile.Read(ref _pending);
 
     private static JObject? Parse(string body)
     {
         try { return string.IsNullOrWhiteSpace(body) ? null : JObject.Parse(body); }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ArcademyPresence: unreadable reply: {E}", ex.Message);
+            Log.Debug("ArcademyPresence: unreadable reply: {E}", ex.Message);
             return null;
         }
     }
