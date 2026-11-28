@@ -69,6 +69,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RemoteCommands.RefreshOverlays = refreshOverlays;
             Action stopSession = StopSessionFromRemote;   // the one remote session stop (trigger_panic calls it too)
             RemoteCommands.StopSession = stopSession;
+            var wallpaper = Platform.WallpaperHead.Service;
+            RemoteCommands.Wallpaper = wallpaper;
             Func<string, string?> playHypnotube = PlayHypnotubeFromRemote;
             Action stopBrowserVideo = StopBrowserVideoFromRemote;
             (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (playHypnotube, stopBrowserVideo);
@@ -114,7 +116,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
                 r.CommandReceived -= command;
-                if (ReferenceEquals(RemoteCommandOwner, this)) RemoteCommandOwner = null;
+                if (ReferenceEquals(RemoteCommandOwner, this))
+                {
+                    RemoteCommandOwner = null;
+                    if (ReferenceEquals(RemoteCommands.Wallpaper, wallpaper)) RemoteCommands.Wallpaper = null;
+                }
                 _remoteOverlayTimer?.Stop();
                 CancelRemoteMoreConfirmation();
                 if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;
@@ -127,6 +133,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 o.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(300) } };
             if (Named<Border>("RemoteCommandNotification") is { } n)
                 n.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(250) } };
+            // WPF RemoteControlService.Screen.cs:168-181: the live preview's head-only reads.
+            Action<ConditioningControlPanel.Services.Remote.RemoteScreenInputs> fill = i =>
+            {
+                i.BrainDrain = Platform.BrainDrainPlayer.Instance?.IsRunning == true;
+                i.Duck = Platform.LibVlcAudio.Instance?.IsDucked == true;
+                if (i.VideoKind == null && _remoteBrowserVideoActive) i.VideoKind = "web";
+                i.IdleSeconds = Platform.DesktopIdle.LastSeconds();   // WPF RemoteControlService.Screen.cs:304
+            };
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.HeadFill = fill;
+            Closed += (_, _) => { if (ConditioningControlPanel.Services.Remote.RemoteScreenFeed.HeadFill == fill) ConditioningControlPanel.Services.Remote.RemoteScreenFeed.HeadFill = null; };
         }
 
         /// <summary>WPF OnRemoteControllerChanged (:784).</summary>

@@ -1,0 +1,282 @@
+using System;
+using System.Linq;
+using System.IO;
+using System.Reflection;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.VisualTree;
+using Avalonia.Interactivity;
+using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Services.Chaos;
+using Xunit;
+
+namespace CCP.Avalonia.Tests;
+
+public class ChaosHubDebugStripTests
+{
+    [Fact]
+    public void Strip_is_flagged_and_actions_refresh_the_hub() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldFlag = ChaosHubWindow.DebugStripEnabled;
+        var oldCompanion = ChaosHubWindow.SetCompanionActive;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var settingsDir = Path.Combine(Path.GetTempPath(), "ccp-debug-strip-" + Guid.NewGuid());
+        Directory.CreateDirectory(settingsDir);
+        var settings = new SettingsService(Path.Combine(settingsDir, "settings.json"));
+        var oldState = ChaosMeta.State;
+        var slotPath = ChaosMetaStore.SlotFilePath(1);
+        var slot = File.Exists(slotPath) ? File.ReadAllBytes(slotPath) : null;
+        var tempPath = slotPath + ".tmp";
+        var temp = File.Exists(tempPath) ? File.ReadAllBytes(tempPath) : null;
+        ChaosHubWindow? hub = null;
+        try
+        {
+            CoreSettings.ServiceProvider = () => settings;
+            ChaosHubWindow.SetCompanionActive = _ => { };
+            ChaosMetaStore.Save(new ChaosMetaState { SeenIntroGuide = true, SeenDollhouse = true }, 1);
+            CoreSettings.Current.ChaosActiveSlot = 1;
+            ChaosHubWindow.DebugStripEnabled = () => false;
+            hub = new ChaosHubWindow(); hub.Show();
+            Assert.Null(hub.DebugStrip);
+            Assert.Empty(Assert.IsType<Grid>(Assert.IsType<Border>(hub.Content).Child).RowDefinitions);
+            hub.Close();
+            ChaosHubWindow.DebugStripEnabled = () => true;
+            hub = new ChaosHubWindow(); hub.Show();
+            var strip = Assert.IsType<WrapPanel>(hub.DebugStrip);
+            var root = Assert.IsType<Grid>(Assert.IsType<Border>(hub.Content).Child);
+            void AssertStripReachable(string visibleView, string hiddenView)
+            {
+                hub.UpdateLayout();
+                HeadlessInput.RenderLiveTree(hub);
+                Assert.True(hub.FindControl<Grid>(visibleView)!.IsEffectivelyVisible);
+                Assert.False(hub.FindControl<Grid>(hiddenView)!.IsEffectivelyVisible);
+                Assert.True(strip.IsEffectivelyVisible);
+                Assert.Same(root, strip.Parent);
+                Assert.Single(root.RowDefinitions);
+                Assert.Equal(GridLength.Auto, root.RowDefinitions[0].Height);
+                Assert.Equal(0, Grid.GetRow(strip));
+                Assert.Equal(0, Grid.GetRow(hub.FindControl<Grid>(visibleView)!));
+                foreach (var control in strip.Children.OfType<Control>().Where(c => c is Button or TextBox))
+                {
+                    var point = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), hub)!.Value;
+                    Assert.InRange(point.X, 0, hub.Bounds.Width);
+                    Assert.InRange(point.Y, 0, hub.Bounds.Height);
+                    var hit = hub.InputHitTest(point) as Visual;
+                    Assert.True(hit == control || (hit != null && control.IsVisualAncestorOf(hit)),
+                        $"{visibleView}: {control}, point {point}, bounds {control.Bounds}, hit {hit}");
+                }
+            }
+            AssertStripReachable("MenuView", "DollhouseView");
+            hub.FindControl<Button>("BtnMenuDollhouse")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            AssertStripReachable("DollhouseView", "MenuView");
+            hub.FindControl<Button>("BtnBackToMenu")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            AssertStripReachable("MenuView", "DollhouseView");
+            var boxes = strip.Children.OfType<TextBox>().ToArray();
+            void Click(string text) => strip.Children.OfType<Button>().Single(b => (string?)b.Content == text)
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            boxes[0].Text = "-1"; Click("set runs"); Assert.Equal(0, ChaosMeta.State.RunsCompleted);
+            boxes[0].Text = "10"; Click("set runs");
+            Assert.Equal(10, ChaosMeta.State.RunsCompleted);
+            Assert.Equal("Slipping", hub.FindControl<TextBlock>("MenuRank")!.Text);
+            Click(Loc.Get("chaos_debug_add_sparks")); Assert.Equal(500, ChaosMeta.State.Sparks);
+            Assert.Equal("500", hub.FindControl<TextBlock>("MenuSparks")!.Text);
+            Click("+500 gold"); Assert.Equal(500, ChaosMeta.State.Gold);
+            Assert.Equal("500", hub.FindControl<TextBlock>("MenuGold")!.Text);
+            Click("complete lesson"); Assert.True(ChaosLessons.IsComplete("slow_fuses"));
+            boxes[1].Text = "vibe_popping"; Click("complete lesson"); Assert.True(ChaosLessons.IsComplete("vibe_popping"));
+            boxes[2].Text = "debug_test_reveal"; Click("force reveal");
+            Assert.True(ChaosMeta.State.SeenReveals.Contains("debug_test_reveal") || ChaosMeta.State.PendingReveals.Contains("debug_test_reveal"));
+            Click("reset meta"); Assert.Equal(0, ChaosMeta.State.RunsCompleted); Assert.Equal(0, ChaosMeta.State.Gold);
+            Assert.Equal("0", hub.FindControl<TextBlock>("MenuGold")!.Text);
+            Assert.NotEqual("Slipping", hub.FindControl<TextBlock>("MenuRank")!.Text);
+            Assert.False(ChaosLessons.IsComplete("slow_fuses"));
+        }
+        finally
+        {
+            hub?.Close(); ChaosHubWindow.DebugStripEnabled = oldFlag; ChaosHubWindow.SetCompanionActive = oldCompanion;
+            settings.SealForReset();
+            CoreSettings.ServiceProvider = oldProvider;
+            if (Directory.Exists(settingsDir)) Directory.Delete(settingsDir, true);
+            if (slot == null) File.Delete(slotPath); else File.WriteAllBytes(slotPath, slot);
+            if (temp == null) File.Delete(tempPath); else File.WriteAllBytes(tempPath, temp);
+            typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, oldState);
+        }
+    });
+
+    [Fact]
+    public void Repeated_debug_actions_keep_one_reveal_loop_and_independent_batch_timing() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldFlag = ChaosHubWindow.DebugStripEnabled;
+        var oldCompanion = ChaosHubWindow.SetCompanionActive;
+        var oldSfx = ChaosHubWindow.PlayRevealSfx;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldState = ChaosMeta.State;
+        var settingsDir = Path.Combine(Path.GetTempPath(), "ccp-debug-reveal-" + Guid.NewGuid());
+        Directory.CreateDirectory(settingsDir);
+        var settings = new SettingsService(Path.Combine(settingsDir, "settings.json"));
+        var slotPath = ChaosMetaStore.SlotFilePath(1);
+        var slot = File.Exists(slotPath) ? File.ReadAllBytes(slotPath) : null;
+        var tempPath = slotPath + ".tmp";
+        var temp = File.Exists(tempPath) ? File.ReadAllBytes(tempPath) : null;
+        ChaosHubWindow? hub = null;
+        try
+        {
+            CoreSettings.ServiceProvider = () => settings;
+            ChaosHubWindow.SetCompanionActive = _ => { };
+            ChaosHubWindow.DebugStripEnabled = () => true;
+            ChaosHubWindow.PlayRevealSfx = (_, _) => { };
+            ChaosMetaStore.Save(new ChaosMetaState { SeenIntroGuide = true, SeenDollhouse = true, RunsCompleted = 10 }, 1);
+            CoreSettings.Current.ChaosActiveSlot = 1;
+            hub = new ChaosHubWindow(); hub.Show();
+            RevealService.Sync("test");
+            foreach (var id in RevealService.PendingIds()) RevealService.MarkSeen(id);
+            hub.FindControl<Button>("BtnMenuDollhouse")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var strip = Assert.IsType<WrapPanel>(hub.DebugStrip);
+            void Click(string text) => strip.Children.OfType<Button>().Single(b => (string?)b.Content == text)
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            hub.AdvanceRevealFlashes(100);
+            int chimes = 0;
+            ChaosHubWindow.PlayRevealSfx = (_, _) => chimes++;
+            int baseline = BeatLoop.Running.Count(loop => loop.Owner == hub);
+            ChaosMeta.State.SeenReveals.Remove(RevealIds.TabLookingGlass);
+            ChaosMeta.State.PendingReveals.Add(RevealIds.TabLookingGlass);
+            Assert.True(hub.FindControl<Control>("TabImprove")!.IsVisible, "target is visible");
+            hub.RunRevealFlashes();
+            Assert.Equal(1, chimes);
+            hub.AdvanceRevealFlashes(1);
+            Click("+500 gold");
+            Click("+500 gold");
+            Assert.Equal(baseline + 1, BeatLoop.Running.Count(loop => loop.Owner == hub));
+            Assert.Equal(3, chimes);
+            hub.AdvanceRevealFlashes(3);
+            Assert.True(RevealService.IsPending(RevealIds.TabLookingGlass));
+            Assert.False(RevealService.IsSeen(RevealIds.TabLookingGlass));
+            Assert.Equal(baseline + 1, BeatLoop.Running.Count(loop => loop.Owner == hub));
+            Click("+500 gold");
+            Assert.Equal(4, chimes);
+            hub.AdvanceRevealFlashes(4);
+            Assert.True(RevealService.IsPending(RevealIds.TabLookingGlass));
+            Assert.Equal(baseline + 1, BeatLoop.Running.Count(loop => loop.Owner == hub));
+            hub.AdvanceRevealFlashes(6);
+            Assert.True(RevealService.IsSeen(RevealIds.TabLookingGlass));
+            Assert.False(RevealService.IsPending(RevealIds.TabLookingGlass));
+            Assert.Equal(baseline, BeatLoop.Running.Count(loop => loop.Owner == hub));
+
+            // WPF's delayed chime timer survives replacement of its opacity animation.
+            ChaosMeta.State.PendingReveals.Clear();
+            ChaosMeta.State.SeenReveals.Remove(RevealIds.TabLookingGlass);
+            ChaosMeta.State.SeenReveals.Remove(RevealIds.SectionToys);
+            ChaosMeta.State.PendingReveals.Add(RevealIds.TabLookingGlass);
+            ChaosMeta.State.PendingReveals.Add(RevealIds.SectionToys);
+            chimes = 0;
+            hub.RunRevealFlashes();
+            Assert.Equal(1, chimes);
+            hub.AdvanceRevealFlashes(0.2);
+            Click("+500 gold");
+            Assert.Equal(2, chimes);
+            hub.AdvanceRevealFlashes(0.6);
+            Assert.Equal(3, chimes);
+            hub.AdvanceRevealFlashes(0.81);
+            Assert.Equal(4, chimes);
+            hub.AdvanceRevealFlashes(3.7);
+            Assert.True(RevealService.IsPending(RevealIds.SectionToys));
+            hub.AdvanceRevealFlashes(3.81);
+            Assert.True(RevealService.IsSeen(RevealIds.SectionToys));
+            Assert.Equal(baseline, BeatLoop.Running.Count(loop => loop.Owner == hub));
+            hub.Close();
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == hub);
+        }
+        finally
+        {
+            hub?.Close(); ChaosHubWindow.DebugStripEnabled = oldFlag; ChaosHubWindow.SetCompanionActive = oldCompanion;
+            ChaosHubWindow.PlayRevealSfx = oldSfx;
+            settings.SealForReset(); CoreSettings.ServiceProvider = oldProvider;
+            if (Directory.Exists(settingsDir)) Directory.Delete(settingsDir, true);
+            if (slot == null) File.Delete(slotPath); else File.WriteAllBytes(slotPath, slot);
+            if (temp == null) File.Delete(tempPath); else File.WriteAllBytes(tempPath, temp);
+            typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, oldState);
+        }
+    });
+
+    [Fact]
+    public void Strip_test_preserves_save_and_settings_without_scheduling_a_save() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var snapshot = ProcessStateSnapshot.Take(false);
+        var previousProvider = CoreSettings.ServiceProvider;
+        var tempPath = ChaosMetaStore.SlotFilePath(1) + ".tmp";
+        var previousTemp = File.Exists(tempPath) ? File.ReadAllBytes(tempPath) : null;
+        var settingsDir = Path.Combine(Path.GetTempPath(), "ccp-debug-settings-" + Guid.NewGuid());
+        try
+        {
+            Directory.CreateDirectory(settingsDir);
+            var settingsPath = Path.Combine(settingsDir, "settings.json");
+            var settings = new SettingsService(settingsPath) { SaveDebounceDueTimeMilliseconds = System.Threading.Timeout.Infinite };
+            settings.Current.ChaosActiveSlot = 2;
+            Assert.True(settings.TrySaveImmediate());
+            var settingsBytes = File.ReadAllBytes(settingsPath);
+            CoreSettings.ServiceProvider = () => settings;
+            ChaosMetaStore.Save(new ChaosMetaState { Gold = 123 }, 1);
+            var slotBytes = File.ReadAllBytes(ChaosMetaStore.SlotFilePath(1));
+            File.WriteAllText(tempPath, "pending save");
+            var state = ChaosMeta.State;
+            Strip_is_flagged_and_actions_refresh_the_hub();
+            Assert.Equal(slotBytes, File.ReadAllBytes(ChaosMetaStore.SlotFilePath(1)));
+            Assert.Equal("pending save", File.ReadAllText(tempPath));
+            Assert.Equal(2, settings.Current.ChaosActiveSlot);
+            Assert.Equal(settingsBytes, File.ReadAllBytes(settingsPath));
+            Assert.False((bool)typeof(SettingsService).GetField("_savePending", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(settings)!);
+            Assert.Same(state, ChaosMeta.State);
+        }
+        finally
+        {
+            SettingsService.DisarmAllPendingSaves();
+            CoreSettings.ServiceProvider = previousProvider;
+            snapshot.Restore();
+            if (previousTemp == null) File.Delete(tempPath); else File.WriteAllBytes(tempPath, previousTemp);
+            if (Directory.Exists(settingsDir)) Directory.Delete(settingsDir, true);
+        }
+    });
+
+    [Theory]
+    [InlineData("en", "+500 sparks")]
+    [InlineData("de", "+500 Funken")]
+    [InlineData("es", "+500 chispas")]
+    [InlineData("fr", "+500 étincelles")]
+    [InlineData("it", "+500 scintille")]
+    [InlineData("ja", "+500 スパーク")]
+    [InlineData("ko", "+500 스파크")]
+    [InlineData("pt-BR", "+500 faíscas")]
+    [InlineData("ru", "+500 искр")]
+    [InlineData("zh-CN", "+500 火花")]
+    public void Sparks_button_tracks_language(string language, string expected) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldFlag = ChaosHubWindow.DebugStripEnabled;
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        var oldRender = global::ConditioningControlPanel.Avalonia.RenderProof.Rendering;
+        ChaosHubWindow? hub = null;
+        try
+        {
+            ChaosHubWindow.DebugStripEnabled = () => true;
+            // A render instance avoids loading or saving the profile in the constructor.
+            global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true;
+            hub = new ChaosHubWindow(); hub.Show();
+            var button = Assert.IsType<WrapPanel>(hub.DebugStrip).Children.OfType<Button>().ElementAt(1);
+            LocalizationManager.Instance.SetLanguage(language);
+            Assert.Equal(expected, button.Content);
+        }
+        finally
+        {
+            hub?.Close();
+            global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = oldRender;
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
+            ChaosHubWindow.DebugStripEnabled = oldFlag;
+        }
+    });
+
+}

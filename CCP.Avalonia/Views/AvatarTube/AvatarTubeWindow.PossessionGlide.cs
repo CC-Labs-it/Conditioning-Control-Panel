@@ -12,6 +12,7 @@ public partial class AvatarTubeWindow
 {
     private PixelPoint? _possessionHome;
     private bool _possessionWasAttached;
+    private int _possessionEpoch;
 
     internal bool? PossessionMoveSupportedOverride { get; set; }
 
@@ -82,15 +83,28 @@ public partial class AvatarTubeWindow
     private async Task GlidePossessionStepsAsync(PixelPoint target, CancellationToken ct)
     {
         var start = Position;
+        var epoch = _possessionEpoch;
         for (int i = 1; i <= 14; i++)
         {
             ct.ThrowIfCancellationRequested();
+            if (epoch != _possessionEpoch) return;
             double t = i / 14.0;
             t = t < .5 ? 2 * t * t : 1 - Math.Pow(-2 * t + 2, 2) / 2;
             Position = new PixelPoint((int)Math.Round(start.X + (target.X - start.X) * t),
                 (int)Math.Round(start.Y + (target.Y - start.Y) * t));
             await Task.Delay(28, ct);
         }
+    }
+
+    // Panic and stop paths cannot wait for the detached tube's normal return glide.
+    internal void StopPossessionMove()
+    {
+        ++_possessionEpoch;
+        if (_possessionHome is not { } home) return;
+        _possessionHome = null;
+        Position = home;
+        if (_possessionWasAttached && _parentWindow != null) UpdatePosition();
+        _possessionWasAttached = false;
     }
 
     public async Task ReturnHomeAsync(CancellationToken ct)
@@ -101,6 +115,7 @@ public partial class AvatarTubeWindow
             return;
         }
         if (_possessionHome is not { } home) return;
+        var epoch = _possessionEpoch;
         try
         {
             // As in WPF, a detached tube's homeward leg must finish even after cancellation.
@@ -108,9 +123,12 @@ public partial class AvatarTubeWindow
         }
         finally
         {
-            _possessionHome = null;
-            if (_possessionWasAttached && _parentWindow != null) UpdatePosition();
-            _possessionWasAttached = false;
+            if (epoch == _possessionEpoch)
+            {
+                _possessionHome = null;
+                if (_possessionWasAttached && _parentWindow != null) UpdatePosition();
+                _possessionWasAttached = false;
+            }
         }
     }
 }

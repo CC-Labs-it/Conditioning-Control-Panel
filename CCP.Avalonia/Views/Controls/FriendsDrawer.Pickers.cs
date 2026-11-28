@@ -162,7 +162,9 @@ public sealed partial class FriendsDrawer
         finally { _openingChess = false; }
         if (!InviteDestination.IsChallengeId(challenge))
         {
-            ShowTimed(friendId, Loc.Get("friends_invite_chess_failed"), false);
+            var text = Loc.Get("friends_invite_chess_failed");
+            ShowTimed(friendId, text, false);
+            if (!_isOpen) Say(text, false);
             return null;
         }
         return await InviteAsync(friendId, InviteDestination.Chess, challenge);
@@ -284,7 +286,12 @@ public sealed partial class FriendsDrawer
     }
 
     /// <summary>WPF ShowNote (untimed): a line that stays until the next result replaces it.</summary>
-    private void ShowNote(string friendId, string key) { _results[friendId] = (Loc.Get(key), true); Render(); }
+    private void ShowNote(string friendId, string key)
+    {
+        if (_resultTimers.Remove(friendId, out var previous)) previous.Dispose();
+        _results[friendId] = (Loc.Get(key), true);
+        Render();
+    }
 }
 
 /// <summary>WPF InviteCodes + CatalogueWatches. Chess uses the game host; Goon waits for its host.</summary>
