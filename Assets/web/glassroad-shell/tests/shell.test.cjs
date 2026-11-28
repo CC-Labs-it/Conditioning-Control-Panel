@@ -7,6 +7,7 @@ const { launchUrl, allowedRequest, allowedPermission, windowOptions, encode, dec
 
 const url = 'http://127.0.0.1:4567/glassroad/index.html?ccp_t=0123456789ABCDEF0123456789ABCDEF&join=room';
 const origin = 'http://127.0.0.1:4567';
+const stable = 'ccp-race://game';
 const turn = () => new Promise(resolve => setImmediate(resolve));
 
 test('launch requires the exact loopback page and one real server token', () => {
@@ -41,7 +42,7 @@ function fixture({ ready = Promise.resolve(), failLoad = false, autoDom = true, 
   const app = new EventEmitter(); app.commandLine = { getSwitchValue: () => 'x11', appendSwitch: (...args) => { app.switch = args; } }; app.whenReady = () => ready; app.quit = () => { app.quits++; }; app.quits = 0;
   const ipcMain = new EventEmitter(), stdin = new PassThrough(), stdout = new PassThrough();
   let output = ''; stdout.on('data', chunk => { output += chunk; });
-  const ses = { webRequest: { onBeforeRequest: (_filter, cb) => { ses.request = cb; } },
+  const ses = { protocol: { handle: (_scheme, cb) => { ses.proxy = cb; } }, webRequest: { onBeforeRequest: (_filter, cb) => { ses.request = cb; } },
     setPermissionRequestHandler: cb => { ses.permit = cb; }, setPermissionCheckHandler: cb => { ses.check = cb; } };
   const windows = [];
   class Window extends EventEmitter {
@@ -61,7 +62,7 @@ function fixture({ ready = Promise.resolve(), failLoad = false, autoDom = true, 
     destroy() { this.dead = true; this.emit('closed'); }
     async loadURL(value) { this.url = value; if (autoDom) this.webContents.emit('dom-ready'); await load; if (failLoad) throw new Error("load failed"); }
   }
-  start({ app, BrowserWindow: Window, ipcMain, session: { fromPartition: (name, opts) => { ses.partition = [name, opts]; return ses; } } }, { stdin, stdout });
+  start({ app, BrowserWindow: Window, ipcMain, session: { fromPartition: (name, opts) => { ses.partition = [name, opts]; return ses; } }, net: { fetch: (target, options) => ({ target, options }) } }, { stdin, stdout });
   return { app, ipcMain, stdin, stdout, ses, windows, output: () => output.trim().split('\n').filter(Boolean).map(JSON.parse),
     input: m => stdin.write(JSON.stringify(m) + '\n') };
 }
@@ -72,7 +73,7 @@ test('one window, locked navigation, IPC, focus and Escape follow the real handl
   assert.equal(f.windows.length, 1);
   const w = f.windows[0], web = w.webContents, event = { sender: web, senderFrame: web.mainFrame };
   assert.equal(w.menuRemoved, true);
-  assert.equal(w.url, url); assert.deepEqual(f.app.switch, ['autoplay-policy', 'no-user-gesture-required']);
+  assert.equal(w.url, stable + new URL(url).pathname + new URL(url).search); assert.deepEqual(f.app.switch, ['autoplay-policy', 'no-user-gesture-required']);
   assert.deepEqual(f.output(), [{ type: 'shell-loaded', displayBackend: 'x11' }]);
   f.input({ type: 'focus' }); assert.equal(w.focused, true);
   w.emit('focus'); w.emit('blur');
@@ -83,10 +84,10 @@ test('one window, locked navigation, IPC, focus and Escape follow the real handl
     let prevented = false; web.emit(name, { preventDefault: () => { prevented = true; } }); assert.equal(prevented, true, name);
   }
   let denied; f.ses.request({ url: 'https://scrolller.com/x' }, result => { denied = result.cancel; }); assert.equal(denied, true);
-  let allowed; f.ses.request({ url: origin + '/glassroad/boot.js' }, result => { allowed = !result.cancel; }); assert.equal(allowed, true);
-  let permission; f.ses.permit(web, 'gamepad', result => { permission = result; }, { requestingUrl: url }); assert.equal(permission, true);
+  let allowed; f.ses.request({ url: stable + '/glassroad/boot.js' }, result => { allowed = !result.cancel; }); assert.equal(allowed, true);
+  let permission; f.ses.permit(web, 'gamepad', result => { permission = result; }, { requestingUrl: stable + '/glassroad/index.html' }); assert.equal(permission, true);
   f.ses.permit(web, 'media', result => { permission = result; }, { requestingUrl: url }); assert.equal(permission, false);
-  assert.equal(f.ses.check(web, 'fullscreen', origin), true); assert.equal(f.ses.check({}, 'fullscreen', origin), false);
+  assert.equal(f.ses.check(web, 'fullscreen', stable), true); assert.equal(f.ses.check({}, 'fullscreen', origin), false);
   assert.deepEqual(w.sent, []); web.emit('did-finish-load');
   f.ipcMain.emit('ccp:bridge-ready', { ...event, senderFrame: {} }); assert.deepEqual(w.sent, []);
   f.ipcMain.emit('ccp:bridge-ready', event); f.ipcMain.emit('ccp:bridge-ready', event);
@@ -228,4 +229,23 @@ test('Core protocol fixtures round trip and window options stay isolated', () =>
     assert.deepEqual(decode(encode(frame).trimEnd()), frame);
   assert.throws(() => decode('x'.repeat(65537)));
   assert.equal(windowOptions({}).webPreferences.contextIsolation, true);
+});
+
+test('persistent origin proxies each run to its own authenticated server', async () => {
+  const first = fixture(), second = fixture();
+  first.input({ type: 'launch', url });
+  second.input({ type: 'launch', url: url.replace(':4567', ':7654') });
+  await turn();
+  assert.equal(new URL(first.windows[0].url).host, new URL(second.windows[0].url).host);
+  assert.equal(first.windows[0].url, second.windows[0].url);
+  assert.ok(first.windows[0].url.startsWith(stable + '/'));
+  for (const [f, port] of [[first, '4567'], [second, '7654']]) {
+    const response = f.ses.proxy({ url: stable + '/glassroad/boot.js?x=1', method: 'GET', headers: new Headers() });
+    const target = new URL(response.target);
+    assert.equal(target.port, port);
+    assert.equal(target.pathname, '/glassroad/boot.js');
+    assert.equal(target.searchParams.get('ccp_t'), '0123456789ABCDEF0123456789ABCDEF');
+    assert.equal(f.ses.proxy({ url: 'ccp-race://other/x', method: 'GET', headers: new Headers() }).status, 403);
+    assert.equal(f.ses.proxy({ url: stable + '/x', method: 'POST', headers: new Headers() }).status, 403);
+  }
 });

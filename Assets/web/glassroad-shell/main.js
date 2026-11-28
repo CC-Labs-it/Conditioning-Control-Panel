@@ -6,6 +6,9 @@
 const path = require('node:path');
 const ROOM = 'glassroad-room.cclabs-race.workers.dev';
 const MAX_LINE = 64 * 1024;
+const RACE_ORIGIN = 'ccp-race://game';
+
+function raceOrigin(u) { return u.protocol === 'ccp-race:' && u.host === 'game' && !u.username && !u.password; }
 
 function windowOptions(ses) {
   return { width: 1280, height: 800, show: true, webPreferences: { session: ses,
@@ -37,6 +40,7 @@ function launchUrl(raw) {
 function allowedRequest(raw, origin) {
   try {
     const u = new URL(raw);
+    if (origin === RACE_ORIGIN && raceOrigin(u)) return true;
     if (u.origin === origin && u.protocol === 'http:') return true;
     // The page uses local blob pictures and signed room songs; online races use
     // the room's WebSocket (NET.md sections 1 and 14). Neither is a navigation.
@@ -49,10 +53,10 @@ function allowedRequest(raw, origin) {
 
 function allowedPermission(permission, origin, requestingUrl) {
   if (permission !== 'gamepad' && permission !== 'fullscreen') return false;
-  try { return new URL(requestingUrl).origin === origin; } catch { return false; }
+  try { const u = new URL(requestingUrl); return origin === RACE_ORIGIN ? raceOrigin(u) : u.origin === origin; } catch { return false; }
 }
 
-function start({ app, BrowserWindow, ipcMain, session }, io = process) {
+function start({ app, BrowserWindow, ipcMain, session, net }, io = process) {
   let win = null, origin = null, launched = false, bridgeReady = false, ended = false;
   let pending = [], buffer = '', sequence = 0, held = false;
   const backend = app.commandLine.getSwitchValue('ozone-platform');
@@ -93,6 +97,18 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
     if (ended) return;
     // Persistent, as WPF's browser_data_glassroad profile: page storage survives between races.
     const ses = session.fromPartition('persist:glassroad-race', { cache: false });
+    // Keep Chromium's origin fixed while every request still passes the server's per-run token gate.
+    ses.protocol.handle('ccp-race', request => {
+      const incoming = new URL(request.url);
+      if (!raceOrigin(incoming) || !['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 403 });
+      const target = new URL(url.origin);
+      target.pathname = incoming.pathname; target.search = incoming.search;
+      target.searchParams.set('ccp_t', url.searchParams.get('ccp_t'));
+      const headers = new Headers();
+      const range = request.headers.get('range');
+      if (range) headers.set('range', range);
+      return net.fetch(target.href, { method: request.method, headers });
+    });
     ses.setPermissionRequestHandler((contents, permission, callback, details) =>
       callback(contents === win?.webContents && allowedPermission(permission, origin, details?.requestingUrl || contents.getURL())));
     ses.setPermissionCheckHandler((contents, permission, requestingOrigin) =>
@@ -120,7 +136,7 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
     win.on('blur', () => { held = false; send({ type: 'shell-focus', active: false }); });
     win.on('closed', stop);
     web.once('dom-ready', () => send({ type: 'shell-loaded', displayBackend: backend }));
-    try { await win.loadURL(url.href); } catch { stop(); }
+    try { await win.loadURL(RACE_ORIGIN + url.pathname + url.search); } catch { stop(); }
   }
 
   function line(raw) {
@@ -130,7 +146,7 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
     if (!launched) {
       const url = message.type === 'launch' && launchUrl(message.url);
       if (!url) { stop(); return; }
-      launched = true; origin = url.origin;
+      launched = true; origin = RACE_ORIGIN;
       open(url).catch(stop);
     } else if (message.type === 'focus') { if (win && !win.isDestroyed()) { win.show(); win.focus(); } }
     else if (message.type === 'shell-close') stop();
@@ -151,5 +167,9 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
   });
 }
 
-if (require.main === module) start(require('electron'));
+if (require.main === module) {
+  const electron = require('electron');
+  electron.protocol.registerSchemesAsPrivileged([{ scheme: 'ccp-race', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
+  start(electron);
+}
 module.exports = { launchUrl, allowedRequest, allowedPermission, windowOptions, encode, decode, start };
