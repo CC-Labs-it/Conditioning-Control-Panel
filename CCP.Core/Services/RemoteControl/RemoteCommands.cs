@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Services
     /// WPF RemoteControlService.ExecuteCommand's dispatch table for the features Core drives. Runs on the
     /// UI thread (RemoteRelay marshals). Returns null when the verb ran, else the refusal the controller
     /// sees: a verb with no surface on this head says so rather than reporting "ok" and doing nothing.
-    /// ponytail: wallpaper and the remaining session verbs have no Core entry point yet; they refuse until their services move.
+    /// Remaining session verbs without a Core entry point refuse until their services move.
     /// </summary>
     public static class RemoteCommands
     {
@@ -50,6 +50,9 @@ namespace ConditioningControlPanel.Services
         /// (remote panic, the wearer's Stop signal) ends the running session. Core owns no session runner, so the
         /// shell sets this to its one MainShellWindow.StopSessionFromRemote.</summary>
         public static Action? StopSession;
+
+        /// <summary>The head's wallpaper host, absent on unsupported heads and in sandbox runs.</summary>
+        public static WallpaperHost? Wallpaper;
 
         /// <summary>The head's embedded browser (WPF MainWindow.PlayHypnotubeFromRemote / StopBrowserVideoFromRemote,
         /// MainWindow.Browser.cs:3188 / :3228). Play returns null when the page was handed to the browser, else the
@@ -207,6 +210,7 @@ namespace ConditioningControlPanel.Services
                     var customText = p?["text"]?.ToString();
                     if (string.IsNullOrWhiteSpace(customText)) return null;   // WPF: blank text is a no-op
                     if (CoreSubliminal.CustomShowProvider is not { } custom) return NotOnThisBuild;
+                    Remote.RemoteScreenFeed.ControllerWord(customText);   // WPF NoteControllerWord (:1311)
                     custom(customText);
                     return null;
                 case "start_brain_drain":
@@ -275,6 +279,14 @@ namespace ConditioningControlPanel.Services
                 case "enable_strict_lock": Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.StrictLock, 1); s.StrictLockEnabled = true; CoreSettings.Save(); return null;
                 case "disable_strict_lock": Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.StrictLock, 0); s.StrictLockEnabled = false; CoreSettings.Save(); return null;
                 case "enable_panic": s.PanicKeyEnabled = true; CoreSettings.Save(); SyncPanicUi(); return null;
+                case "trigger_wallpaper":
+                    if (Wallpaper is not { } wallpaper) return NotOnThisBuild;
+                    _ = wallpaper.ShuffleAsync();
+                    return null;
+                case "stop_wallpaper":
+                    if (Wallpaper is not { } wallpaperToStop) return NotOnThisBuild;
+                    _ = wallpaperToStop.DeactivateAsync();
+                    return null;
                 case "trigger_panic": StopEffects(force: true); return null;
                 default: return NotOnThisBuild;
             }
@@ -300,6 +312,7 @@ namespace ConditioningControlPanel.Services
                     catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] overlay restore refresh failed"); }
                 return;
             }
+            if (Wallpaper is { } wallpaper) _ = wallpaper.DeactivateAsync();
             if (force) ResetAutonomy();
             else try { CancelAutonomyPulses?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy pulse cancel failed"); }
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too

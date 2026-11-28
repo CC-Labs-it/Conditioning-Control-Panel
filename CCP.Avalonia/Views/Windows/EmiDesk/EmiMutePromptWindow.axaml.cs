@@ -60,13 +60,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(EmiMuteChoice.Keep); };
         }
 
+        private static EmiMutePromptWindow? _active;
+
         /// <summary>
         /// Ask, modally. The safe default is leaving the app as it was, so every path that is not
         /// an explicit answer - dismissing the window included - comes back
         /// <see cref="EmiMuteChoice.Keep"/>.
         /// </summary>
-        public static Task<EmiMuteChoice> Ask(Window owner) =>
-            new EmiMutePromptWindow().ShowDialogSafe<EmiMuteChoice>(owner);
+        public static Task<EmiMuteChoice> Ask(Window owner)
+        {
+            var prompt = new EmiMutePromptWindow();
+            _active = prompt;
+            prompt.Closed += (_, _) => { if (ReferenceEquals(_active, prompt)) _active = null; };
+            return prompt.ShowDialogSafe<EmiMuteChoice>(owner);
+        }
+
+        internal static void Cancel() => _active?.Close(EmiMuteChoice.Keep);
 
         /// <summary>
         /// Ask with no owner in hand - WPF's own call shape (<c>EmiMutePromptWindow.Ask()</c> from

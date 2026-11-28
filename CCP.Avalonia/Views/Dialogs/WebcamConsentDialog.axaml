@@ -22,13 +22,7 @@
         Background="{DynamicResource DarkerBgBrush}">
 
     <Window.Resources>
-        <!-- ponytail: local copy of Dialogs/WebcamConsentDialog.xaml:DlgHeader…DlgCheckbox, hoist when a second view needs it -->
-        <ControlTheme x:Key="DlgHeader" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource PinkBrush}"/>
-            <Setter Property="FontSize" Value="22"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="TextWrapping" Value="Wrap"/>
-        </ControlTheme>
+        <!-- ponytail: local copy of Dialogs/WebcamConsentDialog.xaml:DlgSub…DlgCheckbox, hoist when a second view needs it -->
         <ControlTheme x:Key="DlgSub" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#B0B0B0"/>
             <Setter Property="FontSize" Value="12"/>
@@ -121,7 +115,7 @@
         <!-- ─── STEP 1 — What this enables ─── -->
         <ScrollViewer x:Name="PanelStep1" Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Theme="{StaticResource DlgHeader}" Text="Webcam Tracking — Lab Feature"/>
+                <TextBlock Theme="{StaticResource DlgHeaderLarge}" Text="Webcam Tracking — Lab Feature"/>
                 <TextBlock Theme="{StaticResource DlgSub}" Text="Optional. Off by default. Powers two new Lab features."/>
 
                 <TextBlock Theme="{StaticResource DlgBody}" Margin="0,24,0,0"
@@ -150,7 +144,7 @@
         <!-- ─── STEP 2 — Privacy contract ─── -->
         <ScrollViewer x:Name="PanelStep2" Grid.Row="1" VerticalScrollBarVisibility="Auto" IsVisible="False">
             <StackPanel>
-                <TextBlock Theme="{StaticResource DlgHeader}" Text="Your camera frames stay on this computer."/>
+                <TextBlock Theme="{StaticResource DlgHeaderLarge}" Text="Your camera frames stay on this computer."/>
                 <TextBlock Theme="{StaticResource DlgSub}" Text="Always. Read each line."/>
 
                 <Border Margin="0,24,0,0" Padding="20" CornerRadius="6" Background="#1F1F38" BorderBrush="{StaticResource PinkBrush}" BorderThickness="0,0,0,3">
@@ -212,7 +206,7 @@
         <!-- ─── STEP 3 — Explicit consent ─── -->
         <ScrollViewer x:Name="PanelStep3" Grid.Row="1" VerticalScrollBarVisibility="Auto" IsVisible="False">
             <StackPanel>
-                <TextBlock Theme="{StaticResource DlgHeader}" Text="Confirm consent"/>
+                <TextBlock Theme="{StaticResource DlgHeaderLarge}" Text="Confirm consent"/>
                 <TextBlock Theme="{StaticResource DlgSub}" Text="Each box must be checked. None are pre-checked."/>
 
                 <CheckBox x:Name="ChkConsent1" Theme="{StaticResource DlgCheckbox}" Margin="0,24,0,0">
@@ -238,7 +232,7 @@
         <!-- ─── STEP 4 — Calibration prompt ─── -->
         <ScrollViewer x:Name="PanelStep4" Grid.Row="1" VerticalScrollBarVisibility="Auto" IsVisible="False">
             <StackPanel>
-                <TextBlock Theme="{StaticResource DlgHeader}" Text="Calibration"/>
+                <TextBlock Theme="{StaticResource DlgHeaderLarge}" Text="Calibration"/>
                 <TextBlock Theme="{StaticResource DlgSub}" Text="Quick one-time setup so the camera knows where you're looking."/>
 
                 <TextBlock Theme="{StaticResource DlgBody}" Margin="0,24,0,0"

@@ -5,8 +5,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Automation;
+using Avalonia.Media;
+using System.Globalization;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Automation;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
@@ -27,6 +33,49 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class SectionTabStripShellTests
 {
+    [Fact]
+    public async Task TrayAndPillsMatchWpfDetails()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var strip = new SectionTabStrip { MotionOverride = MotionLevel.Off };
+            var window = new Window { Content = strip };
+            try
+            {
+                window.Show();
+                var layers = ((Panel)strip.Track.Parent!).Children.OfType<Border>().Take(4).ToArray();
+                Assert.Equal(4, layers.Length);
+                strip.Show(NavSections.Settings, "settings");
+                Assert.All(layers, layer => Assert.False(layer.IsVisible));
+                foreach (var section in new[] { NavSections.Studio, NavSections.Companion, NavSections.Play, NavSections.Social, NavSections.You, NavSections.Library })
+                {
+                    strip.Show(section, null);
+                    Assert.All(layers, layer => Assert.True(layer.IsVisible));
+                    Assert.NotEmpty(strip.PillKeys);
+                    foreach (var key in strip.PillKeys)
+                    {
+                        var part = strip.Part(key)!;
+                        var label = part.Label;
+                        var width = new FormattedText(label.Text ?? "", System.Globalization.CultureInfo.CurrentUICulture,
+                            FlowDirection.LeftToRight, new Typeface(label.FontFamily, label.FontStyle, FontWeight.ExtraBold, label.FontStretch),
+                            label.FontSize, Brushes.White).WidthIncludingTrailingWhitespace;
+                        Assert.True(label.MinWidth >= width);
+                        Assert.Equal(TextAlignment.Center, label.TextAlignment);
+                        Assert.Equal(500, ToolTip.GetShowDelay(part.Pill));
+                        Assert.Equal($"{Loc.Get(NavSections.Find(section)!.LabelKey)} {Loc.Get("nav_crumb_sep")} {label.Text}",
+                            AutomationProperties.GetHelpText(part.Pill));
+                    }
+                }
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Theory]
     [InlineData(MotionLevel.Off)]
     [InlineData(MotionLevel.Reduced)]
@@ -70,6 +119,56 @@ public sealed class SectionTabStripShellTests
         });
     }
 
+
+    [Fact]
+    public async Task TrayLabelsAndCrumbMatchWpf()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var strip = new SectionTabStrip { MotionOverride = MotionLevel.Off };
+            var w = new Window { Content = strip, Width = 1200, Height = 200 };
+            try
+            {
+                w.Show();
+                strip.Show(NavSections.Play, "play");
+                w.UpdateLayout();
+                var height = ((Control)strip.TrayHost.Parent!).Bounds.Height;
+                var separator = strip.CrumbSeparator;
+                var page = strip.CrumbPage;
+                Assert.Equal(separator.FindResource("TextMutedBrush"), separator.Foreground);
+                Assert.Equal(page.FindResource("TextLightBrush"), page.Foreground);
+                var positions = strip.PillKeys.Select(k => strip.PillFor(k)!.TranslatePoint(new Point(0, 0), strip.TrayHost)!.Value.X).ToArray();
+                foreach (var key in strip.PillKeys)
+                {
+                    var part = strip.Part(key)!;
+                    var label = part.Label;
+                    var width = new FormattedText(label.Text!, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+                        new Typeface(label.FontFamily, label.FontStyle, FontWeight.ExtraBold, label.FontStretch),
+                        label.FontSize, Brushes.White).WidthIncludingTrailingWhitespace;
+                    Assert.Equal(Math.Ceiling(width) + 1, label.MinWidth);
+                    Assert.Equal(TextAlignment.Center, label.TextAlignment);
+                    Assert.Equal(500, ToolTip.GetShowDelay(part.Pill));
+                    Assert.Equal($"{Loc.Get("nav_door_play")} {Loc.Get("nav_crumb_sep")} {label.Text}", AutomationProperties.GetHelpText(part.Pill));
+                }
+                strip.Show(NavSections.Play, "blinktrainer");
+                w.UpdateLayout();
+                Assert.Equal(positions, strip.PillKeys.Select(k => strip.PillFor(k)!.TranslatePoint(new Point(0, 0), strip.TrayHost)!.Value.X).ToArray());
+                strip.CrumbSection.Focus(NavigationMethod.Tab);
+                Assert.Equal(new Thickness(2), strip.CrumbSection.BorderThickness);
+                Assert.Equal(Color.Parse("#CCFFFFFF"), ((ISolidColorBrush)strip.CrumbSection.BorderBrush!).Color);
+                var at = strip.CrumbSection.TranslatePoint(new Point(4, 4), w)!.Value;
+                w.MouseMove(at);
+                Assert.Equal(Color.Parse("#14FFFFFF"), ((ISolidColorBrush)strip.CrumbSection.Background!).Color);
+                strip.Show(NavSections.Settings, "settings", "Settings");
+                w.UpdateLayout();
+                Assert.Equal(0, strip.TrayHost.Opacity);
+                Assert.False(strip.TrayHost.IsHitTestVisible);
+                Assert.Equal(height, ((Control)strip.TrayHost.Parent!).Bounds.Height);
+            }
+            finally { w.Close(); }
+            return Task.CompletedTask;
+        });
+    }
 
     [Fact]
     public async Task StripFollowsShowTabAndItsPillsNavigate()

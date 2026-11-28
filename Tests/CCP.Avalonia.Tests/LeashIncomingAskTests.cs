@@ -146,6 +146,53 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void UnopenedShellDoesNotQueueDuplicateIncomingOffers() =>
+        LeashGateCardTests.Run(false, (shell, launcher, _) =>
+        {
+            var service = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            LeashHead.Service = service;
+            shell.RebindLeashAsks();
+            MainShellWindow? unopened = null;
+            try
+            {
+                service.ApplyBlock(Block((First, "juno")));
+                launcher.Show(); shell.RebindLeashAsks();
+                var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:juno", ask.Card.Tag);
+                unopened = new MainShellWindow();
+                ask.Card.Dismiss(); Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                unopened?.Close(); LeashHead.Service = null; shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent(); Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheOffer() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            shell.Show();
+            var service = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            service.ApplyBlock(Block((First, "juno")));
+            LeashHead.Service = service;
+            try
+            {
+                var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Open(service.Snapshot.Offers.Single(), () => service, shell));
+                shell.RebindLeashAsks();
+                ask.Card.Dismiss(); Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null; shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent(); Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void WithdrawnOffersAndOldServiceCannotOpenAfterRebind() =>
         LeashGateCardTests.Run(false, (shell, _, oldService) =>
         {

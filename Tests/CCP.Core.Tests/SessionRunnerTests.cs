@@ -289,6 +289,27 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.InRange(LockCardScheduler.Instance.LastWindowMinutes ?? -1, 1.49, 1.5);
     }
 
+    [Fact]   // WPF SessionEngine.cs:246, :310, :512, :604, :667, :730: the lifecycle the companion barks hear
+    public void LifecycleEventsFollowWpfSessionEngine()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 2;
+        session.Phases.Add(new SessionPhase { StartMinute = 0, Name = "Intro" });
+        session.Phases.Add(new SessionPhase { StartMinute = 1, Name = "Deep" });
+        var seen = new System.Collections.Generic.List<string>();
+        _runner.Started += () => seen.Add("started");
+        _runner.PhaseChanged += i => seen.Add("phase" + i);
+        _runner.Progressed += () => seen.Add("progress");
+        _runner.Paused += n => seen.Add("paused" + n);
+        _runner.Resumed += gap => seen.Add(gap >= TimeSpan.Zero ? "resumed" : "negative");
+        _runner.Start(session);
+        _runner.Tick(TimeSpan.FromSeconds(30));
+        _runner.Pause();
+        _runner.Resume();
+        _runner.Tick(TimeSpan.FromSeconds(61));
+        Assert.Equal(new[] { "started", "phase0", "progress", "paused1", "resumed", "phase1", "progress" }, seen);
+    }
+
     [Fact]
     public void PauseAndResumeRepaintEvenWhileTheTimerIsHeld()
     {
@@ -554,12 +575,37 @@ public sealed class SessionRunnerTests : IDisposable
     }
 
     [Fact]
-    public void Ledger_IsPersistedBeforeTheSessionOverrides()
+    public void Ledger_IsPersistedBeforeTheSessionOverrides() => VerifyLedgerPersistence();
+
+    [Fact]
+    public void LedgerPersistenceDoesNotDeleteAnotherWritersTemporaryFile()
+    {
+        var otherFile = Path.Combine(CorePaths.UserData, "settings.json." + Guid.NewGuid().ToString("N") + ".tmp");
+        Directory.CreateDirectory(CorePaths.UserData);
+        using var held = new FileStream(otherFile, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        try
+        {
+            VerifyLedgerPersistence();
+            Assert.True(File.Exists(otherFile));
+        }
+        finally
+        {
+            held.Dispose();
+            if (File.Exists(otherFile)) File.Delete(otherFile);
+        }
+    }
+
+    private void VerifyLedgerPersistence()
     {
         var old = CoreSettings.ServiceProvider;
-        var svc = new SettingsService();
+        // A private settings file, not the sandbox's shared CorePaths.UserData/settings.json: another
+        // class's service (RecoveredProfileReconcileTests) could land a debounced save there between
+        // Start's immediate save and the read below, so the read saw that service's file instead.
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-ledger-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "settings.json");
+        var svc = new SettingsService(path);
         CoreSettings.ServiceProvider = () => svc;
-        var path = Path.Combine(CorePaths.UserData, "settings.json");
         try
         {
             svc.Current.FlashFrequency = 20;
@@ -577,7 +623,7 @@ public sealed class SessionRunnerTests : IDisposable
             svc.SaveImmediate();
             svc.SealForReset();
             CoreSettings.ServiceProvider = old;
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*")) File.Delete(f);
+            Directory.Delete(dir, recursive: true);
         }
     }
 
@@ -965,6 +1011,7 @@ public sealed class SessionRunnerTests : IDisposable
 
     private sealed class NoVideoHost : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }

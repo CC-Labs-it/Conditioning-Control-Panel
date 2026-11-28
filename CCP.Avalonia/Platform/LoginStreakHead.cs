@@ -17,6 +17,18 @@ internal static class LoginStreakHead
     private static DispatcherTimer? _rolloverTimer;
     internal static int ProfileGeneration { get; private set; }
 
+    /// <summary>WPF AchievementProgressStreak.cs:67, :118, :137, :147: the EMI Desk streak moments. The
+    /// startup bank stays silent because WPF builds App.EmiDesk after AchievementService (App.xaml.cs:2849, :2859).</summary>
+    internal static Action<string, int> EmiStreakMoment = (moment, streak) =>
+        Views.Windows.EmiDesk.EmiDeskService.Instance.Fire(moment, new { streak });
+
+    private static void Emi(bool emi, string moment, int streak)
+    {
+        if (!emi) return;
+        try { EmiStreakMoment(moment, streak); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Login streak EMI moment failed"); }
+    }
+
     internal static void Start(AchievementEngine engine, AppSettings settings)
     {
         _questXpEngine = null;
@@ -36,6 +48,11 @@ internal static class LoginStreakHead
         var hadHistory = engine.Progress.LastLaunchDate != default;
         if (Update(engine.Progress, settings, DateTime.Today, false) && hadHistory)
             SaveAndPay(engine, settings);
+        // WPF App.xaml.cs:3653-3666: restore the prior suppression state after retroactive awards.
+        var wasSuppressed = engine.SuppressPopups;
+        engine.SuppressPopups = true;
+        try { engine.CheckDailyMaintenance(); }
+        finally { engine.SuppressPopups = wasSuppressed; }
         if (engine.Progress.PendingStreakBreak)
         {
             var id = settings.UnifiedId;
@@ -47,7 +64,7 @@ internal static class LoginStreakHead
     }
 
     // WPF :19/:107. A signed-in gap waits for the cloud before spending any protection.
-    internal static bool Update(AchievementProgress p, AppSettings s, DateTime today, bool resolveGap)
+    internal static bool Update(AchievementProgress p, AppSettings s, DateTime today, bool resolveGap, bool emi = false)
     {
         today = today.Date;
         var last = p.LastLaunchDate.Date;
@@ -67,6 +84,8 @@ internal static class LoginStreakHead
         {
             p.ConsecutiveDays++;
             p.PendingStreakBonus = true;
+            // WPF ResolveDeferredStreakBreak's yesterday branch (:240) does not fire.
+            Emi(emi && !resolveGap, "streakKept", p.ConsecutiveDays);
         }
         else if (!resolveGap && !s.OfflineMode && !string.IsNullOrEmpty(s.UnifiedId))
         {
@@ -78,6 +97,7 @@ internal static class LoginStreakHead
             s.StreakShieldsRemaining--;
             p.ConsecutiveDays++;
             p.PendingStreakBonus = true;
+            Emi(emi, "streakKept", p.ConsecutiveDays);
             for (var d = last < today ? last.AddDays(1) : today; d < today; d = d.AddDays(1))
                 if (!s.StreakShieldUsedDates.Contains(d)) s.StreakShieldUsedDates.Add(d);
         }
@@ -86,8 +106,13 @@ internal static class LoginStreakHead
             s.StreakFixCharges--;
             s.SeasonalStreakRecoveryUsed = true;
             if (!s.OfflineMode && !string.IsNullOrEmpty(s.UnifiedId)) _ = SyncInsurance(s, s.UnifiedId, today, ProfileGeneration);
+            Emi(emi, "streakKept", p.ConsecutiveDays);
         }
-        else p.ConsecutiveDays = 1;
+        else
+        {
+            Emi(emi, "streakBroken", p.ConsecutiveDays);   // the streak as it stood, before the reset
+            p.ConsecutiveDays = 1;
+        }
 
         p.PendingStreakBreak = false;
         p.LastLaunchDate = today;
@@ -102,7 +127,7 @@ internal static class LoginStreakHead
     {
         var p = engine.Progress;
         if (p.PendingStreakBreak || !AchievementProgress.ShouldBankDayRollover(p.LastLaunchDate, today)) return false;
-        var banked = Update(p, settings, today, false);
+        var banked = Update(p, settings, today, false, emi: true);
         if (p.PendingStreakBreak) _ = Timeout(engine, settings, settings.UnifiedId);
         SaveAndPay(engine, settings);
         if (banked && App.Quests is { } quests) App.CreditBankedLoginStreak(quests, p, today);
@@ -169,7 +194,7 @@ internal static class LoginStreakHead
             var adopt = AchievementProgress.DecideLoginStreakAdopt(p.ConsecutiveDays, p.LastLaunchDate, count, date, today);
             if (adopt is { } a) { p.ConsecutiveDays = a.Streak; p.LastLaunchDate = a.LastDate; }
         }
-        if (p.PendingStreakBreak) Update(p, s, today, true);
+        if (p.PendingStreakBreak) Update(p, s, today, true, emi: true);
         else { s.CurrentStreak = p.ConsecutiveDays; s.LastStreakDate = p.LastLaunchDate; }
         SaveAndPay(engine, s);
         if (App.Quests is { } quests) App.CreditBankedLoginStreak(quests, p, today);
@@ -200,7 +225,7 @@ internal static class LoginStreakHead
                 || !ReferenceEquals(engine.Progress, progress)
                 || !ReferenceEquals(CoreSettings.Current, settings)
                 || settings.UnifiedId != id || !engine.Progress.PendingStreakBreak) return;
-            Update(engine.Progress, settings, DateTime.Today, true);
+            Update(engine.Progress, settings, DateTime.Today, true, emi: true);
             SaveAndPay(engine, settings);
             if (App.Quests is { } quests) App.CreditBankedLoginStreak(quests, engine.Progress, DateTime.Today);
         });
