@@ -92,10 +92,12 @@ public sealed class ShellNotificationCallerTests
                 Assert.Empty(host.Children);
                 settings.Current.FlashEnabled = true;
                 settings.Current.MediaSource = "mixed";
+                settings.Current.RemoteMediaConsented = true;
                 shell.WarnIfFlashLibraryEmpty();
                 shell.WarnIfWallpaperLibraryEmpty();
                 Assert.Empty(host.Children);
-                settings.Current.MediaSource = "local";
+                // WPF MainWindow.StartStop.cs:208-213: mixed before the consent draws local only, so it nags.
+                settings.Current.RemoteMediaConsented = false;
                 shell.WarnIfFlashLibraryEmpty();
                 shell.WarnIfWallpaperLibraryEmpty();
                 Assert.Equal(2, host.Children.Count);
@@ -274,7 +276,7 @@ public sealed class ShellNotificationCallerTests
     {
         // WPF Presets.cs:1616-1622 checks the user's settings before session overrides.
         var s = settings.Current;
-        (s.FlashEnabled, s.AudioOnlySession, s.MediaSource) = (flash, audioOnly, source);
+        (s.FlashEnabled, s.AudioOnlySession, s.MediaSource, s.RemoteMediaConsented) = (flash, audioOnly, source, source != "local");
         var runner = App.Sessions = new SessionRunner(new SessionLogService());
         var session = new Session { Id = "library-start", Name = "Library start", DurationMinutes = 10 };
         session.Settings.FlashEnabled = !flash; // Catch a warning moved after runner.Start.
@@ -309,7 +311,7 @@ public sealed class ShellNotificationCallerTests
             Assert.True(runner.IsPaused);
             Assert.Equal(engineRunning, CoreEngine.IsRunning);
             var s = settings.Current;
-            (s.FlashEnabled, s.AudioOnlySession, s.MediaSource) = (flash, audioOnly, source);
+            (s.FlashEnabled, s.AudioOnlySession, s.MediaSource, s.RemoteMediaConsented) = (flash, audioOnly, source, source != "local");
             var before = host.Children.Count;
             Click(shell.Named<Button>("BtnPauseSession")!);
             Assert.False(runner.IsPaused);

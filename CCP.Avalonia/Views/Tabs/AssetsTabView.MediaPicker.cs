@@ -191,11 +191,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (s == null || chip.Tag is not string key) return;
             try
             {
-                // Un-clicking the live chip would leave no source; a click while the ask is open is ignored.
-                if (chip.IsChecked != true || key == s.MediaSource || _consentPending)
+                // A click on the selected source toggles it off. Restore it before asking.
+                bool live = key == s.MediaSource;
+                if (_consentPending || (chip.IsChecked != true && !live))
                 {
                     RefreshRemoteMediaPicker();
                     return;
+                }
+                if (live)
+                {
+                    RefreshRemoteMediaPicker();
+                    if (key == MediaSrcLocal || s.HasRemoteMediaConsent) return;
                 }
                 if (key != MediaSrcLocal && !s.HasRemoteMediaConsent)
                 {

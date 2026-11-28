@@ -11,7 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
     /// WPF <c>App.OfferRemoteMediaSource</c> (App.xaml.cs:891): at an empty-assets dead end, offer
-    /// the online media source, at most once per launch. Only when the source is still "local";
+    /// the online media source, at most once per launch. Only when remote media is not in use;
     /// routed through <see cref="StartupLadder.PresentOrInbox"/> and the "remotemedia" intro card.
     /// The once-per-launch claim is spent when the card opens, so a parked Inbox row keeps it owed.
     /// Every failure is swallowed: the caller's own behaviour must happen either way.
@@ -60,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 // Switched off by the owner (2026-11-07, WPF App.OfferRemoteMediaSource): no "Media without the download" card.
                 if (!PopupSwitches.RemoteMediaOffer) return;
                 if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => Offer(surface, owner)); return; }
-                if (!string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return;
+                if (CoreSettings.Current.UsesRemoteMedia) return;
                 // WPF App.OfferRemoteMediaSource: do not let the intro's modal guard silently
                 // consume this launch's offer. Keep the first request until the modal unwinds.
                 if (ModalUp) { Park(surface, owner); return; }
@@ -76,7 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     {
                         // A held passive card / Inbox row can be opened after another modal starts.
                         if (ModalUp) { Park(surface, owner); return; }
-                        if (!string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return;
+                        if (CoreSettings.Current.UsesRemoteMedia) return;
                         if (Interlocked.CompareExchange(ref _claimed, 1, 0) != 0) return;
                         ShowCard(owner);
                     },

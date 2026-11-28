@@ -377,6 +377,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 settings.Welcomed = true;
                 settings.FirstRunAssetsPromptShown = true;
                 settings.LastSeenVersion = CoreReleaseContent.AppVersion;
+                if (string.Equals(settings.MediaSource, "local", StringComparison.Ordinal))
+                    settings.MediaSource = "mixed";
                 CoreSettings.Save();
                 return true;
             }
