@@ -8526,6 +8526,7 @@
   "account_merged_signin_summary": "Inicia sesión de nuevo para continuar.",
   "account_merged_signin_body": "Tus dos cuentas se han fusionado en una. Inicia sesión de nuevo para continuar.\n\nTu progreso local se conserva.",
   "she_wake_unavailable_tooltip": "El motor opcional de activación sherpa-onnx no está disponible en esta versión. Se usa el reconocedor integrado.",
+  "she_wake_model_found_unavailable": "Modelo de activación encontrado. La activación fiable no está disponible en esta versión.",
   "she_wake_unavailable_status": "El motor opcional de activación no está disponible en esta versión. Se usa el reconocedor integrado.",
   "she_wake_calibration_unavailable": "La calibración de la palabra de activación no está disponible en esta versión.",
   "chaos_expiry_label": "DESVANECIDA",
