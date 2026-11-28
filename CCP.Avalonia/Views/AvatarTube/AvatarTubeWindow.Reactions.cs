@@ -32,21 +32,21 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// </summary>
     public partial class AvatarTubeWindow
     {
-        private MandatoryVideoScheduler? _reactionVideo;
+        private MandatoryVideoScheduler? _completionReactionVideo;
         private int _videoReactionGeneration;
 
         private void AttachVideoReaction()
         {
             DetachVideoReaction();
-            _reactionVideo = CoreEngine.Video;
-            if (_reactionVideo != null) { _reactionVideo.VideoFinished += OnVideoFinished; _reactionVideo.VideoCancelled += CancelVideoReaction; }
+            _completionReactionVideo = CoreEngine.Video;
+            if (_completionReactionVideo != null) { _completionReactionVideo.VideoFinished += OnVideoFinished; _completionReactionVideo.VideoCancelled += CancelVideoReaction; }
         }
 
         private void DetachVideoReaction()
         {
             CancelVideoReaction();
-            if (_reactionVideo != null) { _reactionVideo.VideoFinished -= OnVideoFinished; _reactionVideo.VideoCancelled -= CancelVideoReaction; }
-            _reactionVideo = null;
+            if (_completionReactionVideo != null) { _completionReactionVideo.VideoFinished -= OnVideoFinished; _completionReactionVideo.VideoCancelled -= CancelVideoReaction; }
+            _completionReactionVideo = null;
         }
 
         private void CancelVideoReaction() => Interlocked.Increment(ref _videoReactionGeneration);
@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // WPF AvatarTubeWindow.Reactions.cs:362-382 and VideoService.cs:724-725.
         private void OnVideoFinished()
         {
-            var title = Path.GetFileNameWithoutExtension(_reactionVideo?.LastVideoPath);
+            var title = Path.GetFileNameWithoutExtension(_completionReactionVideo?.LastVideoPath);
             var generation = Volatile.Read(ref _videoReactionGeneration);
             Dispatcher.UIThread.Post(async () => await ReactToVideoAsync(title, generation));
         }
