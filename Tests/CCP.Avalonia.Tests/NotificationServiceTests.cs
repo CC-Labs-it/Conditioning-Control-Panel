@@ -58,6 +58,31 @@ public sealed class NotificationServiceTests
         });
     }
 
+    [Fact]
+    public async Task HistoryRecordsOnlyDisplayedToastsAndDeduplicatesSticky()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var service = new NotificationService();
+            service.Show("queued", NotificationType.Warning);
+            Assert.Equal(0, service.History.Count);
+            service.AttachHost(new StackPanel());
+            service.ShowSticky("history-test-unique", "sticky", NotificationType.Error);
+            service.ShowSticky("history-test-unique", "duplicate", NotificationType.Error);
+            var entries = service.History.Snapshot();
+            Assert.Equal(2, entries.Count);
+            Assert.Equal("sticky", entries[0].Text);
+            Assert.Equal(NotificationType.Error, entries[0].Type);
+            Assert.Equal("queued", entries[1].Text);
+            Assert.Equal(NotificationType.Warning, entries[1].Type);
+            return Task.CompletedTask;
+        });
+    }
+
     private static string Message(Control toast) =>
         ((TextBlock)((Grid)((Border)toast).Child!).Children[0]).Text!;
 
