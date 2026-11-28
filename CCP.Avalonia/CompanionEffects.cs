@@ -56,6 +56,11 @@ namespace ConditioningControlPanel.Avalonia
             return shown ?? true;
         });
 
+        /// <summary>The AI's video surface. WPF App.AiEffects.cs:69-74: refused while a video plays, checked when the
+        /// start runs, so a start held behind the Wayland portal bind is covered too.</summary>
+        internal static bool PlayVideo(string? path) => Start(() => CoreEngine.Video?.IsPlaying != true
+            && CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
+
         /// <summary>An overlay surface: refused without a host or click-through support.</summary>
         private static bool Overlay(Action<Window> show) => OnUi(() =>
             X11Overlay.IsAvailable && Host is not null && Start(() =>
@@ -100,27 +105,9 @@ namespace ConditioningControlPanel.Avalonia
                     voiceMode: CoreSettings.Current.LockCardVoiceMode);
                 return LockCardWindow.IsAnyOpen();
             });
-            // Without WPF's BypassLevelCheck the tint shows only while the engine does; refused otherwise.
-            // Null opacity for "off" (and an "on" with no intensity): the saved opacity is the user's.
-            PinkCommand.Surface = (on, opacity) => Start(() =>
-            {
-                var s = CoreSettings.Current;
-                var (oldOpacity, oldEnabled) = (s.PinkFilterOpacity, s.PinkFilterEnabled);
-                if (opacity is int o) s.PinkFilterOpacity = o;
-                s.PinkFilterEnabled = on;
-                if (Host is { } host) PinkFilterOverlay.Refresh(host);
-                if (on && !PinkFilterOverlay.IsShowing)
-                {
-                    // Refused: nothing showed, so the user's saved Pink filter settings stay as they were.
-                    (s.PinkFilterOpacity, s.PinkFilterEnabled) = (oldOpacity, oldEnabled);
-                    if (Host is { } h) PinkFilterOverlay.Refresh(h);
-                    return false;
-                }
-                CoreSettings.Save();
-                return true;
-            });
-            MediaCommand.VideoSurface = path => Start(() =>
-                CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
+            PinkCommand.Surface = (on, opacity) => OnUi(() => ApplyPink(Host, on, opacity));
+            // WPF App.AiEffects.cs:69-74: a video already playing refuses (a floating run would otherwise add a random window).
+            MediaCommand.VideoSurface = PlayVideo;
             MediaCommand.AudioSurface = PlayAudio;
             CoreAudio.StopSoundProvider = StopAudio;
             MediaCommand.ModVoiceLinesProvider = () => Dispatcher.UIThread.CheckAccess()
@@ -132,6 +119,38 @@ namespace ConditioningControlPanel.Avalonia
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() =>
                     Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, playSound: true, aiGenerated: aiGenerated));
         }
+
+        // WPF App.AiEffects.cs:64,128-150: start the overlay even with the engine off.
+        internal static bool ApplyPink(Window? host, bool on, int? opacity) => OnUi(() =>
+        {
+            var stopGeneration = PinkFilterOverlay.AiStopGeneration;
+            var remoteStopGeneration = RemoteCommands.OverlayStopGeneration;
+            return Start(() =>
+            {
+                if (stopGeneration != PinkFilterOverlay.AiStopGeneration ||
+                    remoteStopGeneration != RemoteCommands.OverlayStopGeneration) return false;
+                var s = CoreSettings.Current;
+                var (oldOpacity, oldEnabled, oldHold, wasStopped) = (s.PinkFilterOpacity, s.PinkFilterEnabled, PinkFilterOverlay.AiHold, RemoteCommands.OverlaysStopped);
+                if (opacity is int o) s.PinkFilterOpacity = o;
+                s.PinkFilterEnabled = on;
+                if (host is not null)
+                {
+                    RemoteCommands.ReleaseOverlayStop();
+                    PinkFilterOverlay.AiHold = true;
+                    PinkFilterOverlay.Refresh(host);
+                }
+                if (on && !PinkFilterOverlay.IsShowing)
+                {
+                    (s.PinkFilterOpacity, s.PinkFilterEnabled, PinkFilterOverlay.AiHold) = (oldOpacity, oldEnabled, oldHold);
+                    if (wasStopped) RemoteCommands.StopOverlays();
+                    if (host is not null) PinkFilterOverlay.Refresh(host);
+                    return false;
+                }
+                if (host is not null) SpiralOverlay.Refresh(host); // WPF OverlayService.Start / RefreshOverlays
+                CoreSettings.Save();
+                return true;
+            });
+        });
 
         private static Action? _stopAudio;
 
@@ -194,7 +213,7 @@ namespace ConditioningControlPanel.Avalonia
                     try
                     {
                         var playing = PlayAudioClip(path, CoreAudio.SoundGain(100, settings?.MasterVolume ?? 100),
-                            _ => { ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("sound", path, CoreEngine.IsRunning, false, DateTime.Now); started.TrySetResult(true); }, Finished);   // WPF AudioService.cs:863
+                            _ => { ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("sound", path, CoreEngine.IsRunning || ConditioningControlPanel.CoreSession.IsSessionRunning, false, DateTime.Now); started.TrySetResult(true); }, Finished);   // WPF AudioService.cs:863
                         if (done) playing?.Dispose(); else clip = playing;
                         if (clip == null) Finished(); else ApplyGain();
                     }

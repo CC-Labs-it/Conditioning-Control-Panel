@@ -25,17 +25,21 @@ function page({ availableAfter = 0, blocked = false, muted = false, manualTimers
         pause: () => videoPauses++,
         requestFullscreen: () => { enters++; return Promise.resolve(); },
     };
+    const docListeners = {};
+    const posts = [];
     const document = {
+        addEventListener: (event, handler) => { (docListeners[event] ??= []).push(handler); },
         querySelector: () => ++queries > availableAfter ? video : null,
         querySelectorAll: () => [video, audio],
         fullscreenElement: video,
         exitFullscreen: () => { exits++; },
     };
-    const window = { __ccpMuted: muted };
+    const window = { __ccpMuted: muted, chrome: { webview: { postMessage: m => posts.push(JSON.parse(m).type) } } };
     const context = { document, window, setTimeout: (f, ms) => { intervals.push(ms); if (manualTimers) timers.push(f); else f(); } };
     const run = () => runInNewContext(script, context);
     const stop = () => runInNewContext(stopScript, context);
-    return { video, document, window, run, stop, listeners, intervals, timers,
+    const fire = event => (docListeners[event] ?? []).forEach(h => h());
+    return { video, document, window, run, stop, listeners, intervals, timers, posts, fire,
         counts: () => ({ queries, plays, enters, exits }), pauses: () => [videoPauses, audioPauses] };
 }
 
@@ -49,6 +53,22 @@ test('waits for video, plays, requests fullscreen and exits on end or double cli
     p.listeners.dblclick({ preventDefault: () => prevented++, stopPropagation: () => prevented++ });
     assert.equal(prevented, 2);
     assert.equal(p.counts().exits, 2);
+});
+
+test('Esc or F11 leaving fullscreen posts fsExit once, only after fullscreen was entered', async () => {
+    const p = page();
+    p.document.fullscreenElement = null;
+    await p.run();
+    p.fire('fullscreenchange');
+    assert.deepEqual(p.posts, []);
+    p.document.fullscreenElement = p.video;
+    p.fire('fullscreenchange');
+    p.document.fullscreenElement = null;
+    p.fire('webkitfullscreenchange');
+    assert.deepEqual(p.posts, ['fsExit']);
+    p.fire('fullscreenchange');
+    p.listeners.ended();
+    assert.deepEqual(p.posts, ['fsExit']);
 });
 
 test('blocked playback requests fullscreen once the user starts it and keeps the saved mute', async () => {

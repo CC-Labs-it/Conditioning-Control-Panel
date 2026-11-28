@@ -199,6 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private void WireControls()
         {
             _btnPanelClose.Click += (_, _) => ClosePanel();
+            this.FindControl<Button>("BtnDeskCounter")!.Click += (_, _) => OpenCounterForDesk();
 
             _btnOpenCards.Click += (_, _) =>
             {
