@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Services;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -51,6 +53,7 @@ internal static class X11Overlay
     // then silently addresses the wrong thing.
     private const int ShapeInput = 2;        // X11/extensions/shapeconst.h
     private const int ClientMessage = 33;    // X11/X.h
+    private const int Below = 1;
     private const int Above = 0;             // X11/X.h
     private const long SubstructureMask = 1572864;  // SubstructureRedirect|SubstructureNotify
     private const long SourcePager = 2;      // netwm_def.h RequestSource::FromTool
@@ -71,6 +74,7 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern IntPtr XDefaultRootWindow(IntPtr display);
     [DllImport(LibX11)] private static extern IntPtr XInternAtom(IntPtr display, string name, bool onlyIfExists);
     [DllImport(LibX11)] private static extern int XChangeProperty(IntPtr display, IntPtr window, IntPtr property, IntPtr type, int format, int mode, IntPtr[] data, int count);
+    [DllImport(LibX11)] private static extern int XChangeProperty(IntPtr display, IntPtr window, IntPtr property, IntPtr type, int format, int mode, byte[] data, int count);
     [DllImport(LibX11)] private static extern IntPtr XGetSelectionOwner(IntPtr display, IntPtr selection);
     [DllImport(LibX11)] private static extern int XDefaultScreen(IntPtr display);
     [DllImport(LibX11)] private static extern int XSetInputFocus(IntPtr display, IntPtr window, int revertTo, nuint time);
@@ -270,8 +274,7 @@ internal static class X11Overlay
     /// configured the real one - measured on XWayland: 537x358 overlays on the non-primary
     /// screens in 14 of 25 runs, 0 of 25 with this order. So override-redirect goes on before
     /// any geometry, and geometry is set here so no caller can get the order wrong. Width/Height
-    /// use the window's own scaling after the move, i.e. the exact factor Avalonia multiplies back
-    /// by in Show().</para></summary>
+    /// use the target screen scaling, including when it differs from the initial window monitor.</para></summary>
     /// <param name="bounds">Where the overlay goes, in screen pixels (e.g. <c>Screen.Bounds</c>).
     /// Applied on every platform; only the override-redirect part is X11-only.</param>
     /// <returns>False when the platform cannot do this (no XID, no display, not 64-bit) or the server refused it.</returns>
@@ -283,8 +286,11 @@ internal static class X11Overlay
         var ok = SetOverrideRedirect(window, passive, topmost);
         window.WindowStartupLocation = WindowStartupLocation.Manual;
         window.Position = bounds.Position;
-        window.Width = bounds.Width / window.DesktopScaling;
-        window.Height = bounds.Height / window.DesktopScaling;
+        var center = new PixelPoint(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
+        var screen = ScreenList.Enumerate(window).FirstOrDefault(s => s.Bounds.Contains(center));
+        var scale = screen is { Scaling: > 0 } ? screen.Scaling : window.DesktopScaling;
+        window.Width = bounds.Width / scale;
+        window.Height = bounds.Height / scale;
         return ok;
     }
 
@@ -305,14 +311,34 @@ internal static class X11Overlay
             {
                 for (var i = 0; i < XSetWindowAttributesSize; i += IntPtr.Size) Marshal.WriteIntPtr(attrs, i, IntPtr.Zero);
                 Marshal.WriteInt32(attrs, 88, 1);
+                var type = OverlayWindowType(WindowManagerName);   // before the error flag: its reads are not this request
                 _xErrored = false;
                 XChangeWindowAttributes(_display, xid, CWOverrideRedirect, attrs);
+                var cls = System.Text.Encoding.ASCII.GetBytes(OverlayWmClass + "\0" + OverlayWmClass + "\0");
+                XChangeProperty(_display, xid, (IntPtr)67 /* XA_WM_CLASS */, (IntPtr)31 /* XA_STRING */, 8, 0 /* PropModeReplace */, cls, cls.Length);
+                if (type != null)
+                    XChangeProperty(_display, xid, XInternAtom(_display, "_NET_WM_WINDOW_TYPE", false), (IntPtr)4 /* XA_ATOM */, 32, 0,
+                        new[] { XInternAtom(_display, type, false) }, 1);
                 XSync(_display, false);
                 return !_xErrored; // e.g. BadWindow: the server refused the request
             }
             finally { Marshal.FreeHGlobal(attrs); }
         }
     }
+
+    /// <summary>WM_CLASS (name and class) of every override-redirect overlay, so blur / rounded-corner
+    /// effects' window-class exclude lists can name the overlays without the app's main window.</summary>
+    internal const string OverlayWmClass = "ccp-overlay";
+
+    /// <summary>The <c>_NET_WM_WINDOW_TYPE</c> an override-redirect overlay gets under <paramref name="wmName"/>,
+    /// null = keep Avalonia's NORMAL (ccp-bugs#1609). KWin takes an unmanaged window's type straight from
+    /// this property (x11window.cpp X11Window::windowType), and third-party KWin effects decorate every
+    /// NORMAL window: KDE-Rounded-Corners outlines Normal/Dialog (Window.cpp hasEffect), Better Blur DX's
+    /// force blur skips only desktop, dock and popup types (window.cpp neverForceBlur). A tooltip is a
+    /// popup to both, and stock KWin effects already treat unmanaged windows as popups (fadingpopups).
+    /// KWin only: picom's sample config dims tooltips, and no other WM runs these effects.</summary>
+    internal static string? OverlayWindowType(string? wmName)
+        => wmName == "KWin" ? "_NET_WM_WINDOW_TYPE_TOOLTIP" : null;
 
     /// <summary>X11 ownership, the form of Win32 GWL_HWNDPARENT that window managers keep: a
     /// window with WM_TRANSIENT_FOR set is stacked directly above its owner, raised and lowered
@@ -687,7 +713,40 @@ internal static class X11Overlay
         return RestackXid(xid, siblingXid);
     }
 
-    private static bool RestackXid(IntPtr xid, IntPtr siblingXid)
+    // WPF ChaosTunnelService.SinkToBottom: leave run chrome above the opaque background.
+    internal static bool Sink(TopLevel window)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.Sink(hwnd);
+        return TryGetXid(window, out var xid) && RestackXid(xid, IntPtr.Zero, Below);
+    }
+
+    internal static bool RestackBelow(TopLevel window, TopLevel sibling)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            return TryGet(sibling, OverlayBackend.Win32, out var other) && Win32Overlay.RestackBelow(hwnd, other);
+        if (!TryGetXid(window, out var xid) || !TryGetXid(sibling, out var target)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            var root = XDefaultRootWindow(_display); var atom = XInternAtom(_display, "_NET_CLIENT_LIST_STACKING", false);
+            if (XGetWindowProperty(_display, root, atom, 0L, 4096L, false, (IntPtr)33, out _, out var format,
+                out ulong count, out ulong remaining, out var data) != 0 || data == IntPtr.Zero) return false;
+            try
+            {
+                if (format != 32 || remaining != 0) return false;
+                int main = -1, tunnel = -1;
+                for (int i = 0; i < (int)count; i++)
+                {
+                    var id = Marshal.ReadIntPtr(data, i * IntPtr.Size);
+                    if (id == xid) main = i; if (id == target) tunnel = i;
+                }
+                return main >= 0 && tunnel >= 0 && (main <= tunnel || RestackXid(xid, target, Below));
+            }
+            finally { XFree(data); }
+        }
+    }
+
+    private static bool RestackXid(IntPtr xid, IntPtr siblingXid, int detail = Above)
     {
         lock (Gate)
         {
@@ -709,7 +768,7 @@ internal static class X11Overlay
                 Marshal.WriteInt32(e, 48, 32);                                            // format
                 Marshal.WriteIntPtr(e, 56, new IntPtr(SourcePager));                      // data.l[0] source
                 Marshal.WriteIntPtr(e, 64, siblingXid);                                   // data.l[1] sibling
-                Marshal.WriteIntPtr(e, 72, new IntPtr(Above));                            // data.l[2] detail
+                Marshal.WriteIntPtr(e, 72, new IntPtr(detail));                            // data.l[2] detail
 
                 // Addressed to the ROOT window, not to ours: the WM holds SubstructureRedirect
                 // there, and that is how the request reaches it.
@@ -749,19 +808,7 @@ internal static class X11Overlay
                 if (i < 0) { i = monitors.Count; monitors.Add(bounds); }
                 return new IntPtr(i + 1);
             }
-            // Managed video windows can be reparented into WM frames; stack the root children.
-            IntPtr RootChild(IntPtr h)
-            {
-                for (var i = 0; i < 32; i++)
-                {
-                    if (XQueryTree(_display, h, out _, out var parent, out var children, out _) == 0) return IntPtr.Zero;
-                    if (children != IntPtr.Zero) XFree(children);
-                    if (parent == root) return h;
-                    if (parent == IntPtr.Zero || parent == h) return IntPtr.Zero;
-                    h = parent;
-                }
-                return IntPtr.Zero;
-            }
+            IntPtr RootChild(IntPtr h) => RootChildOf(h, root);
             var clips = new List<(IntPtr, IntPtr)>();
             foreach (var v in videos)
                 if (v.IsVisible && TryGetXid(v, out var h)) clips.Add((RootChild(h), Monitor(v)));
@@ -781,6 +828,50 @@ internal static class X11Overlay
             return !_xErrored;
         }
     }
+    /// <summary>WPF OverlayService.ReassertOne PinBelowVideo (#497, #1016): put an override-redirect overlay
+    /// directly below the anchor on its own screen, else below the first visible anchor. Native Win32/X11 only.</summary>
+    internal static bool StackBelow(Window window, IReadOnlyList<Window> anchors)
+    {
+        var bounds = window.Screens.ScreenFromWindow(window)?.Bounds;
+        Window? anchor = null;
+        foreach (var a in anchors)
+        {
+            if (!a.IsVisible) continue;
+            if (a.Screens.ScreenFromWindow(a)?.Bounds == bounds) { anchor = a; break; }
+            anchor ??= a;
+        }
+        if (anchor == null) return true;
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            return TryGet(anchor, OverlayBackend.Win32, out var anchorHwnd) && Win32Overlay.StackBelow(hwnd, anchorHwnd);
+        if (!TryGetXid(window, out var xid) || !TryGetXid(anchor, out var anchorXid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            var root = XDefaultRootWindow(_display);
+            var (self, sibling) = (RootChildOf(xid, root), RootChildOf(anchorXid, root));
+            if (self == IntPtr.Zero || sibling == IntPtr.Zero || self == sibling) return false;
+            var changes = new StackChanges { Sibling = sibling, StackMode = 1 /* Below */ };
+            XConfigureWindow(_display, self, (1u << 5) | (1u << 6), ref changes);
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
+
+    // Managed video windows can be reparented into WM frames; stack the root children. Caller holds Gate.
+    private static IntPtr RootChildOf(IntPtr h, IntPtr root)
+    {
+        for (var i = 0; i < 32; i++)
+        {
+            if (XQueryTree(_display, h, out _, out var parent, out var children, out _) == 0) return IntPtr.Zero;
+            if (children != IntPtr.Zero) XFree(children);
+            if (parent == root) return h;
+            if (parent == IntPtr.Zero || parent == h) return IntPtr.Zero;
+            h = parent;
+        }
+        return IntPtr.Zero;
+    }
+
     private static List<IntPtr> QueryChildren(IntPtr root)
     {
         var result = new List<IntPtr>();

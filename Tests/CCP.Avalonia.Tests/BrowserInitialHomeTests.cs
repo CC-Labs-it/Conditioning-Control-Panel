@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -22,7 +23,10 @@ namespace CCP.Avalonia.Tests;
 public sealed class BrowserInitialHomeTests
 {
     private static Task Run(Action<MainShellWindow, SettingsTabView, WebHost, ModBrowser> check) =>
-        AvaloniaTestDispatcher.RunAsync(() =>
+        RunAsync((shell, page, host, mod) => { check(shell, page, host, mod); return Task.CompletedTask; });
+
+    private static Task RunAsync(Func<MainShellWindow, SettingsTabView, WebHost, ModBrowser, Task> check) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
         {
             Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);
             if (Application.Current is null)
@@ -33,6 +37,7 @@ public sealed class BrowserInitialHomeTests
             var oldSettings = CoreSettings.ServiceProvider;
             var settings = new SettingsService();
             CoreSettings.ServiceProvider = () => settings;
+            var oldOfflineMode = settings.Current.OfflineMode;
             settings.Current.OfflineMode = false;
             settings.Current.ActiveModId = BuiltInMods.CCPDefaultId;
             AvApp.StartMods();
@@ -47,20 +52,119 @@ public sealed class BrowserInitialHomeTests
                 shell.ShowTab("settings");
                 Dispatcher.UIThread.RunJobs();
                 var page = shell.Named<SettingsTabView>("SettingsTab")!;
-                check(shell, page, page.FindControl<WebHost>("BrowserWebHost")!, manifest.Browser);
+                await check(shell, page, page.FindControl<WebHost>("BrowserWebHost")!, manifest.Browser);
             }
             finally
             {
                 shell?.Close();
                 Dispatcher.UIThread.RunJobs();
                 manifest.Browser = oldBrowser;
+                settings.Current.OfflineMode = oldOfflineMode;
                 settings.SaveImmediate();
                 settings.SealForReset();
                 CoreSettings.ServiceProvider = oldSettings;
                 AvApp.ResetReleaseContent();
             }
-            return Task.CompletedTask;
         });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CleanupRestoresPersistedOfflineMode(bool callbackFails)
+    {
+        var snapshot = ProcessStateSnapshot.Take();
+        try
+        {
+            var settings = new SettingsService();
+            settings.Current.OfflineMode = false;
+            settings.SaveImmediate();
+            async Task Exercise() => await RunAsync((shell, page, host, mod) =>
+            {
+                CoreSettings.Current.OfflineMode = true;
+                if (callbackFails) throw new InvalidOperationException("expected");
+                return Task.CompletedTask;
+            });
+            if (callbackFails) await Assert.ThrowsAsync<InvalidOperationException>(Exercise);
+            else await Exercise();
+            Assert.False(new SettingsService().Current.OfflineMode);
+        }
+        finally { snapshot.Restore(); }
+    }
+
+    [Fact]
+    public Task AppAutoplayCutIsDeferredWithoutPlaybackCap() => Run((shell, page, host, mod) =>
+        WithVideoSettings(() =>
+    {
+        var scripts = new System.Collections.Generic.List<string>();
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        host.NavigationInvoker = _ => true;
+        shell.BrowserAutoPlayDelay = () => Task.CompletedTask;
+        CoreSettings.Current.VideoMaxDurationSeconds = 30;
+        CoreSettings.Current.VideoCutRandomStart = true;
+        string Start(bool user)
+        {
+            Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/video", true, user));
+            host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/video"));
+            var script = scripts.FindLast(x => x.Contains("const cutRequest ="))!;
+            if (user) Assert.Equal(WebHostTakeover.VideoAutoPlayScript, script);
+            else Assert.StartsWith(WebHost.CarrierShim, script);
+            return script.Split("const cutRequest = '")[1].Split("'")[0];
+        }
+        void Report(string token) => host.OnWebMessage("{\"type\":\"ccpCutMetadata\",\"request\":\"" + token + "\",\"dur\":120}");
+        int Seeks() => scripts.FindAll(x => x.Contains("if(window.__ccpCutRequest===")).Count;
+        var first = Start(false);
+        Report(first); Report(first);
+        Assert.Equal(0, Seeks());
+        var user = Start(true);
+        Report(user);
+        Assert.Equal(0, Seeks());
+        CoreSettings.Current.VideoCutRandomStart = false;
+        var disabled = Start(false);
+        Report(disabled);
+        Assert.Equal(0, Seeks());
+        CoreSettings.Current.VideoCutRandomStart = true;
+        var stale = Start(false);
+        Start(false);
+        Report(stale);
+        Assert.Equal(0, Seeks());
+        var panic = Start(false);
+        shell.PanicPauseBrowserMedia();
+        Report(panic);
+        Assert.Equal(0, Seeks());
+    }));
+
+    private static void WithVideoSettings(Action check)
+    {
+        var settings = CoreSettings.Current;
+        var oldLimit = settings.VideoMaxDurationSeconds;
+        var oldRandom = settings.VideoCutRandomStart;
+        try { check(); }
+        finally
+        {
+            settings.VideoMaxDurationSeconds = oldLimit;
+            settings.VideoCutRandomStart = oldRandom;
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task VideoCutSettingsAreRestoredEvenOnFailure(bool fail) => Run((shell, page, host, mod) =>
+    {
+        var settings = CoreSettings.Current;
+        var originalLimit = settings.VideoMaxDurationSeconds;
+        var originalRandom = settings.VideoCutRandomStart;
+        void Change()
+        {
+            settings.VideoMaxDurationSeconds = originalLimit == 30 ? 60 : 30;
+            settings.VideoCutRandomStart = !originalRandom;
+            if (fail) throw new InvalidOperationException("test cleanup");
+        }
+        if (fail) Assert.Throws<InvalidOperationException>(() => WithVideoSettings(Change));
+        else WithVideoSettings(Change);
+        Assert.Equal(originalLimit, settings.VideoMaxDurationSeconds);
+        Assert.Equal(originalRandom, settings.VideoCutRandomStart);
+    });
 
     [Fact]
     public Task AdapterReadyBeforeFirstPageCompletesMakesNextLinkHalf() => Run((shell, page, host, mod) =>
@@ -489,6 +593,320 @@ public sealed class BrowserInitialHomeTests
         Assert.True(host.IsVisible);
         failures[1]();
         Assert.False(host.IsVisible);
+    });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public Task StartupTimeoutShowsRetryAndRebuilds(int action) => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = timeout => timeouts.Add(timeout);
+        host.FailureWatchFactory = (_, _) => new Watch(() => { });
+        Assert.True(host.RecreateNativeView());
+        var oldView = host.NativeView!;
+        var oldAdapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(oldView, () => oldAdapter.Proxy);
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/initial"));
+        Assert.Single(timeouts);
+        timeouts[0]();
+        var prompt = page.FindControl<TextBlock>("BrowserLoadingText")!;
+        var status = page.FindControl<TextBlock>("TxtBrowserStatus")!;
+        Assert.False(host.HasEngine);
+        Assert.False(host.IsVisible);
+        Assert.True(prompt.IsVisible);
+        Assert.Equal(IconText.BareLoc("label_browser_start_failed_retry"), prompt.Text);
+        Assert.Equal(IconText.BareLoc("label_error_2"), IconText.Bare(status.Text));
+        WebHostPanicAdapterTests.NativeEvent(oldView, "ControlHostImplOnAdapterCreated", oldAdapter.Proxy);
+        Assert.Null(host.ScrolllerGate);
+        Assert.False(host.HasEngine);
+        Assert.True(prompt.IsVisible);
+
+        if (action == 0) shell.BrowserSiteToggle_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        else if (action == 1) shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        else if (action == 2) Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/retry"));
+        else page.OnBrowserPromptClick();
+        var newView = host.NativeView!;
+        Assert.NotSame(oldView, newView);
+        Assert.True(host.IsVisible);
+        var requested = host.Source;
+        Assert.NotNull(requested);
+        var newAdapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(newView, () => newAdapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(newView, "ControlHostImplOnAdapterCreated", newAdapter.Proxy);
+        host.NewScrolllerEngine()(true);
+        if (action == 2) Assert.Equal(requested, newAdapter.Current);
+        else Assert.Null(newAdapter.Current); // the test sandbox refuses public site URLs
+        WebHostPanicAdapterTests.NativeEvent(oldView, "ControlHostImplOnAdapterCreated", oldAdapter.Proxy);
+        timeouts[0]();
+        Assert.True(host.HasEngine);
+        Assert.True(host.IsVisible);
+        if (action == 2) Assert.Equal(requested, newAdapter.Current);
+        else Assert.Null(newAdapter.Current);
+    });
+
+    [Fact]
+    public Task StartupTimeoutFailsAdapterWithoutCore() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        Action? timeout = null;
+        host.StartupWatchScheduler = callback => timeout = callback;
+        host.StartupReadyProbe = _ => false;
+        host.FailureWatchFactory = (_, _) => new Watch(() => { });
+        Assert.True(host.RecreateNativeView());
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/initial"));
+        var adapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(host.NativeView!, () => adapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(host.NativeView!, "ControlHostImplOnAdapterCreated", adapter.Proxy);
+        Assert.NotNull(timeout);
+        timeout!();
+        Assert.False(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_browser_start_failed_retry"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
+    });
+
+    [Fact]
+    public Task StartupTimeoutDoesNotFailReadyAdapter() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        Action? timeout = null;
+        host.StartupWatchScheduler = callback => timeout = callback;
+        host.FailureWatchFactory = (_, _) => new Watch(() => { });
+        host.StartupReadyProbe = _ => true;
+        Assert.True(host.RecreateNativeView());
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/initial"));
+        var adapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(host.NativeView!, () => adapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(host.NativeView!, "ControlHostImplOnAdapterCreated", adapter.Proxy);
+        Assert.NotNull(timeout);
+        timeout!();
+        Assert.True(host.HasEngine);
+        Assert.True(host.IsVisible);
+    });
+
+    [Fact]
+    public Task ReattachedBrowserWithoutAdapterShowsFailureAndRetries() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = timeout => timeouts.Add(timeout);
+        host.StartupReadyProbe = _ => true;
+        host.FailureWatchFactory = (_, _) => new Watch(() => { });
+        Assert.True(host.RecreateNativeView());
+        var native = host.NativeView!;
+        var first = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(native, () => first.Proxy);
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/first"));
+        WebHostPanicAdapterTests.NativeEvent(native, "ControlHostImplOnAdapterCreated", first.Proxy);
+        Assert.Single(timeouts);
+        var container = Assert.IsAssignableFrom<Panel>(host.Parent);
+        container.Children.Remove(host);
+        var window = new Window { Content = host };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(native.IsAttachedToVisualTree());
+            var slot = Assert.IsAssignableFrom<Panel>(native.Parent);
+            CoreSettings.Current.OfflineMode = true;
+            WebHostPanicAdapterTests.NativeEvent(native, "ControlHostImplOnAdapterDeinitialized", first.Proxy);
+            slot.Children.Remove(native);
+            host.StartupReadyProbe = _ => false;
+            slot.Children.Add(native);
+            WebHostPanicAdapterTests.NativeEvent(native, "ControlHostImplOnAdapterCreated", first.Proxy);
+            Assert.Single(timeouts); // no startup failure while offline
+            CoreSettings.Current.OfflineMode = false;
+            host.Source = new Uri("http://127.0.0.1:5555/first"); // offline canceled the held request
+            WebHostPanicAdapterTests.NativeEvent(native, "ControlHostImplOnAdapterDeinitialized", first.Proxy);
+            slot.Children.Remove(native);
+            slot.Children.Add(native);
+            Assert.Equal(2, timeouts.Count);
+            timeouts[0](); // stale timer from the detached adapter
+            Assert.True(host.HasEngine);
+            timeouts[1](); // replacement never reports AdapterCreated
+            Assert.False(host.HasEngine);
+            Assert.Equal(IconText.BareLoc("label_browser_start_failed_retry"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
+            var retry = new Uri("http://127.0.0.1:5555/retry");
+            Assert.True(shell.NavigateToUrlInBrowser(retry.AbsoluteUri));
+            var replacement = host.NativeView!;
+            Assert.NotSame(native, replacement);
+            var adapter = new WebHostPanicAdapterTests.Adapter();
+            WebHostPanicAdapterTests.BindControl(replacement, () => adapter.Proxy);
+            WebHostPanicAdapterTests.NativeEvent(replacement, "ControlHostImplOnAdapterCreated", adapter.Proxy);
+            host.NewScrolllerEngine()(true);
+            Assert.Equal(retry, adapter.Current);
+        }
+        finally
+        {
+            CoreSettings.Current.OfflineMode = false;
+            window.Content = null;
+            window.Close();
+            container.Children.Add(host);
+        }
+    });
+
+    [Fact]
+    public Task FirstCompanionLinkStartsWatchAndNextLinkRetries() => RunAsync(async (shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = timeout => timeouts.Add(timeout);
+        host.FailureWatchFactory = (_, _) => new Watch(() => { });
+        Assert.True(host.RecreateNativeView());
+        var old = host.NativeView!;
+        var pending = shell.NavigateCompanionUrlAsync("http://127.0.0.1:5555/first");
+        Assert.False(pending.IsCompleted);
+        Assert.Single(timeouts);
+        timeouts[0]();
+        Assert.Null(await pending); // startup failure must not launch an external browser
+        Assert.False(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_browser_start_failed_retry"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
+        var retry = new Uri("http://127.0.0.1:5555/retry");
+        var next = shell.NavigateCompanionUrlAsync(retry.AbsoluteUri);
+        var replacement = host.NativeView!;
+        Assert.NotSame(old, replacement);
+        var adapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(replacement, () => adapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(replacement, "ControlHostImplOnAdapterCreated", adapter.Proxy);
+        host.NewScrolllerEngine()(true);
+        Assert.True(await next);
+        Assert.Equal(retry, adapter.Current);
+    });
+
+    [Fact]
+    public Task CompanionGateDeadlineReportsStartupFailure() => RunAsync(async (shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        host.StartupWatchScheduler = _ => { }; // delay the dispatcher watchdog past the gate deadline
+        Assert.True(host.RecreateNativeView());
+        var pending = shell.NavigateCompanionUrlAsync("http://127.0.0.1:5555/first");
+        Assert.Null(await pending.WaitAsync(TimeSpan.FromSeconds(25)));
+        Assert.False(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_browser_start_failed_retry"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task OfflineCancelsStartupWatchAndOnlineRearmsIt(bool deadlineBeforeUiSync, bool gateBlocksReload) => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = callback => timeouts.Add(callback);
+        Assert.True(host.RecreateNativeView());
+        if (gateBlocksReload) host.NewScrolllerEngine()(false);
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/first"));
+        Assert.Single(timeouts);
+        var prompt = page.FindControl<TextBlock>("BrowserLoadingText")!;
+        var status = page.FindControl<TextBlock>("TxtBrowserStatus")!;
+        CoreSettings.Current.OfflineMode = true;
+        if (deadlineBeforeUiSync) timeouts[0]();
+        shell.SyncOfflineModeState();
+        Assert.Single(timeouts); // parking on about:blank must not start another watch
+        timeouts[0]();
+        Assert.True(host.HasEngine);
+        Assert.True(prompt.IsVisible);
+        Assert.Equal(IconText.BareLoc("label_browser_disabled_in_offline_mode"), prompt.Text);
+        Assert.Equal("Offline", IconText.Bare(status.Text).Trim());
+
+        CoreSettings.Current.OfflineMode = false;
+        shell.SyncOfflineModeState();
+        Assert.Equal(2, timeouts.Count); // the restored page is still waiting for an engine
+        timeouts[0](); // a pre-offline deadline cannot fail the new attempt
+        Assert.True(host.HasEngine);
+        timeouts[1]();
+        Assert.False(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_browser_start_failed_retry"), prompt.Text);
+        Assert.Equal(IconText.BareLoc("label_error_2"), IconText.Bare(status.Text));
+    });
+
+    [Fact]
+    public Task OfflineCancelsPendingCompanionStartupWithoutRearmingAnIdleBrowser() => RunAsync(async (shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = callback => timeouts.Add(callback);
+        Assert.True(host.RecreateNativeView());
+        var pending = shell.NavigateCompanionUrlAsync("http://127.0.0.1:5555/first");
+        Assert.False(pending.IsCompleted);
+        Assert.Single(timeouts);
+        CoreSettings.Current.OfflineMode = true;
+        shell.SyncOfflineModeState();
+        Assert.Null(await pending);
+        timeouts[0]();
+        Assert.True(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_browser_disabled_in_offline_mode"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
+        Assert.Equal("Offline", IconText.Bare(page.FindControl<TextBlock>("TxtBrowserStatus")!.Text).Trim());
+        CoreSettings.Current.OfflineMode = false;
+        shell.SyncOfflineModeState();
+        Assert.Single(timeouts); // no page or companion request remains
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/retry"));
+        Assert.Equal(2, timeouts.Count);
+        timeouts[1]();
+        Assert.False(host.HasEngine);
+    });
+
+    [Fact]
+    public Task OfflineFlagAtCompanionGateDeadlineCancelsWait() => RunAsync(async (shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        host.StartupWatchScheduler = _ => { }; // let the companion gate deadline run first
+        Assert.True(host.RecreateNativeView());
+        var pending = shell.NavigateCompanionUrlAsync("http://127.0.0.1:5555/first");
+        CoreSettings.Current.OfflineMode = true; // shell has not applied the flag yet
+        Assert.Null(await pending.WaitAsync(TimeSpan.FromSeconds(25)));
+        shell.SyncOfflineModeState();
+        Assert.True(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_browser_disabled_in_offline_mode"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
+        Assert.Equal("Offline", IconText.Bare(page.FindControl<TextBlock>("TxtBrowserStatus")!.Text).Trim());
+    });
+
+    [Fact]
+    public Task OfflineAdapterThatBecomesReadyDoesNotRestartTheWatch() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = callback => timeouts.Add(callback);
+        host.StartupReadyProbe = _ => true;
+        host.FailureWatchFactory = (_, _) => new Watch(() => { });
+        Assert.True(host.RecreateNativeView());
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/first"));
+        Assert.Single(timeouts);
+        CoreSettings.Current.OfflineMode = true;
+        shell.SyncOfflineModeState();
+        var adapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(host.NativeView!, () => adapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(host.NativeView!, "ControlHostImplOnAdapterCreated", adapter.Proxy);
+        CoreSettings.Current.OfflineMode = false;
+        shell.SyncOfflineModeState();
+        Assert.Single(timeouts);
+        timeouts[0]();
+        Assert.True(host.HasEngine);
+    });
+
+    [Fact]
+    public Task OfflineCanceledPageDoesNotRestartTheWatch() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = callback => timeouts.Add(callback);
+        Assert.True(host.RecreateNativeView());
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/first"));
+        Assert.Single(timeouts);
+        CoreSettings.Current.OfflineMode = true;
+        shell.SyncOfflineModeState();
+        host.CancelHeldNavigation(); // a gate report may cancel the held page while offline
+        Assert.Null(host.Source);
+        CoreSettings.Current.OfflineMode = false;
+        shell.SyncOfflineModeState();
+        Assert.Single(timeouts);
+        timeouts[0]();
+        Assert.True(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_click_to_load_browser"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
     });
 
     private sealed class Watch(Action dispose) : IDisposable

@@ -269,7 +269,7 @@
                                             </LinearGradientBrush>
                                         </Border.Background>
                                         <fx:IconLabel TextElement.FontSize="11" TextElement.FontWeight="Bold" TextElement.Foreground="White"
-                                                   Key="exclusives_chip_lab"/>
+                                                   Key="plans_chip_unlock"/>
                                     </Border>
                                 </StackPanel>
                             </Border>
@@ -411,7 +411,7 @@
                                                             <GradientStop Color="{DynamicResource VaultVeilPartnerColor}" Offset="1"/>
                                                         </LinearGradientBrush>
                                                     </Border.Background>
-                                                    <fx:IconLabel Key="exclusives_chip_lab"
+                                                    <fx:IconLabel Key="plans_chip_unlock"
                                                                TextElement.Foreground="White" TextElement.FontSize="10" TextElement.FontWeight="Bold"/>
                                                 </Border>
                                             </StackPanel>

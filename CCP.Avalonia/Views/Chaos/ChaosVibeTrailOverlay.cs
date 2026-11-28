@@ -26,14 +26,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <see cref="X11Overlay.SetClickThrough"/>; a platform that refuses click-through or
     /// per-pixel transparency gets no trail rather than a full-screen block (PinkFilterOverlay.Accept).</para>
     ///
-    /// <para>ponytail: nothing calls <see cref="Start"/> yet - the VibePopping vibe window (WPF
-    /// ChaosModeService.cs:2709/:2946) and EnsureCreated at run start (:455) need the bubble field,
-    /// which <see cref="ChaosRunHost"/> does not have. Teardown and panic already close it.</para>
     /// </summary>
     internal sealed class ChaosVibeTrailOverlay : Window
     {
         private static ChaosVibeTrailOverlay? _active;
         internal static Action<ChaosVibeTrailOverlay>? BeforePrewarmForTests;
+        internal static bool SkipPlatformChecksForTests;
         private static bool _refused;   // the platform said no once: later vibes don't rebuild and re-warn
         internal static ChaosVibeTrailOverlay? Active => _active;
 
@@ -75,7 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try
             {
                 if (_refused) return;
-                if (!X11Overlay.IsAvailable) { Log.Debug("ChaosVibeTrail: no X11 display, no trail"); return; }
+                if (!SkipPlatformChecksForTests && !X11Overlay.IsAvailable) { Log.Debug("ChaosVibeTrail: no X11 display, no trail"); return; }
                 _active ??= new ChaosVibeTrailOverlay();
                 var w = _active;
                 if (!w.IsVisible)
@@ -90,7 +88,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         return;
                     }
                 }
-                X11Overlay.Raise(w);   // un-hiding doesn't re-stack (WPF ChaosWindowZ.RaiseAboveVideo)
+                if (!CoreSettings.Current.ChaosPinOnTop) w.Topmost = false;
+                else if (CoreEngine.Video?.IsPlaying == true) X11Overlay.Raise(w);   // WPF ChaosWindowZ.RaiseAboveVideo
                 w.BeginFollow();
             }
             catch (Exception ex) { Log.Debug("ChaosVibeTrail.Start: {E}", ex.Message); }

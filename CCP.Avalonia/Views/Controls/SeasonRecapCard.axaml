@@ -2,7 +2,7 @@
      Structure, order, spacing and every resource key preserved. Deviations, all forced:
 
        Resources/Theme/SeasonRecapCard.xaml    -> the same keys as view-local resources below
-                                                  (ponytail: local copy, hoist when a second view
+                                                  (ponytail: local copy, hoist when a third view
                                                   needs them). DynamicResource like WPF: the card
                                                   writes the per-mod palette (Core RecapPalette)
                                                   into these local keys on attach and ModChanged.
@@ -38,7 +38,7 @@
          seasonal neon art is a faded backdrop. Badges use the real dashboard feature icons. -->
 
     <UserControl.Resources>
-        <!-- ponytail: local copy of Resources/Theme/SeasonRecapCard.xaml, hoist when a second view needs it -->
+        <!-- ponytail: local copy of Resources/Theme/SeasonRecapCard.xaml, hoist when a third view needs it -->
         <!-- Structural darks / constants -->
         <Color x:Key="RecapVoid">#FF0A0414</Color>
         <Color x:Key="RecapPanel">#FF150A26</Color>
