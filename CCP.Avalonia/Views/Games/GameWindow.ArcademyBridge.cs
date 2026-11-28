@@ -53,6 +53,8 @@ internal sealed partial class GameWindow
     // only from the folders and presets init.settings carries; each list is wrapped on its own.
     private static JObject ArcademySettingsBag(JObject bag)
     {
+        try { bag["localAssets"] = ConditioningControlPanel.Services.Arcademy.ArcademyLocalAssets.Build(CorePaths.EffectiveAssets, CoreSettings.Current.DisabledAssetPaths, WebAssetServer.AssetPath); }
+        catch (Exception ex) { Log.Debug("[Arcademy] local assets manifest failed: {E}", ex.Message); }
         try { bag["localFolders"] = ArcademyLocalFolders(); }
         catch (Exception ex) { Log.Debug("[Arcademy] local folders unavailable: {E}", ex.Message); }
         try
@@ -161,7 +163,7 @@ internal sealed partial class GameWindow
             (pool[i], pool[j]) = (pool[j], pool[i]);
             var file = pool[i];
             var ext = Path.GetExtension(file).ToLowerInvariant();
-            bool animated = ext == ".webp" && probed++ < 200 && IsAnimatedWebpFile(file);
+            bool animated = ext == ".webp" && probed++ < 200 && ConditioningControlPanel.Services.Arcademy.ArcademyLocalAssets.IsAnimatedWebpFile(file);
             if (kind == "loop" && ext == ".webp" && !animated) continue;
             var rowKind = animated ? "loop" : kind;
             var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
@@ -177,17 +179,6 @@ internal sealed partial class GameWindow
             rows.Add(new { url, kind = rowKind, mime, tag, src = presetSrc ?? folder, poster = (string?)null });
         }
         return rows;
-    }
-
-    private static bool IsAnimatedWebpFile(string file)
-    {
-        try
-        {
-            using var fs = File.OpenRead(file);
-            var head = new byte[21];
-            return ScrolllerDiskCache.IsAnimatedWebp(head, fs.Read(head, 0, head.Length));
-        }
-        catch { return false; }
     }
 
     // WPF ArcademyHostService.cs:5281-5376: every reqId gets one sub-probe; a found sub joins the LIBRARY only,
