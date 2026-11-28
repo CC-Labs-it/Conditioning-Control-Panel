@@ -130,7 +130,7 @@ public sealed class BrainDrainIntegrationTests
         var card = new BrainDrainFeatureControl(); owner.Content = card;
         var check = card.FindControl<CheckBox>("ChkAllowCapture")!;
         Assert.True(check.IsChecked); Assert.False(service.HasPendingSave);
-        var calls = new List<uint>(); BrainDrainOverlay.Capture = (_, flag) => calls.Add(flag);
+        var calls = new List<uint>(); BrainDrainOverlay.Capture = (_, flag) => { calls.Add(flag); return true; };
         BrainDrainOverlay.Start(owner); calls.Clear();
         check.IsChecked = false;
         Assert.False(service.Current.AllowOverlayCapture); Assert.True(service.HasPendingSave);

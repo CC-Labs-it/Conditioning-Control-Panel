@@ -62,8 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
                 CoreSettings.Save();
             };
             // WPF SliderBlurStrength_Changed / ChkMelt_Changed / ChkAllowCapture_Changed
-            // (.xaml.cs:291-319,346-357): saved preferences. The desktop blur and melt visual has
-            // not landed on this head, so nothing reads these three here yet.
+            // (.xaml.cs:291-319,346-357): saved preferences. BrainDrainOverlay reads blur strength and capture
+            // visibility on its reconcile tick; the melt visual has not landed on this head.
             _blur.ValueChanged += (_, e) =>
             { if (!_loading && CoreSettings.Current.BrainDrainBlurStrength != (int)e.NewValue) { CoreSettings.Current.BrainDrainBlurStrength = (int)e.NewValue; CoreSettings.Save(); } };
             _melt.IsCheckedChanged += (_, _) =>
