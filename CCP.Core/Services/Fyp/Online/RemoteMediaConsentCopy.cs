@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Services.Fyp.Online;
 /// communities a player picks or types in.</para>
 ///
 /// <para>A language file entry under <see cref="TitleKey"/> / <see cref="MessageKey"/> still wins over
-/// these English words; none exists today.</para>
+/// these English words, so en.json and the nine translations must say the same.</para>
 /// </summary>
 internal static class RemoteMediaConsentCopy
 {

@@ -9592,8 +9592,8 @@
   "label_active_phrase_count": "{0} active",
   "remote_media_offer_title": "Media without the download",
   "remote_media_offer_summary": "Your folders are empty - she can stream from the online pool instead.",
-  "title_remote_media_consent": "Use Reddit media?",
-  "msg_remote_media_consent": "Pull media from Reddit?\n\nThe app will stream images and clips from the subreddits you pick, straight from your own machine. Nothing is saved to your disk, nothing is uploaded, and none of it goes through our servers.\n\nIt is adult content and it is not curated by us - you choose the niches and subreddits, and only those are ever fetched.\n\nTurn it on?",
+  "title_remote_media_consent": "Use Scrolller media?",
+  "msg_remote_media_consent": "Pull media from Scrolller?\n\nThe app will stream images and clips from the subreddits you pick, straight from your own machine. Copies stay briefly on your own disk, nothing is uploaded, and none of it goes through our servers.\n\nIt is adult content and it is not curated by us - you choose the niches and subreddits, and only those are ever fetched.\n\nTurn it on?",
   "lucky_xp_multiplier": "{0}x XP",
   "chaos_dvd_title": "Porn DVD",
   "chaos_dvd_loading": "now loading",
@@ -10200,5 +10200,6 @@
   "promo_hours": "hours",
   "promo_minutes": "min",
   "native_repair_title": "Conditioning Control Panel - startup failed",
-  "native_repair_message": "Conditioning Control Panel could not load its graphics libraries, so it can't start.\n\nClose the app, delete this temporary folder, then launch again:\n\n{0}\n\nIt is rebuilt automatically. If that does not help, check whether antivirus quarantined the app's files.\n\nDetails: {1}"
+  "native_repair_message": "Conditioning Control Panel could not load its graphics libraries, so it can't start.\n\nClose the app, delete this temporary folder, then launch again:\n\n{0}\n\nIt is rebuilt automatically. If that does not help, check whether antivirus quarantined the app's files.\n\nDetails: {1}",
+  "brain_drain_capture_failed": "Brain Drain could not capture the screen. Please send a bug report."
 }

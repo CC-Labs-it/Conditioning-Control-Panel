@@ -8833,8 +8833,8 @@
   "label_active_phrase_count": "{0}개 활성",
   "remote_media_offer_title": "다운로드 없는 미디어",
   "remote_media_offer_summary": "폴더가 비어 있습니다 - 대신 그녀가 온라인 미디어를 스트리밍할 수 있습니다.",
-  "title_remote_media_consent": "Reddit 미디어를 사용할까요?",
-  "msg_remote_media_consent": "Reddit에서 미디어를 가져올까요?\n\n앱이 직접 고른 서브레딧의 이미지와 클립을 내 컴퓨터로 바로 스트리밍합니다. 디스크에는 아무것도 저장되지 않고, 아무것도 업로드되지 않으며, 저희 서버를 거치지도 않습니다.\n\n성인용 콘텐츠이며 저희가 선별하지 않습니다 - 니치와 서브레딧은 직접 고르고, 가져오는 것은 그것뿐입니다.\n\n켤까요?",
+  "title_remote_media_consent": "Scrolller 미디어를 사용할까요?",
+  "msg_remote_media_consent": "Scrolller에서 미디어를 가져올까요?\n\n앱이 직접 고른 서브레딧의 이미지와 클립을 내 컴퓨터로 바로 스트리밍합니다. 사본은 내 디스크에 잠시 남지만, 아무것도 업로드되지 않으며, 저희 서버를 거치지도 않습니다.\n\n성인용 콘텐츠이며 저희가 선별하지 않습니다 - 니치와 서브레딧은 직접 고르고, 가져오는 것은 그것뿐입니다.\n\n켤까요?",
   "lucky_xp_multiplier": "{0}x XP",
   "chaos_dvd_title": "포르노 DVD",
   "chaos_dvd_loading": "불러오는 중",
@@ -9444,5 +9444,6 @@
   "promo_hours": "시간",
   "promo_minutes": "분",
   "native_repair_title": "Conditioning Control Panel - 시작 실패",
-  "native_repair_message": "그래픽 라이브러리를 불러올 수 없어 Conditioning Control Panel을 시작할 수 없습니다.\n\n앱을 닫고 다음 임시 폴더를 삭제한 후 다시 실행하세요.\n\n{0}\n\n폴더는 자동으로 다시 만들어집니다. 문제가 계속되면 백신이 파일을 격리했는지 확인하세요.\n\n세부 정보: {1}"
+  "native_repair_message": "그래픽 라이브러리를 불러올 수 없어 Conditioning Control Panel을 시작할 수 없습니다.\n\n앱을 닫고 다음 임시 폴더를 삭제한 후 다시 실행하세요.\n\n{0}\n\n폴더는 자동으로 다시 만들어집니다. 문제가 계속되면 백신이 파일을 격리했는지 확인하세요.\n\n세부 정보: {1}",
+  "brain_drain_capture_failed": "Brain Drain이 화면을 캡처하지 못했습니다. 버그를 신고해 주세요."
 }

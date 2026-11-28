@@ -71,7 +71,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private System.Threading.CancellationTokenSource? _crumbFadeRun;
         internal System.Threading.Tasks.Task CrumbFadeCompletion { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
         internal double CrumbOpacity => _crumbPanel.Opacity;
-        private readonly StackPanel _pillRow = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
+        // Gap 3, not WPF's PillGap 6: Skia lays Inter wider than WPF lays Segoe UI, and a free account's Companion
+        // tray (three locked pills with tier signs) ran 18 px under the help button at the default 1469 px strip
+        // once the room title crumb grew (NavRehomeShellTests.TheTrayEndsBeforeTheHelpButtonAt1469AndSettingsHidesIt).
+        private readonly StackPanel _pillRow = new() { Orientation = Orientation.Horizontal, Spacing = 3 };
         private readonly Border _track;
         private readonly Panel _trayHost;
         private readonly Border _accentLine = new() { Height = 2, CornerRadius = new CornerRadius(1), Opacity = 0.85 };
