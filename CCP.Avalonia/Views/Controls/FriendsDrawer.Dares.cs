@@ -116,12 +116,11 @@ public sealed partial class FriendsDrawer
             top.Inlines.Add(new global::Avalonia.Controls.Documents.Run(" · " + Loc.Get("dares_ended_early")) { Foreground = Gold });
         mid.Children.Add(top);
 
-        // What it is about, short: the kind's icon and the "what" words.
-        var what = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-        var tone = DareSlipRules.ToneOf(bet.What.Kind);
+        // What it is about, short: a small handwritten fill, the kind's icon and colour (WPF :148).
         int.TryParse(bet.What.Kind == DareKind.Dare ? bet.What.Target : null, out var wn);
-        what.Children.Add(new IconGlyph { Kind = DareLook.ToneKind(tone), Size = 11, Foreground = new SolidColorBrush(DareLook.ToneColor(tone)), Margin = new Thickness(0, 0, 5, 0) });
-        what.Children.Add(Label(DareSlipRules.WhatText(bet.Type, bet.What, wn, Loc.Get), 11.5, Muted));
+        var what = DareLook.Fill(new DareSeg(DareSegKind.Chip, DareSlipRules.WhatText(bet.Type, bet.What, wn, Loc.Get), DareStep.What,
+            DareSlipRules.ToneOf(bet.What.Kind), DareSlipRules.TipOf(bet.What.Kind)), small: true);
+        what.Margin = new Thickness(0, 4, 0, 0);
         mid.Children.Add(what);
 
         if (state == DareRowState.Running) mid.Children.Add(Progress(bet));
@@ -130,10 +129,9 @@ public sealed partial class FriendsDrawer
         if (state is DareRowState.IOwe or DareRowState.TheyOwe)
         {
             var stake = state == DareRowState.IOwe ? bet.MyStake : bet.TheirStake;
-            var words = Loc.GetF(state == DareRowState.IOwe ? "dares_i_owe" : "dares_they_owe", DareSlipRules.StakeText(stake, stake.DareNumber, Loc.Get));
-            var owe = Label(words, 11.5, new SolidColorBrush(DareLook.ToneColor(DareSlipRules.ToneOf(stake.Kind))));
-            (owe.Margin, owe.Tag) = (new Thickness(0, 2, 0, 0), "dares-owe");
-            mid.Children.Add(owe);
+            mid.Children.Add(OweRow(Loc.Get(state == DareRowState.IOwe ? "dares_i_owe" : "dares_they_owe"),
+                new DareSeg(DareSegKind.Chip, DareSlipRules.StakeText(stake, stake.DareNumber, Loc.Get), DareStep.Mine,
+                    DareSlipRules.ToneOf(stake.Kind), DareSlipRules.TipOf(stake.Kind))));
         }
         Grid.SetColumn(mid, 1);
         g.Children.Add(mid);
@@ -164,6 +162,18 @@ public sealed partial class FriendsDrawer
         Grid.SetColumn(buttons, 2);
         g.Children.Add(buttons);
         row.Child = g;
+        return row;
+    }
+
+    /// <summary>WPF :201: "I owe [fill]", the template's words around a small handwritten fill of the stake.</summary>
+    private static Control OweRow(string template, DareSeg stake)
+    {
+        var row = new WrapPanel { Margin = new Thickness(0, 4, 0, 0), Tag = "dares-owe" };
+        int at = template.IndexOf("{0}", StringComparison.Ordinal);
+        string before = at < 0 ? template : template[..at], after = at < 0 ? "" : template[(at + 3)..];
+        if (before.Trim().Length > 0) { var b = Label(before.Trim(), 11.5, Text, Display); b.Margin = new Thickness(0, 0, 5, 0); row.Children.Add(b); }
+        row.Children.Add(DareLook.Fill(stake, small: true));
+        if (after.Trim().Length > 0) { var a = Label(after.Trim(), 11.5, Text, Display); a.Margin = new Thickness(5, 0, 0, 0); row.Children.Add(a); }
         return row;
     }
 

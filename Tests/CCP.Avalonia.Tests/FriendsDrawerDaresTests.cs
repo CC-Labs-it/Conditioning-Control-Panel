@@ -71,6 +71,10 @@ public sealed class FriendsDrawerDaresTests
             d.Render();
             Assert.True(d.DaresStrip.IsVisible);
             Assert.Equal(new[] { "o1", "b1" }, d.DareRowIds);   // WPF StripOrder: the offer leads, then what I owe
+            // WPF FriendsDrawer.Dares.cs:151,201: the "what" and the owed stake are small handwritten chips with the kind's help.
+            Assert.NotNull(ToolTip.GetTip(Tagged<Control>(d, "dares-chip:What")));
+            var owe = Tagged<Control>(d, "dares-owe");
+            Assert.NotNull(ToolTip.GetTip(Tagged<Control>(owe, "dares-chip:Mine")));
 
             Press(d, "dares-answer");
             Assert.NotNull(DareOfferCard.Open);

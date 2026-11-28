@@ -279,34 +279,38 @@ internal static class DareLook
     }
 
     /// <summary>WPF :336-388, read only: a white handwritten box, its kind's colour on the border and the icon;
-    /// the friend shows a round initial; a Lockdown is ink inverted.</summary>
-    public static Control Fill(DareSeg seg)
+    /// the friend shows a round initial; a Lockdown is ink inverted. <paramref name="small"/> = the drawer strip's size, no shadow.</summary>
+    public static Control Fill(DareSeg seg, bool small = false)
     {
         bool inverted = seg.Tone == DareTone.Lockdown, who = seg.Tone == DareTone.Who;
         var c = who ? FriendColor(seg.Text) : ToneColor(seg.Tone);
         IBrush line = inverted ? Brushes.White : new SolidColorBrush(c);
+        double iconSize = small ? 17 : 24;
         var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        if (who) sp.Children.Add(InitialDisc(seg.Text, 24, c));
+        if (who) sp.Children.Add(InitialDisc(seg.Text, iconSize, c));
         else
         {
             var icon = new Grid { VerticalAlignment = VerticalAlignment.Center };
             // WPF :346: Sparkles' star is filled gold under its outline.
-            if (seg.Tone == DareTone.Sp) icon.Children.Add(new IconGlyph { Kind = IconKind.Star, Variant = IconVariant.Filled, Size = 24, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD4, 0x5E)) });
-            icon.Children.Add(Icon(ToneKind(seg.Tone), 24, line));
+            if (seg.Tone == DareTone.Sp) icon.Children.Add(new IconGlyph { Kind = IconKind.Star, Variant = IconVariant.Filled, Size = iconSize, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD4, 0x5E)) });
+            icon.Children.Add(Icon(ToneKind(seg.Tone), iconSize, line));
             sp.Children.Add(icon);
         }
-        var words = Hand(seg.Text, 29, inverted ? Brushes.White : InkBrush);
-        words.Margin = new Thickness(6, 0, 0, 2);
+        var words = Hand(seg.Text, small ? 20 : 29, inverted ? Brushes.White : InkBrush);
+        words.Margin = new Thickness(small ? 4 : 6, 0, 0, small ? 1 : 2);
         words.VerticalAlignment = VerticalAlignment.Center;
+        if (small) words.TextTrimming = TextTrimming.CharacterEllipsis;
         sp.Children.Add(words);
-        var g = new Grid { Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
+        var g = new Grid { Margin = small ? new Thickness(0) : new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
             Tag = "dares-chip:" + seg.Step };
-        g.Children.Add(new Border { Background = new SolidColorBrush(Color.FromArgb(0x22, 0, 0, 0)), CornerRadius = new CornerRadius(8), Margin = new Thickness(1, 2, -1, -2) });
+        if (!small) g.Children.Add(new Border { Background = new SolidColorBrush(Color.FromArgb(0x22, 0, 0, 0)), CornerRadius = new CornerRadius(8), Margin = new Thickness(1, 2, -1, -2) });
         g.Children.Add(new Border
         {
             Child = sp, Background = inverted ? InkBrush : new SolidColorBrush(Color.FromRgb(0xFF, 0xFA, 0xF8)),
-            BorderBrush = inverted ? InkBrush : line, BorderThickness = new Thickness(seg.Tone == DareTone.When ? 1.5 : 2),
-            CornerRadius = new CornerRadius(8), Padding = new Thickness(7, 3, 10, 3),
+            // WPF :358: small sits on the drawer's dark violet, so an inverted fill keeps a lilac edge.
+            BorderBrush = inverted ? (small ? new SolidColorBrush(Color.FromRgb(0x8F, 0x6F, 0xE0)) : InkBrush) : line,
+            BorderThickness = new Thickness(seg.Tone == DareTone.When || small ? 1.5 : 2),
+            CornerRadius = new CornerRadius(small ? 6 : 8), Padding = small ? new Thickness(4, 1, 7, 1) : new Thickness(7, 3, 10, 3),
         });
         if (seg.TipKey != null) ToolTip.SetTip(g, Loc.Get(seg.TipKey));
         AutomationProperties.SetName(g, seg.Text);
