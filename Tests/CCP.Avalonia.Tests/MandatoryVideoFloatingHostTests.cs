@@ -12,6 +12,7 @@ using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -44,9 +45,10 @@ public sealed class MandatoryVideoFloatingHostTests
         public bool IsSeekable => true;
         public bool HasVideo => true;
         public bool Paused, Stopped;
+        public Action? BeforeStop;
         public bool? AudioOff;
         public void SetPause(bool paused) => Paused = paused;
-        public void Stop() => Stopped = true;
+        public void Stop() { BeforeStop?.Invoke(); Stopped = true; }
         public void Dispose() { }
         public readonly List<bool> AudioCalls = new();
         public void SetAudioOff(bool off) { AudioOff = off; AudioCalls.Add(off); }
@@ -79,6 +81,7 @@ public sealed class MandatoryVideoFloatingHostTests
                 = (true, 3, together, keepSound, false, false, false, false, 0, false);
             var decoders = new List<Decoder>();
             var o = new MandatoryVideoOverlay(() => { var d = new Decoder(); decoders.Add(d); return d; });
+            o.FloatingInputRegionWriter = (_, _, _) => true;
             o.Scheduler = new MandatoryVideoScheduler(o, new StillTime(), () => new[] { "/v/a.mp4", "/v/b.mp4", "/v/c.mp4", "/v/d.mp4", "/v/e.mp4" });
             try
             {
@@ -96,6 +99,165 @@ public sealed class MandatoryVideoFloatingHostTests
             }
             return Task.CompletedTask;
         });
+
+    [Fact]
+    public Task Panic_stops_an_added_window_reveal_on_the_same_tick() => Run((o, decoders) =>
+    {
+        var settings = CoreSettings.Current;
+        var oldLevel = settings.MotionLevel;
+        var oldProbe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+        var previous = CoreEngine.Video;
+        try
+        {
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            CoreEngine.Video = o.Scheduler;
+            var regions = new List<PixelRect[]?>();
+            o.FloatingInputRegionWriter = (_, rects, _) => { regions.Add(rects); return true; };
+            Assert.True(o.TryFloatingTrigger(userInitiated: true));
+            var joined = Assert.Single(o.Floaters);
+            var reveal = Assert.IsType<FloatingVideoReveal>(joined.Surface.Reveal);
+            Assert.True(reveal.IsAnimating);
+            Assert.NotEmpty(regions);
+            Assert.NotNull(regions[^1]);
+            var stoppedBeforeDecoder = false;
+            decoders[^1].BeforeStop = () => stoppedBeforeDecoder = !reveal.IsAnimating && regions[^1] == null;
+            PanicSurfaces.All.Single(s => s.Id == "engine").Stop(null);
+            Assert.True(stoppedBeforeDecoder);
+            Assert.Null(regions[^1]);
+            Assert.False(reveal.IsAnimating);
+            Assert.False(joined.Window.IsVisible);
+            reveal.RevealAt(260);
+            Assert.False(joined.Window.IsVisible);
+        }
+        finally
+        {
+            CoreEngine.Video = previous;
+            settings.MotionLevel = oldLevel;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = oldProbe;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Joined_controls_wait_for_reveal_and_do_not_return_after_panic(bool panic) => Run((o, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var oldLevel = settings.MotionLevel;
+        var oldProbe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+        var oldTime = BeatLoop.Time;
+        var previous = CoreEngine.Video;
+        var time = new SteppedTime();
+        try
+        {
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            BeatLoop.Time = time;
+            CoreEngine.Video = o.Scheduler;
+            Assert.True(o.TryFloatingTrigger(userInitiated: true));
+            var joined = Assert.Single(o.Floaters);
+            Assert.True(joined.Surface.Reveal!.IsAnimating);
+            Assert.False(joined.Surface.Buttons.Row.IsVisible);
+            time.Advance(TimeSpan.FromMilliseconds(259));
+            BeatLoop.StepAll();
+            Assert.False(joined.Surface.Buttons.Row.IsVisible);
+            if (panic)
+            {
+                PanicSurfaces.All.Single(s => s.Id == "engine").Stop(null);
+                Assert.False(joined.Window.IsVisible);
+                time.Advance(TimeSpan.FromMilliseconds(100));
+                BeatLoop.StepAll();
+                Assert.False(joined.Surface.Buttons.Row.IsVisible);
+            }
+            else
+            {
+                time.Advance(TimeSpan.FromMilliseconds(1));
+                BeatLoop.StepAll();
+                Assert.True(joined.Surface.Buttons.Row.IsVisible);
+                Assert.False(joined.Surface.Reveal.IsAnimating);
+            }
+        }
+        finally
+        {
+            CoreEngine.Video = previous;
+            BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = oldProbe;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    });
+
+    [Fact]
+    public Task Joined_controls_recheck_lockdown_when_reveal_finishes() => Run((o, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var oldLevel = settings.MotionLevel;
+        var oldProbe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+        var oldTime = BeatLoop.Time;
+        var previous = LockdownService.Current;
+        var lockdown = new LockdownService();
+        var time = new SteppedTime();
+        try
+        {
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            BeatLoop.Time = time;
+            LockdownService.Current = lockdown;
+            Assert.True(o.TryFloatingTrigger(userInitiated: true));
+            var joined = Assert.Single(o.Floaters);
+            Assert.False(joined.Surface.Buttons.Row.IsVisible);
+            lockdown.Activate(TimeSpan.FromMinutes(30));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(joined.Surface.Buttons.Close.IsVisible);
+            time.Advance(TimeSpan.FromMilliseconds(260));
+            BeatLoop.StepAll();
+            Assert.True(joined.Surface.Buttons.Row.IsVisible);
+            Assert.True(joined.Surface.Buttons.Mute.IsVisible);
+            Assert.False(joined.Surface.Buttons.Close.IsVisible);
+        }
+        finally
+        {
+            lockdown.Deactivate();
+            lockdown.Dispose();
+            LockdownService.Current = previous;
+            BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = oldProbe;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    });
+
+    [Theory]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, true)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, false)]
+    public Task Joined_controls_show_immediately_without_an_animation(ConditioningControlPanel.Models.MotionLevel level, bool regionAvailable) => Run((o, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var oldLevel = settings.MotionLevel;
+        var oldProbe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+        try
+        {
+            settings.MotionLevel = level;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            o.FloatingInputRegionWriter = (_, _, _) => regionAvailable;
+            Assert.True(o.TryFloatingTrigger(userInitiated: true));
+            var joined = Assert.Single(o.Floaters);
+            Assert.False(joined.Surface.Reveal!.IsAnimating);
+            Assert.True(joined.Surface.Buttons.Row.IsVisible);
+        }
+        finally
+        {
+            settings.MotionLevel = oldLevel;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = oldProbe;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    });
 
     [Fact]
     public Task Joined_blur_uses_its_own_frames_and_panic_releases_it() => Run((o, decoders) =>

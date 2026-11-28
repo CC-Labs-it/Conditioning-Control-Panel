@@ -1,8 +1,12 @@
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Xunit;
 
@@ -15,6 +19,154 @@ public class FloatingVideoRevealTests
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+    }
+
+    [Theory]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, true)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, false)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Off, false)]
+    public async Task Added_window_reveals_from_its_centre_only_at_full_motion(ConditioningControlPanel.Models.MotionLevel level, bool animates)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var settings = ConditioningControlPanel.CoreSettings.Current;
+            var saved = (settings.MotionLevel, settings.GentleVisuals);
+            var probe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+            var savedTime = BeatLoop.Time;
+            var time = new SteppedTime();
+            BeatLoop.Time = time;
+            settings.MotionLevel = level;
+            settings.GentleVisuals = false;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            var picture = new Border { Background = Brushes.Black };
+            var frame = new Border { Child = picture };
+            var window = new Window { Width = 400, Height = 200, Position = new PixelPoint(100, 200), ShowActivated = false, Content = frame };
+            var requests = new List<(PixelRect[]? Rects, bool BeforeShow, bool Sync)>();
+            var reveal = new FloatingVideoReveal(window, animate: true)
+            {
+                InputRegionWriter = (w, rects, sync) => { requests.Add((rects, !w.IsVisible, sync)); return true; }
+            };
+            var completed = 0;
+            try
+            {
+                reveal.Present(() => { Assert.True(window.IsVisible); completed++; });
+                Assert.Equal(animates ? 0 : 1, completed);
+                Assert.Equal(animates, reveal.IsAnimating);
+                window.UpdateLayout();
+                Assert.Equal(400, window.Width, 3);
+                Assert.Equal(200, window.Height, 3);
+                Assert.Equal(new PixelPoint(100, 200), window.Position);
+                var pictureBounds = picture.Bounds;
+                Assert.Equal(new Size(400, 200), pictureBounds.Size);
+                if (animates)
+                {
+                    Assert.Equal(new Rect(60, 30, 280, 140), Assert.IsType<RectangleGeometry>(frame.Clip).Rect);
+                    Assert.Single(requests);
+                    Assert.True(requests[0].BeforeShow);
+                    Assert.True(requests[0].Sync);
+                    Assert.Equal(new PixelRect(60, 30, 280, 140), Assert.Single(requests[0].Rects!));
+                    // The reveal runs on the shared beat (AmbientBeatLoopsTests ratchet), not its own timer.
+                    Assert.Contains(BeatLoop.Running, b => ReferenceEquals(b.Owner, frame));
+                    time.Advance(TimeSpan.FromMilliseconds(130));
+                    BeatLoop.StepAll();
+                    window.UpdateLayout();
+                    var midway = Assert.IsType<RectangleGeometry>(frame.Clip).Rect;
+                    Assert.Equal(7.5, midway.X, 3);
+                    Assert.Equal(3.75, midway.Y, 3);
+                    Assert.Equal(385, midway.Width, 3);
+                    Assert.Equal(192.5, midway.Height, 3);
+                    Assert.Equal(new PixelRect(8, 4, 384, 192), Assert.Single(requests[^1].Rects!));
+                    Assert.False(requests[^1].Sync);
+                    Assert.Equal(pictureBounds, picture.Bounds);
+                    Assert.Equal(400, window.Width, 3);
+                    Assert.Equal(200, window.Height, 3);
+                    Assert.Equal(new PixelPoint(100, 200), window.Position);
+                    time.Advance(TimeSpan.FromMilliseconds(130));
+                    BeatLoop.StepAll();
+                    Assert.Null(frame.Clip);
+                    Assert.DoesNotContain(BeatLoop.Running, b => ReferenceEquals(b.Owner, frame));
+                    Assert.Null(requests[^1].Rects);
+                    Assert.Equal(pictureBounds, picture.Bounds);
+                    Assert.False(reveal.IsAnimating);
+                    Assert.Equal(1, completed);
+                    reveal.RevealAt(260);
+                    Assert.Equal(1, completed);
+                }
+                else { Assert.Null(frame.Clip); Assert.Empty(requests); }
+            }
+            finally
+            {
+                reveal.Close();
+                BeatLoop.Time = savedTime;
+                (settings.MotionLevel, settings.GentleVisuals) = saved;
+                ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = probe;
+                ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData(1, 8, 4, 384, 192)]
+    [InlineData(1.5, 12, 6, 576, 288)]
+    [InlineData(2, 15, 8, 770, 384)]
+    public void Input_region_uses_physical_pixels(double scale, int x, int y, int width, int height)
+    {
+        var clip = new Rect(7.5, 3.75, 385, 192.5);
+        Assert.Equal(new PixelRect(x, y, width, height), FloatingVideoReveal.InputRect(clip, scale));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Unsupported_input_region_shows_the_whole_window(bool failAfterStart)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var settings = ConditioningControlPanel.CoreSettings.Current;
+            var saved = (settings.MotionLevel, settings.GentleVisuals);
+            var probe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            settings.GentleVisuals = false;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            var frame = new Border();
+            var window = new Window { Width = 400, Height = 200, Content = frame };
+            var calls = new List<PixelRect[]?>();
+            var reveal = new FloatingVideoReveal(window, animate: true)
+            {
+                InputRegionWriter = (_, rects, _) =>
+                {
+                    calls.Add(rects);
+                    return rects == null || (failAfterStart && calls.Count == 1);
+                }
+            };
+            var completed = 0;
+            try
+            {
+                reveal.Present(() => { Assert.True(window.IsVisible); completed++; });
+                if (failAfterStart) { Assert.True(reveal.IsAnimating); Assert.Equal(0, completed); reveal.RevealAt(130); }
+                Assert.Equal(1, completed);
+                Assert.False(reveal.IsAnimating);
+                Assert.True(window.IsVisible);
+                Assert.Null(frame.Clip);
+                Assert.Null(calls[^1]);
+                var count = calls.Count;
+                reveal.RevealAt(200);
+                Assert.Equal(count, calls.Count);
+            }
+            finally
+            {
+                reveal.Close();
+                (settings.MotionLevel, settings.GentleVisuals) = saved;
+                ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = probe;
+                ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            }
+            return Task.CompletedTask;
+        });
     }
 
     [Fact]

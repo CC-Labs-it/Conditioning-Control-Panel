@@ -58,6 +58,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private Action? _refreshFloating;
         internal Action<Window> ApplyFloatingPassive { get; set; } = X11Overlay.SetPassive;
+        internal Func<Window, PixelRect[]?, bool, bool> FloatingInputRegionWriter { get; set; } =
+            (window, rects, sync) => X11Overlay.SetWindowInputRegion(window, rects, sync);
         internal Action<Window> DenyVideoMouseActivate { get; set; } = w => Win32Window.DenyMouseActivate(w);
         internal Action<Window> MakeVideoNonActivating { get; set; } = Win32Window.MakeNonActivating;
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
@@ -681,7 +683,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 else if (!_closing) EndPrimary("window closed");
             };
             WireChaosTimerStacking(w);
-            var reveal = floating ? new FloatingVideoReveal(w, inst == null ? HoldRevealAudio : held => { inst.Held = held; ApplyInstanceVolume(inst); }) : null;
+            var reveal = floating ? new FloatingVideoReveal(w, inst == null ? HoldRevealAudio : held => { inst.Held = held; ApplyInstanceVolume(inst); }, animate: inst != null) { InputRegionWriter = FloatingInputRegionWriter } : null;
             if (!floating)
             {
                 w.Show();
