@@ -6,6 +6,8 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
@@ -31,6 +33,7 @@ internal sealed partial class MandatoryVideoOverlay
         public VlcVolumePump.Player? VolumePlayer;
         public Media? Media;
         public VlcFrameSink? Sink;
+        public WriteableBitmap? Fill;
         public DispatcherTimer? Watch;
         public VideoReveal? Fade;
         public readonly Stopwatch SinceReady = new();
@@ -173,6 +176,7 @@ internal sealed partial class MandatoryVideoOverlay
                 f.Sink = new VlcFrameSink(player, () => sinkMedia, bmp => f.Surface.Video.Source = bmp, () =>
                 {
                     f.FrameSeen = true;
+                    if (f.Sink?.Bitmap is { } frame) UpdateFloatingFill(f, frame, s.VideoBlurredBackgroundEnabled);
                     f.Surface.Video.InvalidateVisual();
                 });
                 player.Playing += (_, _) => Dispatcher.UIThread.Post(() =>
@@ -233,6 +237,36 @@ internal sealed partial class MandatoryVideoOverlay
     private static void SampleInstance(FloatingInstance f)
     {
         if (f.Playback is { } p) f.PlayedMs = Math.Max(f.PlayedMs, p.Time - f.StartMs);
+    }
+
+    /// <summary>WPF FloatingInstances.cs:514: each joined clip supplies its own blurred background.</summary>
+    internal static void UpdateFloatingFill(FloatingInstance f, WriteableBitmap frame, bool enabled)
+    {
+        if (f.Closed) return;
+        var x = f.Surface;
+        var aspect = (double)frame.PixelSize.Width / frame.PixelSize.Height;
+        var bounds = x.Window.Bounds;
+        var on = enabled && MandatoryVideoScheduler.NeedsBlurFill(aspect,
+            bounds.Width > 0 && bounds.Height > 0 ? bounds.Width / bounds.Height : 16.0 / 9);
+        x.Fill.IsVisible = x.Scrim.IsVisible = on;
+        if (!on)
+        {
+            x.Fill.Source = null;
+            f.Fill?.Dispose();
+            f.Fill = null;
+            return;
+        }
+        var height = Math.Max(1, (int)Math.Round(FillWidth / aspect));
+        if (f.Fill == null || f.Fill.PixelSize.Height != height)
+        {
+            x.Fill.Source = null;
+            f.Fill?.Dispose();
+            f.Fill = new WriteableBitmap(new PixelSize(FillWidth, height), new Vector(96, 96),
+                PixelFormat.Bgra8888, AlphaFormat.Opaque);
+            x.Fill.Source = f.Fill;
+        }
+        Downscale(frame, f.Fill);
+        x.Fill.InvalidateVisual();
     }
 
     /// <summary>WPF RevealInstance (:593-617): shown, it joins the sound rotation; controls after the fade.</summary>
@@ -390,10 +424,14 @@ internal sealed partial class MandatoryVideoOverlay
             CloseGraceHost(x);
             if (_gracePaused && endRun) ShowGraceCards();   // its screen's Resume card moves to a window still up
             x.Video.Source = null;
+            x.Fill.Source = null;
+            x.Fill.IsVisible = x.Scrim.IsVisible = false;
             x.Reveal?.Cancel();
             x.Window.Close();
         }
         f.Sink = null;
+        f.Fill?.Dispose();
+        f.Fill = null;
         Log.Information("VideoService: floating window closed ({Reason}), {Left} left", reason, FloatingUp);
         if (refocus) ApplyAudioFocus();
         if (endRun && FloatingUp == 0 && Scheduler.IsPlaying) Scheduler.End();

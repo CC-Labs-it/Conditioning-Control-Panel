@@ -55,13 +55,13 @@ public class FriendNoticeRulesTests
     }
 
     [Fact]
-    public void NewestIsOnTopAndOnlyThreeAreDrawn()
+    public void NewestIsOnTopAndOnlyTwoAreDrawn()
     {
         var s = new FriendNoticeStack();
         foreach (var id in new[] { "a", "b", "c", "d", "e" }) s.Add(N(NoticeKind.Poke, id));
 
-        Assert.Equal(new[] { "e", "d", "c" }, s.Visible.Select(n => n.FriendId));
-        Assert.Equal(2, s.Hidden);
+        Assert.Equal(new[] { "e", "d" }, s.Visible.Select(n => n.FriendId));
+        Assert.Equal(3, s.Hidden);
     }
 
     [Fact]
@@ -96,10 +96,10 @@ public class FriendNoticeRulesTests
     {
         var s = new FriendNoticeStack();
         var oldest = s.Add(N(NoticeKind.Invite, "a")).Notice;
-        foreach (var id in new[] { "b", "c", "d" }) s.Add(N(NoticeKind.Poke, id));
+        foreach (var id in new[] { "b", "c" }) s.Add(N(NoticeKind.Poke, id));
 
         var gone = s.Tick(6001);
-        Assert.Equal(3, gone.Count);
+        Assert.Equal(2, gone.Count);
         Assert.Equal(1, oldest.Fraction);
         Assert.Same(oldest, Assert.Single(s.Visible));
     }

@@ -134,6 +134,26 @@ namespace ConditioningControlPanel
             }
         }
 
+        // ---- Preset import (button) -----------------------------------------
+
+        /// <summary>
+        /// The Session Door's Import button (ccp-bugs #1743): a picked file goes through
+        /// <see cref="HandlePresetDrop"/>, the same path as a file dropped on the window, so the
+        /// checks, the id de-dup, the copy to the custom folder and the toasts are one code path.
+        /// </summary>
+        internal void BtnImportPreset_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = Loc.Get("sd_import_tip"),
+                Filter = "Preset files (*.preset.json;*.json)|*.preset.json;*.json",
+                Multiselect = false,
+                CheckFileExists = true
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            HandlePresetDrop(dialog.FileName);
+        }
+
         // ---- Preset drag-drop import ---------------------------------------
 
         private void HandlePresetDrop(string filePath)

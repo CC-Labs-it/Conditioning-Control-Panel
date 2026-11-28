@@ -161,8 +161,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string LegacyHead => Loc.Get("companion_awareness_legacy_head");
         public string LegacyBody => Loc.Get("companion_awareness_legacy_body");
         public string LegacyAction => Loc.Get("companion_awareness_legacy_action");
-        // The current lifecycle starts only the ledger. Show this action when an observer can start.
-        public bool CanReviewConsent => false;
+        // WPF AwarenessPrivacyView.xaml:189 shows it with the band; it needs an observer to switch on.
+        public bool CanReviewConsent => !_preview && AvApp.AwarenessObserverHost != null;
 
         // ------------------------------- the wire -------------------------------
 

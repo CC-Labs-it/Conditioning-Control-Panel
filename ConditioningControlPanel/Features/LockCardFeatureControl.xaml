@@ -3,9 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
-             xmlns:feat="clr-namespace:ConditioningControlPanel.Features">
+             xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview"
+             rows:RowHue.TintSliders="True">
 
-    <Grid>
+    <!-- Readable Rows: slider rows share one label column (SharedSizeGroup RowLabel). -->
+    <Grid Grid.IsSharedSizeScope="True">
         <StackPanel>
             <!-- HERO. The old standalone Enable card is gone: its checkbox moved into the
                  pill on the right (same name, same handlers, same SessionLock marker) and its
@@ -79,37 +83,38 @@
 
                                 <feat:OptionSection Key="lockcard.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                                 <!-- Per hour -->
-                                <Grid Height="36" ToolTip="{loc:Str tooltip_lock_card_frequency_1_10_per_hour}">
+                                <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_lock_card_frequency_1_10_per_hour}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_per_hour}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_per_hour}" Emblem="Often">
+                                        <rows:RowLabel.Value>
+                                            <MultiBinding Converter="{x:Static rows:RowFraction.Instance}">
+                                                <Binding Path="Value" ElementName="SliderFreq"/>
+                                                <Binding Path="Maximum" ElementName="SliderFreq"/>
+                                            </MultiBinding>
+                                        </rows:RowLabel.Value>
+                                    </rows:RowLabel>
                                     <Slider Grid.Column="1" x:Name="SliderFreq" feat:OptionSection.Setting="LockCardFrequency" Minimum="1" Maximum="10" Value="2"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderFreq_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtFreq" Text="2" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtFreq" Text="2" Unit="{loc:Str row_unit_an_hour}"/>
                                 </Grid>
 
                                 <!-- Repeats -->
-                                <Grid x:Name="RowRepeats" Height="36" ToolTip="{loc:Str tooltip_number_of_times_to_type_the_phrase_1_10}">
+                                <Grid x:Name="RowRepeats" Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_number_of_times_to_type_the_phrase_1_10}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_repeats}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_repeats}" Emblem="Card"/>
                                     <Slider Grid.Column="1" x:Name="SliderRepeats" feat:OptionSection.Setting="LockCardRepeats" Minimum="1" Maximum="10" Value="3"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderRepeats_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtRepeats" Text="3x" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtRepeats" Text="3x"/>
                                 </Grid>
 
                                 <!-- Repeat shape. Two switches, and each reveals its own dials only
@@ -117,93 +122,84 @@
                                      additionally HIDES the Repeats row and the random switch above -
                                      in that mode the count is derived, not chosen, and leaving a dead
                                      slider on screen would read as a bug. -->
-                                <Grid x:Name="RowRandomRepeats" Height="34" ToolTip="{loc:Str tooltip_lock_card_random_repeats}">
+                                <Grid x:Name="RowRandomRepeats" Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_lock_card_random_repeats}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_lock_card_random_repeats}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_lock_card_random_repeats}" Emblem="Random"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkRandomRepeats}"/>
                                     <CheckBox Grid.Column="1" x:Name="ChkRandomRepeats" feat:SessionLock.Owned="True"
                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                               Checked="ChkRandomRepeats_Changed" Unchecked="ChkRandomRepeats_Changed"/>
                                 </Grid>
 
-                                <Grid x:Name="RowRepeatsMin" Height="36" Visibility="Collapsed"
+                                <Grid x:Name="RowRepeatsMin" Style="{StaticResource OptionRow}" Visibility="Collapsed"
                                       ToolTip="{loc:Str tooltip_lock_card_fewest_repeats}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_lock_card_fewest_repeats}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_lock_card_fewest_repeats}" Emblem="Card"/>
                                     <Slider Grid.Column="1" x:Name="SliderRepeatsMin" feat:OptionSection.Setting="LockCardRepeatsMin" Minimum="1" Maximum="10" Value="1"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderRepeatsMin_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtRepeatsMin" Text="1x" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtRepeatsMin" Text="1x"/>
                                 </Grid>
 
-                                <Grid Height="34" ToolTip="{loc:Str tooltip_lock_card_match_by_length}">
+                                <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_lock_card_match_by_length}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_lock_card_match_by_length}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_lock_card_match_by_length}" Emblem="Words"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkTargetLength}"/>
                                     <CheckBox Grid.Column="1" x:Name="ChkTargetLength" feat:SessionLock.Owned="True"
                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                               Checked="ChkTargetLength_Changed" Unchecked="ChkTargetLength_Changed"/>
                                 </Grid>
 
-                                <Grid x:Name="RowTargetLength" Height="36" Visibility="Collapsed"
+                                <Grid x:Name="RowTargetLength" Style="{StaticResource OptionRow}" Visibility="Collapsed"
                                       ToolTip="{loc:Str tooltip_lock_card_target_characters}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_lock_card_target_characters}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_lock_card_target_characters}" Emblem="Words"/>
                                     <Slider Grid.Column="1" x:Name="SliderTargetLength" feat:OptionSection.Setting="LockCardTargetLength" Minimum="20" Maximum="600" Value="120"
                                             TickFrequency="10" IsSnapToTickEnabled="True"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderTargetLength_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtTargetLength" Text="120" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtTargetLength" Text="120"/>
                                 </Grid>
 
-                                <Grid x:Name="RowTargetVariance" Height="36" Visibility="Collapsed"
+                                <Grid x:Name="RowTargetVariance" Style="{StaticResource OptionRow}" Visibility="Collapsed"
                                       ToolTip="{loc:Str tooltip_lock_card_length_variance}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_lock_card_length_variance}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_lock_card_length_variance}" Emblem="Random"/>
                                     <Slider Grid.Column="1" x:Name="SliderTargetVariance" feat:OptionSection.Setting="LockCardTargetLengthVariance" Minimum="0" Maximum="200" Value="20"
                                             TickFrequency="5" IsSnapToTickEnabled="True"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderTargetVariance_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtTargetVariance" Text="&#177;20" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtTargetVariance" Text="&#177;20"/>
                                 </Grid>
                                 </feat:OptionSection>
 
                                 <feat:OptionSection Key="lockcard.rules" Title="{loc:Str studio_section_rules}" Theme="Interaction">
                                 <!-- Strict lock -->
-                                <Grid Height="34" ToolTip="{loc:Str tooltip_cannot_escape_must_complete_typing}">
+                                <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_cannot_escape_must_complete_typing}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_strict_lock}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_strict_lock}" Emblem="Lock"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkStrict}"/>
                                     <CheckBox Grid.Column="1" x:Name="ChkStrict"
                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                               Checked="ChkStrict_Changed" Unchecked="ChkStrict_Changed"/>
@@ -212,13 +208,13 @@
                                 <!-- Solve by voice. TxtVoiceHint stays VISIBLE, not a ToolTip: code-behind
                                      repaints it with "no microphone detected" / "speech model not installed",
                                      which is the difference between the switch working and silently not. -->
-                                <Grid Height="34">
+                                <Grid Style="{StaticResource OptionRow}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <helpers:EmojiTextBlock Grid.Column="0" Text="🎤 Solve by voice" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="🎤 Solve by voice" Emblem="Mic"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkVoiceMode}"/>
                                     <CheckBox Grid.Column="1" x:Name="ChkVoiceMode"
                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                               Checked="ChkVoiceMode_Changed" Unchecked="ChkVoiceMode_Changed"/>
@@ -231,13 +227,13 @@
                                 <!-- Power-user rows, folded (house rule: progressive disclosure). -->
                                 <feat:MoreFold x:Name="FoldMore">
                                     <!-- Reset on typo (ccp-bugs #1163): a mistake wipes the line. -->
-                                    <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_lockcard_reset_on_typo}">
+                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_lockcard_reset_on_typo}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{loc:Str setting_lockcard_reset_on_typo}" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_lockcard_reset_on_typo}" Emblem="Lock"
+                                                       IsOn="{Binding IsChecked, ElementName=ChkResetOnTypo}"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkResetOnTypo"
                                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                   Checked="ChkResetOnTypo_Changed" Unchecked="ChkResetOnTypo_Changed"/>
@@ -267,29 +263,16 @@
                     </Grid>
                 </StackPanel>
 
-                <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its
-                     Background to CornerRadius but does NOT clip child content, so a child Image would
-                     square off the rounded corners (round-2 lesson). Same plate the hero uses. -->
+                <!-- SIDE ART -> LIVE PREVIEW (owner 2026-11-24): a framed slice of a desktop where a drawn
+                     lock card types itself (Controls/Preview/Scenes/LockCardPreviewScene.cs). The mod art
+                     brush stays (ApplyFeatureArt writes it) but is parked in Tag. -->
                 <Border Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                         BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                        VerticalAlignment="Stretch" MinHeight="200">
-                    <Border.Background>
-                        <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill">
-                            <ImageBrush.ImageSource>
-                                <BitmapImage UriSource="pack://application:,,,/Resources/features/Phrase_Lock.png"
-                                             DecodePixelWidth="800"/>
-                            </ImageBrush.ImageSource>
-                        </ImageBrush>
-                    </Border.Background>
-                    <!-- Scrim so the plate sits under the page instead of fighting it. -->
-                    <Border CornerRadius="12">
-                        <Border.Background>
-                            <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                                <GradientStop Color="#66000000" Offset="0"/>
-                                <GradientStop Color="#00000000" Offset="0.45"/>
-                            </LinearGradientBrush>
-                        </Border.Background>
-                    </Border>
+                        Background="#06050D" VerticalAlignment="Stretch" MinHeight="200">
+                    <Border.Tag>
+                        <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill"/>
+                    </Border.Tag>
+                    <pv:EffectPreview Scene="lockcard"/>
                 </Border>
             </Grid>
 

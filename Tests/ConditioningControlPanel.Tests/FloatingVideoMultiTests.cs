@@ -166,7 +166,7 @@ public class FloatingVideoMultiTests
         // Every arming site and the verdict ask the one rule; an instance never arms anything.
         Assert.Equal(1, Count(main, "SetupAttention();"));
         Assert.Contains("AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, IsFloating))\n", main.Replace("\r\n", "\n"));
-        Assert.Contains("AttentionChecksApply(settings.AttentionChecksEnabled, IsFloating) && _spawned > 0", main);
+        Assert.Contains("AttentionChecksApply(settings.AttentionChecksEnabled, IsFloating) && judged > 0", main);
         Assert.Equal(1, Count(browser, "SetupAttention();"));
         Assert.Contains("AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, IsFloating)) SetupAttention();", browser);
         Assert.DoesNotContain("SetupAttention", inst);

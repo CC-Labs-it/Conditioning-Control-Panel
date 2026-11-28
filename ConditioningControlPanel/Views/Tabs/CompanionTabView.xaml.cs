@@ -84,7 +84,7 @@ namespace ConditioningControlPanel.Views.Tabs
         internal Border EffectPermsPanel => Room.EffectPermsPanel;
 
         internal Slider SliderMaxHapticIntensity => Room.SliderMaxHapticIntensity;
-        internal TextBlock TxtMaxHapticIntensity => Room.TxtMaxHapticIntensity;
+        internal global::ConditioningControlPanel.Controls.Rows.RowValue TxtMaxHapticIntensity => Room.TxtMaxHapticIntensity;
 
         internal CheckBox ChkAllowFlash => Room.ChkAllowFlash;
         internal CheckBox ChkAllowVideo => Room.ChkAllowVideo;
@@ -134,11 +134,11 @@ namespace ConditioningControlPanel.Views.Tabs
         internal Button HelpBtnCompanions => _vm.Shelf.Roster.HelpBtnCompanions;
 
         // ---- Z8 · BEHAVIOR ----
-        internal TextBlock TxtIdleIntervalCompanion => _vm.Shelf.Behavior.TxtIdleIntervalCompanion;
+        internal global::ConditioningControlPanel.Controls.Rows.RowValue TxtIdleIntervalCompanion => _vm.Shelf.Behavior.TxtIdleIntervalCompanion;
         internal Slider SliderIdleIntervalCompanion => _vm.Shelf.Behavior.SliderIdleIntervalCompanion;
-        internal TextBlock TxtBubbleDurationCompanion => _vm.Shelf.Behavior.TxtBubbleDurationCompanion;
+        internal global::ConditioningControlPanel.Controls.Rows.RowValue TxtBubbleDurationCompanion => _vm.Shelf.Behavior.TxtBubbleDurationCompanion;
         internal Slider SliderBubbleDurationCompanion => _vm.Shelf.Behavior.SliderBubbleDurationCompanion;
-        internal TextBlock TxtVoiceLevelCompanion => _vm.Shelf.Behavior.TxtVoiceLevelCompanion;
+        internal global::ConditioningControlPanel.Controls.Rows.RowValue TxtVoiceLevelCompanion => _vm.Shelf.Behavior.TxtVoiceLevelCompanion;
         internal Slider SliderVoiceLevelCompanion => _vm.Shelf.Behavior.SliderVoiceLevelCompanion;
         internal TextBlock TxtChatShortcutLabel => _vm.Shelf.Behavior.TxtChatShortcutLabel;
         internal TextBlock TxtCameraShortcutLabel => _vm.Shelf.Behavior.TxtCameraShortcutLabel;
@@ -151,7 +151,7 @@ namespace ConditioningControlPanel.Views.Tabs
         internal CheckBox ChkTriggerModeCompanion => _vm.Shelf.Triggers.ChkTriggerModeCompanion;
         internal StackPanel TriggerSettingsPanelCompanion => _vm.Shelf.Triggers.TriggerSettingsPanelCompanion;
         internal Slider SliderTriggerIntervalCompanion => _vm.Shelf.Triggers.SliderTriggerIntervalCompanion;
-        internal TextBlock TxtTriggerIntervalCompanion => _vm.Shelf.Triggers.TxtTriggerIntervalCompanion;
+        internal global::ConditioningControlPanel.Controls.Rows.RowValue TxtTriggerIntervalCompanion => _vm.Shelf.Triggers.TxtTriggerIntervalCompanion;
         internal TextBlock TxtPhraseCount => _vm.Shelf.Triggers.TxtPhraseCount;
         internal ComboBox CmbPhrasePresets => _vm.Shelf.Triggers.CmbPhrasePresets;
 
@@ -170,9 +170,9 @@ namespace ConditioningControlPanel.Views.Tabs
         // ---- Z8 · AWARENESS FINE-TUNING ----
         internal Border AwarenessSettingsPanel => _vm.Shelf.Awareness.AwarenessSettingsPanel;
         internal Slider SliderAwarenessCooldown => _vm.Shelf.Awareness.SliderAwarenessCooldown;
-        internal TextBlock TxtAwarenessCooldown => _vm.Shelf.Awareness.TxtAwarenessCooldown;
+        internal global::ConditioningControlPanel.Controls.Rows.RowValue TxtAwarenessCooldown => _vm.Shelf.Awareness.TxtAwarenessCooldown;
         internal Slider SliderAwarenessCooldownMax => _vm.Shelf.Awareness.SliderAwarenessCooldownMax;
-        internal TextBlock TxtAwarenessCooldownMax => _vm.Shelf.Awareness.TxtAwarenessCooldownMax;
+        internal global::ConditioningControlPanel.Controls.Rows.RowValue TxtAwarenessCooldownMax => _vm.Shelf.Awareness.TxtAwarenessCooldownMax;
         internal Button BtnPrivacySpoiler => _vm.Shelf.Awareness.BtnPrivacySpoiler;
         internal TextBlock TxtPrivacyDetails => _vm.Shelf.Awareness.TxtPrivacyDetails;
         internal Button HelpBtnAwareness => _vm.Shelf.Awareness.HelpBtnAwareness;

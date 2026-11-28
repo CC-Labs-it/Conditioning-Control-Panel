@@ -137,9 +137,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _freed = true;
                 if (_buffer != IntPtr.Zero) Marshal.FreeHGlobal(_buffer);
                 _buffer = IntPtr.Zero;
+                // Under the lock: an exiting app frees off the stopped dispatcher, and Blit checks _buffer here.
+                Bitmap?.Dispose();
+                Bitmap = null;
             }
-            Bitmap?.Dispose();
-            Bitmap = null;
         }
     }
 }

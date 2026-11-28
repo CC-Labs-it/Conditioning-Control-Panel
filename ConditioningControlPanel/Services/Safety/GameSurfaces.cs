@@ -72,6 +72,8 @@ internal static class GameSurfaces
             () => PrizeCounter.PrizeCounterHostService.CloseFor(PrizeCounter.PrizeCounterHostService.ClosePanic)),
         // Glassroad (Racing Thoughts 3D, every race door since 7.2): its own window, so panic closes it.
         new("glassroad", () => Glassroad.GlassroadHostService.IsActive, Glassroad.GlassroadHostService.Close),
+        // Terms & Conditioning (7.4.0): its own WebView2 window, so panic closes it.
+        new(Tc.TcHostService.GameId, () => Tc.TcHostService.IsActive, Tc.TcHostService.Close),
         // Rain's wardrobe (7.2): a normal window, not a game, but a WebView2 surface panic must close.
         new("rain-wardrobe", () => Companion.RainWardrobeHostService.IsActive, Companion.RainWardrobeHostService.Close),
     };

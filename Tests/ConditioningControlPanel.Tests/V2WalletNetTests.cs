@@ -139,7 +139,7 @@ public class V2WalletNetTests
     public void TheSyncSendsTheBalanceItCarried_AndAResetReplyDoesNotLower()
     {
         var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Settings", "ProfileSyncService.cs"));
-        Assert.Contains("int sentSkillPoints = v2SyncData.skill_points;", src);
+        Assert.Contains("int sentSkillPoints = v2SyncData.SkillPoints;", src);
         Assert.Contains("v2Result.LevelReset == true ? null : sentSkillPoints", src);
     }
 
