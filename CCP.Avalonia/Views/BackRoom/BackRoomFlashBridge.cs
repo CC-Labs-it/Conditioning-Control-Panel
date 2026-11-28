@@ -16,19 +16,22 @@ internal sealed class BackRoomFlashBridge
     private readonly Func<bool> _chaosRunning;
     private readonly Func<long> _now;
     private readonly string _assetsRoot, _webRoot;
+    private readonly int _port;
+    private readonly Func<string, string?>? _resolve;
     private long _washAt = long.MinValue / 2;
 
-    internal BackRoomFlashBridge(Visual host, Func<bool> chaosRunning, string assetsRoot, string webRoot)
+    internal BackRoomFlashBridge(Visual host, Func<bool> chaosRunning, string assetsRoot, string webRoot, int port = 0, Func<string, string?>? resolve = null)
         : this((ms, alpha) => ChaosFlashOverlay.Show(host, ms, alpha),
             (path, ms, alpha, still, shown) => ChaosFlashOverlay.ShowHero(host, path, ms, alpha, still, shown),
             ChaosFlashOverlay.StopHero, ChaosFlashOverlay.CloseActive, chaosRunning,
-            () => Environment.TickCount64, assetsRoot, webRoot) { }
+            () => Environment.TickCount64, assetsRoot, webRoot, port, resolve) { }
 
     internal BackRoomFlashBridge(Action<int, double> wash, Action<string, int, double, bool, Action> hero,
-        Action stopHero, Action close, Func<bool> chaosRunning, Func<long> now, string assetsRoot, string webRoot)
+        Action stopHero, Action close, Func<bool> chaosRunning, Func<long> now, string assetsRoot, string webRoot, int port = 0, Func<string, string?>? resolve = null)
     {
         _wash = wash; _hero = hero; _stopHero = stopHero; _close = close;
         _chaosRunning = chaosRunning; _now = now; _assetsRoot = assetsRoot; _webRoot = webRoot;
+        _port = port; _resolve = resolve;
     }
 
     internal void GlitchWash(int durationMs, double opacity)
@@ -47,7 +50,13 @@ internal sealed class BackRoomFlashBridge
     {
         try
         {
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps) return null;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
+            // Breakout deals URLs from its own loopback server. Reuse its file policy.
+            if (uri.Scheme == Uri.UriSchemeHttp && uri.Host == "127.0.0.1" && uri.Port == _port
+                && (uri.AbsolutePath.StartsWith("/ccp.assets/", StringComparison.Ordinal)
+                    || uri.AbsolutePath.StartsWith("/backroom/", StringComparison.Ordinal)))
+                return _resolve?.Invoke(uri.AbsolutePath);
+            if (uri.Scheme != Uri.UriSchemeHttps) return null;
             var root = uri.Host switch { "ccp.assets" => _assetsRoot, "ccp.game" => _webRoot, _ => null };
             if (string.IsNullOrEmpty(root)) return null;
             var relative = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
