@@ -629,6 +629,14 @@ public sealed class CompanionBarkHeadTests
         Assert.Equal("first play", spoken());
     });
 
+    [Fact]
+    public void GiftGivenBarkReachesTheEngine() => WithSeamsRestored(_ =>
+    {
+        Seeded(Rule("ChaosGiftGiven", "gift"), out var spoken);
+        ConditioningControlPanel.Services.Chaos.ChaosLessons.GiftGivenBark!();
+        Assert.Equal("gift", spoken());
+    });
+
     private sealed class WebcamBarkClock : System.TimeProvider
     {
         private global::System.DateTimeOffset _now = global::System.DateTimeOffset.UtcNow;
@@ -759,6 +767,7 @@ public sealed class CompanionBarkHeadTests
             CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked);
         var chaos = (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider);
         var firstTimeBark = ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark;
+        var giftGivenBark = ConditioningControlPanel.Services.Chaos.ChaosLessons.GiftGivenBark;
         var emi = (ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire, ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe);
         // Seed points the bridge at the real desk, whose holds land on the shared line engine.
         using var emiScope = new EmiTestScope();
@@ -774,6 +783,7 @@ public sealed class CompanionBarkHeadTests
                 CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked) = hooks;
             (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider) = chaos;
             ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark = firstTimeBark;
+            ConditioningControlPanel.Services.Chaos.ChaosLessons.GiftGivenBark = giftGivenBark;
             (ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire, ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe) = emi;
             (s.AvatarEnabled, s.BarkChatSuppressionMs) = (state.AvatarEnabled, state.BarkChatSuppressionMs);
             s.BarkVariantRotation.Clear();

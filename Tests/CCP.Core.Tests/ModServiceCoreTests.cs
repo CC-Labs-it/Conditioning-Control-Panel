@@ -5,11 +5,15 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Serilog;
+using Serilog.Core;
+using Serilog.Events;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -56,10 +60,81 @@ public sealed class ModServiceCoreTests
         // mid-write; it would hold its .tmp open (Windows CI: IOException on File.Delete) or land after this.
         SettingsService.DisarmAllPendingSaves();
         Directory.CreateDirectory(Root);
-        // A .tmp still held by its writer is skipped: it is never read as settings.json.
-        foreach (var f in RoadmapTestProfile.SettingsFiles(Root)) File.Delete(f);
+        // A .tmp still held by its writer may be skipped; remove stale files when possible.
+        foreach (var f in Directory.GetFiles(Root, "settings*"))
+        {
+            try { File.Delete(f); }
+            catch (IOException) when (f.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) { }
+        }
         foreach (var dir in new[] { "mods", "builtin_mods", "content" })
             if (Directory.Exists(Path.Combine(Root, dir))) Directory.Delete(Path.Combine(Root, dir), recursive: true);
+    }
+
+    [Fact]
+    public void ResetProfileDisarmsEarlierDebouncedSaves()
+    {
+        ResetProfile();
+        var earlier = new SettingsService { SaveDebounceDueTimeMilliseconds = int.MaxValue };
+        try
+        {
+            earlier.Save();
+            Assert.True(earlier.HasPendingSave);
+            File.WriteAllText(Path.Combine(Root, "settings.json.stale.tmp"), "partial");
+            ResetProfile();
+            Assert.False(earlier.HasPendingSave);
+            Assert.Empty(Directory.GetFiles(Root, "settings*"));
+        }
+        finally
+        {
+            earlier.SealForReset();
+            ResetProfile();
+        }
+    }
+
+    [Fact]
+    public async Task ResetProfileWaitsForAnInFlightDebouncedSave()
+    {
+        ResetProfile();
+        SettingsService.DisarmAllPendingSaves();
+        var earlier = new SettingsService { SaveDebounceDueTimeMilliseconds = 1 };
+        var oldLogger = Log.Logger;
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var resetStarted = new ManualResetEventSlim();
+        Task? reset = null;
+        try
+        {
+            Log.Logger = new LoggerConfiguration().MinimumLevel.Debug()
+                .WriteTo.Sink(new BlockSettingsSave(entered, release)).CreateLogger();
+            earlier.Save();
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+            reset = Task.Run(() => { resetStarted.Set(); ResetProfile(); });
+            Assert.True(resetStarted.Wait(TimeSpan.FromSeconds(10)));
+            Assert.NotSame(reset, await Task.WhenAny(reset, Task.Delay(500)));
+            release.Set();
+            await reset.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Empty(Directory.GetFiles(Root, "settings*"));
+        }
+        finally
+        {
+            release.Set();
+            try { if (reset != null) await reset.WaitAsync(TimeSpan.FromSeconds(10)); }
+            finally
+            {
+                try { earlier.SealForReset(); }
+                finally { Log.Logger = oldLogger; ResetProfile(); }
+            }
+        }
+    }
+
+    private sealed class BlockSettingsSave(ManualResetEventSlim entered, ManualResetEventSlim release) : ILogEventSink
+    {
+        public void Emit(LogEvent logEvent)
+        {
+            if (!logEvent.MessageTemplate.Text.StartsWith("Settings.Save: ActivePackIds BEFORE serialize", StringComparison.Ordinal)) return;
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(10));
+        }
     }
 
     [Fact]

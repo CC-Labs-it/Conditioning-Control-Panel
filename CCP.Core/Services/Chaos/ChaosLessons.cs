@@ -31,6 +31,7 @@ public static class ChaosLessons
     /// <summary>Head bark hooks (WPF: App.Bark.NotifyChaosLessonComplete / NotifyChaosFirstTime),
     /// fired at the exact point the WPF head barked. Null on a head without the companion bark.</summary>
     public static Action<string>? LessonBark, FirstTimeBark;
+    public static Action? GiftGivenBark;
 
     // ---- thresholds (tunable) ----
     public const long T_VIBE_POPPING   = 10;  // treats popped inside a 5s rolling window (high-water)

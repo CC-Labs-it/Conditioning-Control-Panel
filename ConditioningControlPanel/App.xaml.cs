@@ -2823,6 +2823,7 @@ namespace ConditioningControlPanel
             // Layers window and by #668 audio-only sessions), so constructing it is free.
             LayeredAudio = new Services.Audio.LayeredAudioService();
             Services.Chaos.ChaosLessons.LessonBark = id => App.Bark?.NotifyChaosLessonComplete(id);
+            Services.Chaos.ChaosLessons.GiftGivenBark = () => App.Bark?.NotifyChaosGiftGiven();
             Services.Chaos.ChaosLessons.FirstTimeBark = id => App.Bark?.NotifyChaosFirstTime(id);
             Services.Chaos.ChaosMeta.Init();   // load persistent Chaos meta-progression before the run service
             Chaos = new Services.Chaos.ChaosModeService();
