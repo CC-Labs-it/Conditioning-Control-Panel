@@ -43,7 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 browser.Children.Add(rows);
                 void Refresh()
                 {
-                    var matches = ModTextCatalog.Search(entries, search.Text);
+                    var matches = ModTextCatalog.Search(entries, search.Text, ShownLabels);
                     count.Text = Loc.GetF("mod_text_count", matches.Count, entries.Count);
                     rows.Items.Clear();
                     string? group = null;
@@ -75,6 +75,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal static string LocalizeTextSource(string source) => source.StartsWith("rank title, level ", StringComparison.Ordinal)
             ? Loc.GetF("mod_text_rank_source", source.Substring(18).TrimEnd('+')) : Loc.Get("mod_text_meta_" + MetadataKey(source));
+
+        // The browser shows translated group and source labels, so search them too.
+        internal static string ShownLabels(ModTextEntry e) => LocalizeTextGroup(e.Group) + " " + LocalizeTextSource(e.Source);
 
         private static string MetadataKey(string value) => Regex.Replace(value.ToLowerInvariant(), "[^a-z0-9]+", "_").Trim('_');
 

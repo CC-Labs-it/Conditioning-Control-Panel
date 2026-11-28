@@ -169,16 +169,18 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>
         /// Search used by the browser: every word of the query must appear (ignoring case) in the
-        /// text, the source or the group name. An empty query matches everything.
+        /// text, the source, the group name or the displayed (translated) <paramref name="labels"/>.
+        /// An empty query matches everything.
         /// </summary>
-        public static bool Matches(ModTextEntry entry, string? query)
+        public static bool Matches(ModTextEntry entry, string? query, Func<ModTextEntry, string>? labels = null)
         {
             if (string.IsNullOrWhiteSpace(query)) return true;
             foreach (var word in query.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (entry.Text.IndexOf(word, StringComparison.OrdinalIgnoreCase) < 0
                     && entry.Source.IndexOf(word, StringComparison.OrdinalIgnoreCase) < 0
-                    && entry.Group.IndexOf(word, StringComparison.OrdinalIgnoreCase) < 0)
+                    && entry.Group.IndexOf(word, StringComparison.OrdinalIgnoreCase) < 0
+                    && (labels == null || labels(entry).IndexOf(word, StringComparison.OrdinalIgnoreCase) < 0))
                     return false;
             }
             return true;
@@ -192,7 +194,7 @@ namespace ConditioningControlPanel.Services
         /// flavour, even when those texts do not contain the query. Every other matching entry
         /// follows in its usual group; a text is never listed twice.
         /// </summary>
-        public static IReadOnlyList<ModTextEntry> Search(IReadOnlyList<ModTextEntry> entries, string? query)
+        public static IReadOnlyList<ModTextEntry> Search(IReadOnlyList<ModTextEntry> entries, string? query, Func<ModTextEntry, string>? labels = null)
         {
             if (string.IsNullOrWhiteSpace(query)) return entries;
             var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -207,7 +209,7 @@ namespace ConditioningControlPanel.Services
             foreach (var name in entries)
             {
                 if (name.SkillId == null || name.Source != SkillName) continue;
-                if (!Matches(name, query)) continue;
+                if (!Matches(name, query, labels)) continue;
                 if (!words.Any(w => name.Text.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0)) continue;
 
                 var group = SkillGroup(name.Text);
@@ -216,7 +218,7 @@ namespace ConditioningControlPanel.Services
             }
 
             foreach (var e in entries)
-                if (Matches(e, query) && shown.Add(e.Text)) result.Add(e);
+                if (Matches(e, query, labels) && shown.Add(e.Text)) result.Add(e);
 
             return result;
         }

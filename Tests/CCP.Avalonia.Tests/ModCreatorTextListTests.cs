@@ -110,6 +110,10 @@ public sealed class ModCreatorTextListTests
             Assert.Equal("Compétences", ModCreatorWindow.LocalizeTextGroup("Skills"));
             Assert.Equal("effet de compétence", ModCreatorWindow.LocalizeTextSource("skill effect"));
             Assert.Contains("20", ModCreatorWindow.LocalizeTextSource("rank title, level 20+"));
+            var found = ModTextCatalog.Search(entries, "Compétences", ModCreatorWindow.ShownLabels);
+            Assert.Contains(found, e => e.Group == ModTextCatalog.Skills);
+            Assert.Empty(ModTextCatalog.Search(entries, "Compétences"));
+            Assert.Contains(ModTextCatalog.Search(entries, "effet de compétence", ModCreatorWindow.ShownLabels), e => e.Source == "skill effect");
         }
         finally { LocalizationManager.Instance.SetLanguage(previous); }
     }
