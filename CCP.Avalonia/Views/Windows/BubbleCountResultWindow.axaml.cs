@@ -206,6 +206,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
 
             primaryWindow.TakeKeyboard();
+            Platform.KeyboardReclaim.Start(primaryWindow, () => !primaryWindow._isCompleted,
+                () => primaryWindow._txtAnswer.Focus(), "Bubble count answer");
         }
 
         private void TakeKeyboard()

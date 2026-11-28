@@ -45,6 +45,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Avalonia.Controls.Rows"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.PresetsTabView"
              AttachedToVisualTree="OnModLabelsAttached" DetachedFromVisualTree="OnModLabelsDetached">
     <UserControl.Resources>
@@ -57,6 +58,30 @@
             <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,0,12,0"/>
+        </ControlTheme>
+        <!-- 7.4.1 LIFT (WPF 43c014f363, ccp-bugs #1743): the two main zones' titles in the fold-header
+             face of Readable Rows, Fredoka 22 SemiBold, in the zone's own hue (Foreground per zone).
+             Presets wear the Studio pink, Sessions the SectionHueNotifications blue, so a session is
+             never saved where a preset was meant. The old mono tag stays on Takeaway. -->
+        <ControlTheme x:Key="SdZoneTitle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Fredoka}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,12,0"/>
+        </ControlTheme>
+        <ControlTheme x:Key="SdZoneEmblem" TargetType="rows:OptionEmblem">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Margin" Value="0,0,9,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </ControlTheme>
+        <!-- One line under a zone title saying what the zone holds. -->
+        <ControlTheme x:Key="SdZoneWhat" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
         </ControlTheme>
         <ControlTheme x:Key="SdZoneRule" TargetType="Border">
             <Setter Property="Height" Value="1"/>
@@ -76,7 +101,8 @@
              is deliberate: the difficulty stripe is full-bleed to the row's left edge. The 5px
              bottom margin is hover headroom for the 2px lift. -->
         <ControlTheme x:Key="SdSessionRow" TargetType="Border">
-            <Setter Property="Height" Value="44"/>
+            <!-- 48, not 44 (7.4.1): room for the 16 px Nunito name of Readable Rows. -->
+            <Setter Property="Height" Value="48"/>
             <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -101,22 +127,25 @@
         </ControlTheme>
 
         <ControlTheme x:Key="SdRackIcon" TargetType="TextBlock">
-            <Setter Property="Width" Value="28"/>
-            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="FontSize" Value="18"/>
             <Setter Property="TextAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </ControlTheme>
+        <!-- The session's name in the row-label face of Readable Rows: 16 Bold Nunito in the
+             Sessions ink (70% TextLight + 30% the zone hue, mixed by the code-behind). -->
         <ControlTheme x:Key="SdRowTitle" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource SdSessionInk}"/>
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="16"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </ControlTheme>
         <!-- The spoiler-free blurb, on the same line as the name. Full text on the row tooltip. -->
         <ControlTheme x:Key="SdRowBlurb" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="Margin" Value="10,0,0,0"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
@@ -125,7 +154,7 @@
         <ControlTheme x:Key="SdRackMeta" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="FontFamily" Value="Consolas, Courier New"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="Margin" Value="10,0,0,0"/>
@@ -282,10 +311,11 @@
              34px pills on a WrapPanel. Selection is the rack's language - an accent tint plus a
              1px accent stroke - never a fatter border, which would re-flow the chip on click. -->
         <ControlTheme x:Key="SdPresetChip" TargetType="Border">
-            <Setter Property="Height" Value="34"/>
-            <Setter Property="CornerRadius" Value="17"/>
-            <Setter Property="Padding" Value="11,0"/>
-            <Setter Property="Margin" Value="0,0,7,6"/>
+            <!-- 38 / r19 since the 7.4.1 lift: the name went to 16 px Nunito. -->
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="CornerRadius" Value="19"/>
+            <Setter Property="Padding" Value="13,0"/>
+            <Setter Property="Margin" Value="0,0,7,7"/>
             <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -313,9 +343,10 @@
         </ControlTheme>
         <!-- MaxWidth is set per chip in code - a theme cannot know how much room the glyphs took. -->
         <ControlTheme x:Key="SdPresetChipName" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource SdPresetInk}"/>
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="16"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </ControlTheme>
@@ -452,33 +483,39 @@
             <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="Padding" Value="6,9"/>
         </ControlTheme>
+        <!-- Caption over a number in the unit face of Readable Rows (11 Bold Nunito, muted), the
+             number in the value face (19 ExtraBold Nunito). Reward and Grade keep the colour
+             SessionIO paints on them. -->
         <ControlTheme x:Key="SdMedLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
-            <Setter Property="FontFamily" Value="Consolas, Courier New"/>
-            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="11"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
         </ControlTheme>
         <ControlTheme x:Key="SdMedValue" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="FontSize" Value="19"/>
+            <Setter Property="FontWeight" Value="ExtraBold"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="0,3,0,0"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </ControlTheme>
 
         <!-- ============================ detail chrome ============================ -->
         <!-- IconLabel twins of SdDetailLabel / SdMedLabel: a loc label that leads with an icon (fluent-icons 2026-10-10). -->
-        <ControlTheme x:Key="SdDetailIconLabel" TargetType="fx:IconLabel">
-            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextLightBrush}"/>
-            <Setter Property="TextElement.FontWeight" Value="SemiBold"/>
-            <Setter Property="TextElement.FontSize" Value="12.5"/>
-            <Setter Property="Margin" Value="0,0,0,4"/>
+        <!-- A detail row (7.4.1): RowLabel (emblem + 16 Bold Nunito in the zone hue, inherited from
+             the scroller's RowHue.Hue) over the summary line, which starts under the label's text. -->
+        <ControlTheme x:Key="SdDetailRow" TargetType="rows:RowLabel">
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="Margin" Value="0,0,0,1"/>
         </ControlTheme>
         <ControlTheme x:Key="SdMedIconLabel" TargetType="fx:IconLabel">
-            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextDimBrush}"/>
-            <Setter Property="TextElement.FontFamily" Value="Consolas, Courier New"/>
-            <Setter Property="TextElement.FontSize" Value="9.5"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="TextElement.FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="TextElement.FontWeight" Value="Bold"/>
+            <Setter Property="TextElement.FontSize" Value="11"/>
             <Setter Property="Spacing" Value="3"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
         </ControlTheme>
@@ -489,9 +526,9 @@
             <Setter Property="Margin" Value="0,0,0,4"/>
         </ControlTheme>
         <ControlTheme x:Key="SdDetailValue" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
-            <Setter Property="FontSize" Value="11.5"/>
-            <Setter Property="Margin" Value="0,0,0,13"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Margin" Value="44,0,0,12"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </ControlTheme>
     </UserControl.Resources>
@@ -544,22 +581,9 @@
                     <TextBlock Theme="{StaticResource Type.PageSubtitle}" Text="{loc:Str sd_page_sub}" Margin="0,3,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Recent sessions. Moved up out of the Sessions zone header, where it was a
-                         second competing action next to the zone tag. -->
-                    <Button x:Name="BtnSessionHistory"
-                            ToolTip.Tip="{loc:Str tooltip_recent_sessions}"
-                            Theme="{StaticResource OutlineButton}"
-                            Padding="12,7" Margin="0,0,7,0" FontSize="11.5" Cursor="Hand">
-                        <fx:IconLabel Key="btn_recent_sessions" TextElement.FontWeight="SemiBold"/>
-                    </Button>
-                    <!-- Was the right-hand "Session Editor" placeholder box. -->
-                    <Button x:Name="BtnCreateSession"
-                            Theme="{StaticResource PinkButton}"
-                            Padding="14,7" FontSize="11.5" FontWeight="SemiBold" Cursor="Hand">
-                        <TextBlock Text="{loc:Str btn_create_new}"/>
-                    </Button>
-                </StackPanel>
+                <!-- Recent and Create New used to sit at the right of this band. A page-wide
+                     "+ Create New" beside a Presets zone read as "new preset" (ccp-bugs #1743), so
+                     both went down into the Sessions zone header in the 7.4.1 lift. -->
             </Grid>
         </Border>
 
@@ -577,21 +601,31 @@
             <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto">
 
                 <!-- ============================ ZONE: PRESETS ============================ -->
-                <Border Grid.Row="0" Theme="{StaticResource SectionPanel}" Margin="5,8,5,0" Padding="14,12">
+                <!-- 7.4.1: the zone wears the Studio pink on its frame, title, rule and chip names
+                     (RowHue.Hue is inherited by the emblem), and leads with the scope line, so
+                     "what a preset is" is read before the chips. -->
+                <Border Grid.Row="0" x:Name="PresetsZone" Theme="{StaticResource SectionPanel}" Margin="5,8,5,0" Padding="14,12"
+                        BorderBrush="{DynamicResource SectionHueStudioBorderBrush}"
+                        rows:RowHue.Hue="{DynamicResource SectionHueStudio}">
                     <StackPanel>
-                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
-                            <TextBlock Grid.Column="0" Theme="{StaticResource SdZoneTag}" Text="{loc:Str sd_zone_presets}"/>
-                            <Border Grid.Column="1" Theme="{StaticResource SdZoneRule}">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,6">
+                            <rows:OptionEmblem Grid.Column="0" Kind="Layers" Theme="{StaticResource SdZoneEmblem}"/>
+                            <TextBlock Grid.Column="1" Theme="{StaticResource SdZoneTitle}" Text="{loc:Str sd_head_presets}"
+                                       Foreground="{DynamicResource SectionHueStudioBrush}"/>
+                            <Border Grid.Column="2" Theme="{StaticResource SdZoneRule}">
                                 <Border.Background>
                                     <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
-                                        <GradientStop Color="{DynamicResource PinkColor}" Offset="0"/>
+                                        <GradientStop Color="{DynamicResource SectionHueStudio}" Offset="0"/>
                                         <GradientStop Color="Transparent" Offset="1"/>
                                     </LinearGradientBrush>
                                 </Border.Background>
                             </Border>
-                            <Button Grid.Column="2" x:Name="HelpBtnPresets"
+                            <Button Grid.Column="3" x:Name="HelpBtnPresets"
                                     Theme="{StaticResource HelpButtonStyle}" Tag="Presets"/>
                         </Grid>
+
+                        <!-- ccp-bugs #1427: says what a preset carries and what it leaves alone. -->
+                        <TextBlock x:Name="TxtPresetScope" Text="{loc:Str sd_presets_scope}" Theme="{StaticResource SdZoneWhat}" TextWrapping="Wrap"/>
 
                         <!-- THE RAIL. A WrapPanel, not a horizontal scroller: preset eleven lands
                              on a second line instead of off the right edge.
@@ -603,17 +637,15 @@
                             <Border x:Name="BtnNewPreset" Theme="{StaticResource SdPresetChipNew}"
                                     ToolTip.Tip="{loc:Str tooltip_create_a_new_preset_from_current_settings}">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="+" FontSize="15" FontWeight="Bold"
+                                    <TextBlock Text="+" FontSize="17" FontWeight="Bold"
                                                VerticalAlignment="Center" Margin="0,0,6,0"
-                                               Foreground="{DynamicResource PinkBrush}"/>
-                                    <TextBlock Text="{loc:Str label_new}" FontSize="10" FontWeight="Bold"
-                                               FontFamily="Consolas, Courier New" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                               Foreground="{DynamicResource SectionHueStudioBrush}"/>
+                                    <TextBlock Text="{loc:Str label_new}" FontSize="15" FontWeight="Bold"
+                                               FontFamily="{x:Static rows:RowFonts.Nunito}" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource SectionHueStudioBrush}"/>
                                 </StackPanel>
                             </Border>
                         </WrapPanel>
-                        <TextBlock x:Name="TxtPresetScope" Text="{loc:Str sd_presets_scope}" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
 
@@ -623,22 +655,44 @@
                      colour code, never by which panel it sits in. Rows carry the session id in
                      Tag, and that is contractual. The source, difficulty, sort and search controls
                      query this same registry (locked sessions included, as WPF). -->
-                <Border Grid.Row="1" Theme="{StaticResource SectionPanel}" Margin="5,8,5,0" Padding="14,12">
-                    <Grid RowDefinitions="Auto,Auto,*">
+                <!-- 7.4.1: its own hue (SectionHueNotifications blue) so it never reads as the preset
+                     zone above; the session doors (Recent, New session) sit on its header line, and one
+                     line under the title says what a session does to the effects that are on (the
+                     #1743 mix-up: a session switches off what it does not use). -->
+                <Border Grid.Row="1" x:Name="SessionsZone" Theme="{StaticResource SectionPanel}" Margin="5,8,5,0" Padding="14,12"
+                        BorderBrush="{DynamicResource SectionHueNotificationsBorderBrush}"
+                        rows:RowHue.Hue="{DynamicResource SectionHueNotifications}">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*">
 
-                        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,10">
-                            <TextBlock Grid.Column="0" Theme="{StaticResource SdZoneTag}" Text="{loc:Str sd_zone_sessions}"/>
-                            <Border Grid.Column="1" Theme="{StaticResource SdZoneRule}">
+                        <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto" Margin="0,0,0,6">
+                            <rows:OptionEmblem Grid.Column="0" Kind="Often" Value="0.3" Theme="{StaticResource SdZoneEmblem}"/>
+                            <TextBlock Grid.Column="1" Theme="{StaticResource SdZoneTitle}" Text="{loc:Str sd_head_sessions}"
+                                       Foreground="{DynamicResource SectionHueNotificationsBrush}"/>
+                            <Border Grid.Column="2" Theme="{StaticResource SdZoneRule}">
                                 <Border.Background>
                                     <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
-                                        <GradientStop Color="{DynamicResource PinkColor}" Offset="0"/>
+                                        <GradientStop Color="{DynamicResource SectionHueNotifications}" Offset="0"/>
                                         <GradientStop Color="Transparent" Offset="1"/>
                                     </LinearGradientBrush>
                                 </Border.Background>
                             </Border>
-                            <TextBlock Grid.Column="2" x:Name="TxtRackCount"
+                            <TextBlock Grid.Column="3" x:Name="TxtRackCount"
                                        Theme="{StaticResource SdZoneHint}" Text=""/>
-                            <Button Grid.Column="3" x:Name="HelpBtnSessions"
+                            <!-- Recent sessions, back on this line since the 7.4.1 lift: it is a session door. -->
+                            <Button Grid.Column="4" x:Name="BtnSessionHistory"
+                                    ToolTip.Tip="{loc:Str tooltip_recent_sessions}"
+                                    Theme="{StaticResource OutlineButton}"
+                                    Padding="11,5" FontSize="12" VerticalAlignment="Center" Cursor="Hand">
+                                <fx:IconLabel Key="btn_recent_sessions" TextElement.FontWeight="SemiBold"/>
+                            </Button>
+                            <!-- Was a page-wide "+ Create New" in the header band; it names its object now. -->
+                            <Button Grid.Column="5" x:Name="BtnCreateSession"
+                                    Theme="{StaticResource PinkButton}"
+                                    Padding="13,5" Margin="7,0,10,0" FontSize="12" FontWeight="SemiBold"
+                                    VerticalAlignment="Center" Cursor="Hand">
+                                <TextBlock Text="{loc:Str sd_btn_new_session}"/>
+                            </Button>
+                            <Button Grid.Column="6" x:Name="HelpBtnSessions"
                                     Theme="{StaticResource HelpButtonStyle}" Tag="Sessions"
                                     IsEnabled="False" Opacity="0.5"/>
                         </Grid>
@@ -653,7 +707,9 @@
                              search query the mounted registry. The chips are built in
                              code because each carries a live count; sort and search remain declared
                              here so their localized faces stay in XAML. -->
-                        <fx:SplitRowPanel Grid.Row="1" x:Name="RackToolbar" Gap="0" MinHeight="28"
+                        <TextBlock Grid.Row="1" x:Name="TxtSessionsWhat" Text="{loc:Str sd_sessions_what}" Theme="{StaticResource SdZoneWhat}" TextWrapping="Wrap"/>
+
+                        <fx:SplitRowPanel Grid.Row="2" x:Name="RackToolbar" Gap="0" MinHeight="28"
                                           HorizontalAlignment="Stretch" Margin="0,0,0,9">
                           <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <StackPanel x:Name="RackSourceChips"
@@ -692,7 +748,7 @@
                           </StackPanel>
                         </fx:SplitRowPanel>
 
-                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
                             <!-- ONE panel. RepaintSessionRack clears and refills it; nothing else
                                  may add a child, or the FX sweep picks up a stranger. -->
                             <StackPanel x:Name="SessionRackPanel"/>
@@ -752,16 +808,9 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Export of the SELECTED session. It says "Export session", not
-                                 "Export" (#961): sharing a strip with the Takeaway chips made a
-                                 bare "Export" read as "export this takeaway", which it can never
-                                 do. Enabled by SelectSession, as in WPF. -->
-                            <Button DockPanel.Dock="Right" x:Name="BtnExportSession"
-                                    IsEnabled="False" Theme="{StaticResource OutlineButton}"
-                                    Padding="12,5" FontSize="11" Margin="0,0,7,0" VerticalAlignment="Center"
-                                    ToolTip.Tip="{loc:Str tooltip_export_session}">
-                                <TextBlock Text="{loc:Str btn_export_session}"/>
-                            </Button>
+                            <!-- Export session used to sit here (#961). It moved to the session floor
+                                 under Start in the 7.4.1 lift: on this strip it sat closer to the
+                                 takeaways than to the session it exports. -->
 
                             <!-- Import ticker. Hidden until ShowDropZoneStatus has something; it
                                  is the drag-drop system's only feedback surface. -->
@@ -849,32 +898,30 @@
 
                     <!-- ================== DETAIL: preset view ================== -->
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="16,14,16,0"
-                                  x:Name="PresetDetailScroller">
+                                  x:Name="PresetDetailScroller"
+                                  rows:RowHue.Hue="{DynamicResource SectionHueStudio}">
                         <StackPanel x:Name="DetailContentPanel">
-                            <fx:IconLabel x:Name="TxtDetailFlashLabel"
-                                       Theme="{StaticResource SdDetailIconLabel}" Key="section_flash_images"/>
+                            <rows:RowLabel x:Name="TxtDetailFlashLabel" Emblem="Many" Subject="Image" Value="3" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare section_flash_images}"/>
                             <TextBlock x:Name="TxtDetailFlash"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <fx:IconLabel x:Name="TxtDetailVideoLabel"
-                                       Theme="{StaticResource SdDetailIconLabel}" Key="label_mandatory_videos"/>
+                            <rows:RowLabel x:Name="TxtDetailVideoLabel" Emblem="Many" Subject="Video" Value="2" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare label_mandatory_videos}"/>
                             <TextBlock x:Name="TxtDetailVideo"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <fx:IconLabel x:Name="TxtDetailSubLabel"
-                                       Theme="{StaticResource SdDetailIconLabel}" Key="section_subliminals_2"/>
+                            <rows:RowLabel x:Name="TxtDetailSubLabel" Emblem="Words" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare section_subliminals_2}"/>
                             <TextBlock x:Name="TxtDetailSubliminal"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="section_audio"/>
+                            <rows:RowLabel Emblem="Loud" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare section_audio}"/>
                             <TextBlock x:Name="TxtDetailAudio"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="label_overlays"/>
+                            <rows:RowLabel Emblem="Spiral" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare label_overlays}"/>
                             <TextBlock x:Name="TxtDetailOverlays"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="label_advanced"/>
+                            <rows:RowLabel Emblem="Layers" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare label_advanced}"/>
                             <TextBlock x:Name="TxtDetailAdvanced"
                                        Theme="{StaticResource SdDetailValue}" Text="—"/>
                         </StackPanel>
@@ -882,7 +929,8 @@
 
                     <!-- ================== DETAIL: session view (spoiler-free) ================== -->
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="16,14,16,0"
-                                  x:Name="SessionDetailScroller" IsVisible="False">
+                                  x:Name="SessionDetailScroller" IsVisible="False"
+                                  rows:RowHue.Hue="{DynamicResource SectionHueNotifications}">
                         <StackPanel x:Name="SessionDetailPanel">
 
                             <!-- The medallion row: duration / reward / grade read as one stat line.
@@ -1038,29 +1086,27 @@
                                     <fx:IconLabel Key="label_spoilers_below" TextElement.Foreground="{DynamicResource DangerBrush}" TextElement.FontFamily="Consolas, Courier New" TextElement.FontSize="11.5" TextElement.FontWeight="Bold" HorizontalAlignment="Center"/>
                                 </Border>
 
-                                <fx:IconLabel x:Name="TxtSessionFlashLabel"
-                                           Theme="{StaticResource SdDetailIconLabel}" Key="section_flash_images"/>
+                                <rows:RowLabel x:Name="TxtSessionFlashLabel" Emblem="Many" Subject="Image" Value="3" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare section_flash_images}"/>
                                 <TextBlock x:Name="TxtSessionFlash"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <fx:IconLabel x:Name="TxtSessionSubLabel"
-                                           Theme="{StaticResource SdDetailIconLabel}" Key="section_subliminals_2"/>
+                                <rows:RowLabel x:Name="TxtSessionSubLabel" Emblem="Words" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare section_subliminals_2}"/>
                                 <TextBlock x:Name="TxtSessionSubliminal"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="section_audio"/>
+                                <rows:RowLabel Emblem="Loud" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare section_audio}"/>
                                 <TextBlock x:Name="TxtSessionAudio"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="label_overlays"/>
+                                <rows:RowLabel Emblem="Spiral" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare label_overlays}"/>
                                 <TextBlock x:Name="TxtSessionOverlays"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="label_extras"/>
+                                <rows:RowLabel Emblem="Layers" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare label_extras}"/>
                                 <TextBlock x:Name="TxtSessionExtras"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <fx:IconLabel Theme="{StaticResource SdDetailIconLabel}" Key="label_timeline"/>
+                                <rows:RowLabel Emblem="When" Theme="{StaticResource SdDetailRow}" Text="{loc:StrBare label_timeline}"/>
                                 <TextBlock x:Name="TxtSessionTimeline"
                                            Theme="{StaticResource SdDetailValue}" Text="—"/>
                             </StackPanel>
@@ -1091,20 +1137,31 @@
                                 <fx:IconLabel Key="btn_delete_2"/>
                             </Button>
                         </Grid>
-                        <Grid ColumnDefinitions="*,*" Margin="0,6,0,0">
-                            <Button x:Name="BtnExportPreset" Grid.Column="0"
-                                    Theme="{StaticResource OutlineButton}" Margin="0,0,3,0" Padding="10,8"
+                        <!-- Import (ccp-bugs #1743) beside Export: the same picker-then-HandlePresetDrop
+                             path as a file dropped on the window, so the two can never disagree. Never
+                             gated on a selection: it adds a preset, it does not act on one. -->
+                        <Grid ColumnDefinitions="*,*,*" Margin="0,6,0,0">
+                            <Button x:Name="BtnImportPreset" Grid.Column="0"
+                                    Theme="{StaticResource OutlineButton}" Margin="0,0,3,0" Padding="4,8"
+                                    FontSize="12" ToolTip.Tip="{loc:Str sd_import_tip}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                                <TextBlock Text="{loc:Str sd_import}"/>
+                            </Button>
+                            <Button x:Name="BtnExportPreset" Grid.Column="1"
+                                    Theme="{StaticResource OutlineButton}" Margin="3,0,3,0" Padding="4,8"
                                     IsEnabled="False" FontSize="12"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
                                 <TextBlock Text="{loc:Str btn_export_preset}"/>
                             </Button>
-                            <Button x:Name="BtnSharePreset" Grid.Column="1"
-                                    Theme="{StaticResource OutlineButton}" Margin="3,0,0,0" Padding="10,8"
+                            <Button x:Name="BtnSharePreset" Grid.Column="2"
+                                    Theme="{StaticResource OutlineButton}" Margin="3,0,0,0" Padding="4,8"
                                     IsEnabled="False" FontSize="12"
                                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
                                 <TextBlock Text="{loc:Str btn_share_to_catalogue}"/>
                             </Button>
                         </Grid>
+                        <TextBlock Text="{loc:Str sd_preset_drop_hint}" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,7,0,0"/>
                     </StackPanel>
 
                     <StackPanel Grid.Row="2" x:Name="SessionButtonsPanel"
@@ -1114,6 +1171,16 @@
                                 Padding="12,13" FontSize="14" IsEnabled="False"
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
                             <TextBlock Text="{loc:Str btn_start_session}"/>
+                        </Button>
+                        <!-- Export of the SELECTED session, enabled by SelectSession as in WPF. It sits
+                             with the session it exports since the 7.4.1 lift. #961: it still says
+                             "Export session", never a bare "Export". -->
+                        <Button x:Name="BtnExportSession"
+                                IsEnabled="False" Theme="{StaticResource OutlineButton}"
+                                Padding="10,8" FontSize="12" Margin="0,7,0,0"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                ToolTip.Tip="{loc:Str tooltip_export_session}">
+                            <TextBlock Text="{loc:Str btn_export_session}"/>
                         </Button>
                     </StackPanel>
                 </Grid>

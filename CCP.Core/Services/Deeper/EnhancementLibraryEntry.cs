@@ -19,5 +19,10 @@ namespace ConditioningControlPanel.Services.Deeper
         // enhancement file's media_duration, with head-owned cache/probe backfill
         // allowed after the list shows.
         public double DurationSeconds { get; set; }
+
+        // A box that falls back to ToString() (a ComboBox template without the
+        // DisplayMemberPath selector) shows the file name, never the type name
+        // (ccp-bugs #1741).
+        public override string ToString() => Name;
     }
 }

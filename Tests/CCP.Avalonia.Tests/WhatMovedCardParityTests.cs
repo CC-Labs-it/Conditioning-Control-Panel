@@ -64,10 +64,22 @@ public sealed class WhatMovedCardParityTests
         Assert.Equal(WhatMovedPlan.Rows.Count, icons.Count);
         Assert.All(icons, g => Assert.False(g.IsFallback, $"unmapped row icon {g.Emoji}"));
         var show = buttons.Single(b => ((WhatMovedRow)b.Tag!).Id == id);
-        show.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, show));
-        Dispatcher.UIThread.RunJobs();
+        // "play" is the launcher's Games door since declutter wave 2: ShowTab opens that door through
+        // PanelDoorLink and leaves the tab on screen alone (NavSections.LauncherDoors).
+        var door = ConditioningControlPanel.Services.UI.NavSections.LauncherDoorFor(tab);
+        var before = shell.CurrentTab;
+        var (oldOpen, oldFallback) = (ConditioningControlPanel.Services.UI.PanelDoorLink.OpenLauncherDoor, ConditioningControlPanel.Services.UI.PanelDoorLink.Fallback);
+        string? opened = null;
+        if (door != null) { ConditioningControlPanel.Services.UI.PanelDoorLink.OpenLauncherDoor = d => opened = d; ConditioningControlPanel.Services.UI.PanelDoorLink.Fallback = null; }
+        try
+        {
+            show.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, show));
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally { (ConditioningControlPanel.Services.UI.PanelDoorLink.OpenLauncherDoor, ConditioningControlPanel.Services.UI.PanelDoorLink.Fallback) = (oldOpen, oldFallback); }
         Assert.False(card.IsVisible);
-        Assert.Equal(tab, shell.CurrentTab);
+        if (door != null) { Assert.Equal(door, opened); Assert.Equal(before, shell.CurrentTab); }
+        else Assert.Equal(tab, shell.CurrentTab);
         Assert.Equal(7, CoreSettings.Current.WhatMovedCardShown); // Help replay never spends another offer
         if (section != null)
         {

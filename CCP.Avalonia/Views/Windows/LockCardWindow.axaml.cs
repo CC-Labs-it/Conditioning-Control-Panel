@@ -591,13 +591,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 App.Quests?.TrackLockCardCompleted();
                 try { Platform.ChasterHead.Service?.Note("typo", _totalErrors); Platform.ChasterHead.Service?.Note("lockcard"); }
                 catch (Exception ex) { Log.Debug("chaster lock card hook: {E}", ex.Message); }
+                try { ReactionCompleted?.Invoke(_phrase, _totalErrors, _requiredRepeats); } catch (Exception ex) { Log.Debug("lock card reaction handler: {E}", ex.Message); }
                 try { Completed?.Invoke(); } catch (Exception ex) { Log.Debug("lock card completed handler: {E}", ex.Message); }
                 ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Note("done");   // WPF LockCardCompleted
             }
 
-            // ponytail: the rest stays stubbed and has no Core seam to reach through.
-            // App.LockCard.NotifyCompleted(_phrase, _totalErrors, _requiredRepeats) (!_isTest only)
-            //   - ConditioningControlPanel/Services/LockCard/LockCardService.cs
+            // ponytail: NotifyCompleted also announces to EMI and other service subscribers (WPF LockCardService.cs:47-71).
             Log.Information("Lock Card completed - {Repeats} repeats in {Time:F1}s with {Errors} errors{Test}",
                 _requiredRepeats, completionTime, _totalErrors, _isTest ? " (TEST)" : "");
 
@@ -1147,6 +1146,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                 // Last, so the card that can be typed into owns the foreground.
                 primary.TakeKeyboard();
+                // A refused activation leaves the card on top but never active, so Deactivated never reclaims it.
+                Platform.KeyboardReclaim.Start(primary, () => !primary._isCompleted && !primary._fadingOut,
+                    primary.FocusInput, "Lock Card");
                 Log.Information("Lock Card shown on {Count} window(s) - {Repeats} repeat(s), strict={Strict}, test={Test}",
                     _allWindows.Count, repeats, strictMode, isTest);
             }
@@ -1202,6 +1204,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>A real (not test) card was completed (WPF TotalLockCardsCompleted; the leash task counts these).</summary>
         internal static event Action? Completed;
+        internal static event Action<string, int, int>? ReactionCompleted;
 
         /// <summary>The CoreLockCard surface (seeded in App): draw the next phrase and resolve its repeat
         /// count through the three modes exactly as WPF LockCardService.ShowLockCard does.</summary>

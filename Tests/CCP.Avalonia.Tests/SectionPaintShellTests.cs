@@ -173,7 +173,7 @@ public sealed class SectionPaintShellTests
                 w = new MainShellWindow();
                 w.Show();
                 var home = w.Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
-                foreach (var tab in new[] { "settings", "play", "settings" })
+                foreach (var tab in new[] { "settings", "playeyes", "settings" })   // "play" opens the launcher Games door (declutter wave 2)
                 {
                     w.ShowTab(tab);
                     Dispatcher.UIThread.RunJobs();
