@@ -142,6 +142,66 @@ internal static class X11Overlay
         if (TryGet(window, OverlayBackend.Win32, out var hwnd)) Win32Overlay.SetPassive(window, hwnd);
     }
 
+    [DllImport(LibX11)] private static extern int XRestackWindows(IntPtr d, IntPtr[] windows, int count);
+    internal static bool HasKwinBlur() // KWin advertises the atom on the root, even with zero data.
+    {
+        lock (Gate) {
+            if (!OperatingSystem.IsLinux() || !EnsureDisplay()) return false; var data = IntPtr.Zero;
+            try { return XGetWindowProperty(_display, XDefaultRootWindow(_display), XInternAtom(_display, "_KDE_NET_WM_BLUR_BEHIND_REGION", false), 0L, 0L, false, IntPtr.Zero, out var type, out _, out ulong _, out ulong _, out data) == 0 && type != IntPtr.Zero; }
+            finally { if (data != IntPtr.Zero) XFree(data); }
+        }
+    }
+    private static IntPtr[] Children(IntPtr w, out IntPtr parent)
+    {
+        var data = IntPtr.Zero; parent = IntPtr.Zero;
+        try
+        {
+            if (XQueryTree(_display, w, out _, out parent, out data, out uint count) == 0) return Array.Empty<IntPtr>();
+            return Enumerable.Range(0, (int)Math.Min(count, 4096u)).Select(i => Marshal.ReadIntPtr(data, i * IntPtr.Size)).ToArray();
+        }
+        finally { if (data != IntPtr.Zero) XFree(data); }
+    }
+    private static IntPtr Frame(IntPtr w)
+    {
+        var root = XDefaultRootWindow(_display);
+        for (int i = 0; i < 32; i++)
+        {
+            Children(w, out var parent);
+            if (parent == root || parent == IntPtr.Zero) return w;
+            w = parent;
+        }
+        return IntPtr.Zero;
+    }
+    // WPF OverlayService.cs:3213-3248: server-ordered own root frames include override-redirect pictures, unlike _NET_CLIENT_LIST_STACKING.
+    internal static IReadOnlyList<BrainDrainKeepClear.BandEntry> VisibleOwnBand(IReadOnlyList<Window> windows)
+    {
+        if (OperatingSystem.IsWindows()) return Win32Overlay.VisibleOwnBand(windows);
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return Array.Empty<BrainDrainKeepClear.BandEntry>();
+            var frames = new Dictionary<IntPtr, IntPtr>();
+            foreach (var w in windows.Where(w => w.IsVisible && w.Topmost && w.WindowState != WindowState.Minimized))
+                if (TryGetXid(w, out var id)) frames[Frame(id)] = id;
+            return Children(XDefaultRootWindow(_display), out _).Reverse().Where(frames.ContainsKey)
+                .Select(f => new BrainDrainKeepClear.BandEntry(frames[f], true, false)).ToArray();
+        }
+    }
+    internal static bool EnableDesktopBlur(Window w)
+    {
+        if (!SetClickThrough(w, true) || w.ActualTransparencyLevel == WindowTransparencyLevel.None) return false;
+        if (OperatingSystem.IsWindows()) return w.ActualTransparencyLevel == WindowTransparencyLevel.Blur;
+        if (!TryGetXid(w, out var id)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay() || !IsCompositing) return false;
+            var atom = XInternAtom(_display, "_KDE_NET_WM_BLUR_BEHIND_REGION", false);
+            if (!HasKwinBlur()) return false;
+            _xErrored = false;
+            XChangeProperty(_display, id, atom, new IntPtr(6), 32, 0, Array.Empty<IntPtr>(), 0);
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
     /// <summary>Makes <paramref name="window"/> transparent to the mouse while it keeps drawing,
     /// or gives it back its input. The X11 equivalent of adding and clearing
     /// <c>WS_EX_TRANSPARENT</c>, and reversible at runtime the same way.
@@ -715,6 +775,26 @@ internal static class X11Overlay
         return RestackXid(xid, siblingXid);
     }
 
+    /// <summary>WPF OverlayService.cs:3247: insert directly below the anchor without activation,
+    /// movement or resizing. Called by BrainDrainOverlay with the shared BrainDrainKeepClear.Sink ordering.
+    /// On X11 it restacks the root FRAMES in server order (override-redirect pictures included), unlike
+    /// <see cref="RestackBelow"/>, which reads _NET_CLIENT_LIST_STACKING for the tunnel.
+    /// Unsupported backends return false; they must not pretend to have reordered anything.</summary>
+    internal static bool InsertBelow(TopLevel window, TopLevel sibling)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            return TryGet(sibling, OverlayBackend.Win32, out var after) && Win32Overlay.RestackBelow(hwnd, after);
+        if (!TryGetXid(window, out var xid) || !TryGetXid(sibling, out var anchor)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            XRestackWindows(_display, new[] { Frame(anchor), Frame(xid) }, 2);
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
+
     // WPF ChaosTunnelService.SinkToBottom: leave run chrome above the opaque background.
     internal static bool Sink(TopLevel window)
     {
@@ -802,7 +882,7 @@ internal static class X11Overlay
                 Marshal.WriteInt32(e, 48, 32);                                            // format
                 Marshal.WriteIntPtr(e, 56, new IntPtr(SourcePager));                      // data.l[0] source
                 Marshal.WriteIntPtr(e, 64, siblingXid);                                   // data.l[1] sibling
-                Marshal.WriteIntPtr(e, 72, new IntPtr(detail));                            // data.l[2] detail
+                Marshal.WriteIntPtr(e, 72, new IntPtr(Above));                            // data.l[2] detail
 
                 // Addressed to the ROOT window, not to ours: the WM holds SubstructureRedirect
                 // there, and that is how the request reaches it.

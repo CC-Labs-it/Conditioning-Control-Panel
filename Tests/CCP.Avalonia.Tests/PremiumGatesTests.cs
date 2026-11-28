@@ -54,7 +54,9 @@ public sealed class PremiumGatesTests
                 service.Current.AutonomyModeEnabled = true;
                 // Opening Play notes it in the dashboard's RECENT rail, a real save (WPF
                 // NoteDestinationOpened); already at the head, so this measures the lapse pass alone.
-                service.Current.RailRecent.Insert(0, "tab.playeyes");
+                // Play lands on its Eyes pill since declutter wave 2 ("play" opens the launcher's Games door).
+                service.Current.RailRecent.Insert(0, ConditioningControlPanel.Services.FavoritesRailRule.DestinationIdForTab(
+                    "playeyes", ConditioningControlPanel.Services.SettingsPaletteIndex.All)!);
                 // Opening a section page remembers its last tab (WPF SyncSectionChrome); already so.
                 service.Current.NavLastTabBySection = "{\"play\":\"playeyes\"}";
                 service.SaveImmediate();
@@ -171,11 +173,11 @@ public sealed class PremiumGatesTests
                 bool Banded(string band) => shell.Named<Control>("PlayTab")!.FindControl<Control>(band)!.IsVisible;
                 void Show(string tab) { shell.ShowTab(tab); Dispatcher.UIThread.RunJobs(); }
 
-                // Free: every veil and band up, except toys (free on every tier, HapticsAccess.IsOpen).
+                // Free: every veil and band up.
                 (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider) = (null, null, null);
                 Show("playeyes");
                 foreach (var (t, g) in Veils) Assert.True(Veiled(t, g), g);
-                Assert.False(HapticsVeiled());
+                Assert.False(HapticsVeiled());   // toys are free since 2026-11-11 (HapticsAccess.IsOpen): never veiled
                 foreach (var b in Bands) Assert.True(Banded(b), b);
 
                 // The free day lifts its own veil and band, nothing else.

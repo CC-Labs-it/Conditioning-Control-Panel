@@ -34,6 +34,9 @@ public class FirstShowRemoteConsentTests
                 var emi = new EmiDeskWindow { Left = -10000, Top = -10000, Opacity = 0 };
                 var show = new FirstShowDesktopWindow(true, emi, null)
                 {
+                    // The preview voice plays at 65% with no App.Settings: in the shared test process
+                    // that loaded wmp.dll and failed every later RowsRender.AssertSilent (sync/73-linux CI).
+                    Silent = true,
                     CurrentSettings = () => s,
                     ConsentOverride = (title, message) =>
                     {
@@ -48,6 +51,7 @@ public class FirstShowRemoteConsentTests
                     var pick = show.Pick(preset);
                     Assert.True(pick.IsCompleted);   // every seam answers at once
                     pick.GetAwaiter().GetResult();
+                    Assert.False(show.AudioHasPlayer);   // silent: no MediaPlayer, so no wmp.dll
                 }
                 finally { show.Close(); emi.Close(); }
             });
