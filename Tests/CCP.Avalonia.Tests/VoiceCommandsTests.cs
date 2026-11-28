@@ -173,17 +173,21 @@ public sealed class VoiceCommandsTests
         await Until(() => mic.Starts > starts && engine.IsListening, 10);   // the wake loop listens again
     });
 
-    // A silent room: with the WAV, the live wake loop wakes on it and the command listen can match a
-    // Lockdown-guarded intent ("one [unk]" -> pause), whose refusal is a second "stop" escape below.
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(new byte[32000], async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
     {
+        // This test injects commands directly; no replaying microphone should race its tripwire.
         var s = CoreSettings.Current;
-        s.AutonomyConsentGiven = true;
-        s.PanicKeyEnabled = true;
-        using var ld = LockdownService.Current = new LockdownService();
+        var premium = CoreEntitlement.HasPremiumProvider;
+        var panicEnabled = s.PanicKeyEnabled;
+        var previousLockdown = LockdownService.Current;
+        var ld = new LockdownService();
         try
         {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            s.AutonomyConsentGiven = true;
+            s.PanicKeyEnabled = true;
+            LockdownService.Current = ld;
             Assert.True(shell.SetAutonomyEnabled(true));
             ld.Activate(TimeSpan.FromMinutes(30));
             var escapes = new System.Collections.Generic.List<string>();
@@ -210,9 +214,14 @@ public sealed class VoiceCommandsTests
         }
         finally
         {
-            shell.Autonomy.Stop();
-            LockdownService.Current = null;
-            (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
+            try { ld.Dispose(); shell.Autonomy.Stop(); }
+            finally
+            {
+                LockdownService.Current = previousLockdown;
+                (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
+                s.PanicKeyEnabled = panicEnabled;
+                CoreEntitlement.HasPremiumProvider = premium;
+            }
         }
         await Task.CompletedTask;
     });
