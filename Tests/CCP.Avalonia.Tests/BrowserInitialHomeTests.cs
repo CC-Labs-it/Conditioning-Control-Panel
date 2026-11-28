@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -15,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Browser;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
@@ -132,6 +134,99 @@ public sealed class BrowserInitialHomeTests
         Report(panic);
         Assert.Equal(0, Seeks());
     }));
+
+    [Fact]
+    public Task AppTakeoverCutSeeksOnceAndPanicCancelsPendingSeek() => WithIsolatedBrowserMediaSession(() => Run((shell, page, host, mod) =>
+        WithVideoSettings(() =>
+    {
+        var media = ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared;
+        var scripts = new System.Collections.Generic.List<string>();
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        host.NavigationInvoker = _ => true;
+        shell.BrowserAutoPlayDelay = () => Task.CompletedTask;
+        CoreSettings.Current.VideoMaxDurationSeconds = 30;
+        CoreSettings.Current.VideoCutRandomStart = true;
+        string Start()
+        {
+            media.ReplaceSession(ConditioningControlPanel.Services.Browser.BrowserMediaSession.MediaOwner.Remote, true);
+            Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/video", true, false));
+            host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/video"));
+            return scripts.FindLast(x => x.Contains("const cutRequest ="))!.Split("const cutRequest = '")[1].Split("'")[0];
+        }
+        void Report(string token) => host.OnWebMessage("{\"type\":\"ccpCutMetadata\",\"request\":\"" + token + "\",\"dur\":120}");
+        int Seeks() => scripts.FindAll(x => x.Contains("if(window.__ccpCutRequest===")).Count;
+        try
+        {
+            var first = Start();
+            Report(first); Report(first);
+            Assert.Equal(1, Seeks());
+            var pending = Start();
+            PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
+            Report(pending);
+            Assert.Equal(1, Seeks());
+        }
+        finally { media.OnMediaStopped("test"); }
+    })));
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TakeoverCutTestPreservesPriorBrowserSession(bool playing)
+    {
+        var original = BrowserMediaSession.Shared;
+        var prior = new BrowserMediaSession(new BubbleCountQueueTests.Clock());
+        var settings = CoreSettings.Current;
+        var (protect, grace) = (settings.ProtectBrowserVideoPlayback, settings.BrowserVideoGraceSeconds);
+        try
+        {
+            (settings.ProtectBrowserVideoPlayback, settings.BrowserVideoGraceSeconds) = (true, 120);
+            if (playing)
+            {
+                prior.ReplaceSession(BrowserMediaSession.MediaOwner.Autonomy, true);
+                prior.OnMediaPlaying(120);
+            }
+            BrowserMediaSession.Shared = prior;
+            var defer = prior.ShouldDeferNewVideo;
+            await AppTakeoverCutSeeksOnceAndPanicCancelsPendingSeek();
+            Assert.Same(prior, BrowserMediaSession.Shared);
+            Assert.Equal(playing, prior.IsPlaying);
+            Assert.Equal(playing, prior.IsTakeover);
+            Assert.Equal(playing, prior.HoldsScreen);
+            Assert.Equal(defer, prior.ShouldDeferNewVideo);
+        }
+        finally
+        {
+            BrowserMediaSession.Shared = original;
+            prior.OnMediaStopped("test");
+            (settings.ProtectBrowserVideoPlayback, settings.BrowserVideoGraceSeconds) = (protect, grace);
+        }
+    }
+
+    [Fact]
+    public async Task IsolatedBrowserSessionIsRestoredAfterFailure()
+    {
+        var original = BrowserMediaSession.Shared;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => WithIsolatedBrowserMediaSession(() =>
+        {
+            Assert.NotSame(original, BrowserMediaSession.Shared);
+            BrowserMediaSession.Shared.ReplaceSession(BrowserMediaSession.MediaOwner.Remote, true);
+            throw new InvalidOperationException("test cleanup");
+        }));
+        Assert.Same(original, BrowserMediaSession.Shared);
+    }
+
+    private static async Task WithIsolatedBrowserMediaSession(Func<Task> run)
+    {
+        var original = BrowserMediaSession.Shared;
+        var isolated = new BrowserMediaSession();
+        BrowserMediaSession.Shared = isolated;
+        try { await run(); }
+        finally
+        {
+            try { isolated.OnMediaStopped("test"); }
+            finally { BrowserMediaSession.Shared = original; }
+        }
+    }
 
     private static void WithVideoSettings(Action check)
     {
