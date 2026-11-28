@@ -142,7 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs {
         internal static void StopTrailersForPanic() {
             TrailerOwners.RemoveAll(w => !w.TryGetTarget(out _));
             foreach (var weak in TrailerOwners)
-                if (weak.TryGetTarget(out var tab)) tab.HideTrailer();
+                if (weak.TryGetTarget(out var tab)) { try { tab.HideTrailer(); } finally { tab.StopPressFeedback(); } }
         }
         private void FxTrailerStart(TabPrice price) {
             FxTrailerStop();
