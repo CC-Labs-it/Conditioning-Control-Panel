@@ -75,6 +75,7 @@ namespace ConditioningControlPanel.Services
         private bool _toldNoVideos, _heldFlashes;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
         private int _retryCount, _generation;
+        internal int ReactionGeneration => System.Threading.Volatile.Read(ref _generation);
 
         public BubbleCountScheduler(IBubbleCountHost host, TimeProvider? time = null, Func<IReadOnlyList<string>>? library = null)
         {
@@ -84,7 +85,7 @@ namespace ConditioningControlPanel.Services
         }
 
         // WPF BubbleCountService.cs:64-65: only terminal game outcomes are announced.
-        public event Action? GameCompleted, GameFailed;
+        public event Action? GameCompleted, GameFailed, ForceCleaned;
 
         public bool IsRunning { get; private set; }
         /// <summary>A game (lead-in, clip, answer or retry message) is in progress.</summary>
@@ -156,6 +157,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ForceCleanup / ResetBusyState: close everything, no completion, no XP.</summary>
         public void ForceCleanup()
         {
+            try { ForceCleaned?.Invoke(); }
+            catch (Exception ex) { Log.Warning(ex, "BubbleCountService: cleanup notification failed"); }
             Dispose(ref _leadIn);
             Dispose(ref _queued);   // WPF panic: InteractionQueue.ForceReset drops the queued game
             foreach (var poll in _feedPolls) poll.Dispose();

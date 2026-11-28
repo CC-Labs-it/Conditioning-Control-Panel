@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     {
         /// <summary>Where a line came from: decides the gap after it (WPF Speech.cs:71); a queued
         /// Trigger replays through its own bubble (ShowSpeechBySource :217).</summary>
-        internal enum SpeechSource { Preset, AI, Trigger, VideoAnnouncement }
+        internal enum SpeechSource { Preset, AI, Trigger, VideoAnnouncement, GameReaction }
 
         // WPF Speech.cs:35,283: queued audio drops, but the line id and mood still drive the expression.
         private readonly Queue<(string Text, bool Unprompted, SpeechSource Source, string? LineId, string? Mood)> _speechQueue = new();
@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         /// <summary>Cancels the pending post-line gap (WPF _speechDelayTimer.Stop). Never null.</summary>
         private Action _cancelSpeechDelay = NoSpeechDelay;
-        private bool _videoAnnouncementDelayPending;
+        private bool _videoAnnouncementDelayPending, _gameReactionDelayPending;
         private int _speechDelayGeneration;
         /// <summary>The idle cancel; anything else means a gap is pending (the stale-latch check reads it).</summary>
         private static readonly Action NoSpeechDelay = static () => { };
@@ -79,11 +79,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (remaining > 0)
             {
                 _videoAnnouncementDelayPending = next.Source == SpeechSource.VideoAnnouncement;
+                _gameReactionDelayPending = next.Source == SpeechSource.GameReaction;
                 _cancelSpeechDelay = SpeechDelayScheduler(TimeSpan.FromSeconds(remaining), () =>
                 {
                     if (generation != _speechDelayGeneration) return;
                     _cancelSpeechDelay = NoSpeechDelay;
                     _videoAnnouncementDelayPending = false;
+                    _gameReactionDelayPending = false;
                     ShowQueued(next);
                 });
             }
@@ -99,7 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 var video = line.Source == SpeechSource.VideoAnnouncement;
                 // WPF AvatarTubeWindow.Speech.cs:230-234: queued presets keep their emotion ID, not audio.
-                ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: line.Unprompted, mood: line.Mood, emotionLineId: line.LineId, videoAnnouncement: video);
+                ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: line.Unprompted, mood: line.Mood, emotionLineId: line.LineId, videoAnnouncement: video, gameReaction: line.Source == SpeechSource.GameReaction);
             }
         }
 
@@ -120,6 +122,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             ProcessNextSpeech();
         }
 
+        private void CancelQueuedGameReaction()
+        {
+            var count = _speechQueue.Count;
+            for (var i = 0; i < count; i++)
+            {
+                var line = _speechQueue.Dequeue();
+                if (line.Source != SpeechSource.GameReaction) _speechQueue.Enqueue(line);
+            }
+            if (!_gameReactionDelayPending) return;
+            _gameReactionDelayPending = false;
+            _speechDelayGeneration++;
+            _cancelSpeechDelay();
+            _cancelSpeechDelay = NoSpeechDelay;
+            ProcessNextSpeech();
+        }
+
         /// <summary>WPF GigglePriority / PanicSilence: drop every waiting line and the pending gap.</summary>
         private void ClearSpeechQueue()
         {
@@ -127,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _speechQueue.Clear();
             _speechDelayGeneration++;
             _videoAnnouncementDelayPending = false;
+            _gameReactionDelayPending = false;
             _cancelSpeechDelay();
             _cancelSpeechDelay = NoSpeechDelay;
         }
@@ -147,6 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal void EndSpeechBubble()
         {
             _videoAnnouncementShowing = false;
+            _gameReactionShowing = false;
             CancelTriggerAnimation();
             _speechTimer?.Stop();
             _speechBubble.IsVisible = false;

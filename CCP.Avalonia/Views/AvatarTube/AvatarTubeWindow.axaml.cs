@@ -324,7 +324,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             RefreshTubeLayout();
 
             AttachCompanionLevels();
-            AttachServiceReactions(App.Achievements, global::ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler); // WPF xaml.cs:302-306
+            AttachServiceReactions(App.Achievements, global::ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler, CoreEngine.BubbleCount); // WPF xaml.cs:270-274,302-306
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
             AttachTriggerSettings(); // WPF Speech.cs:1630-1675
 
@@ -1322,13 +1322,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         public void Giggle(string text, bool unprompted = false, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null)
             => GiggleCore(text, unprompted, phraseAudioPath, barkVoice, mood, videoAnnouncement: false);
 
-        private void GiggleCore(string text, bool unprompted, string? phraseAudioPath, bool barkVoice, string? mood, bool videoAnnouncement)
+        private void GiggleCore(string text, bool unprompted, string? phraseAudioPath, bool barkVoice, string? mood, bool videoAnnouncement, bool gameReaction = false)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
             {
                 if (_isWaitingForAi || _isShowingAiBubble) return;   // re-checked on the UI thread, as WPF
-                var source = videoAnnouncement ? SpeechSource.VideoAnnouncement : SpeechSource.Preset;
+                var source = videoAnnouncement ? SpeechSource.VideoAnnouncement : gameReaction ? SpeechSource.GameReaction : SpeechSource.Preset;
                 if (_isGiggling) { _speechQueue.Enqueue((text, unprompted, source, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood)); return; }
                 if (!IsSpeechReady())
                 {
@@ -1337,7 +1337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted, mood: mood, videoAnnouncement: videoAnnouncement);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted, mood: mood, videoAnnouncement: videoAnnouncement, gameReaction: gameReaction);
             });
         }
 
@@ -1345,8 +1345,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null, string? mood = null, string? emotionLineId = null, bool videoAnnouncement = false)
+                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null, string? mood = null, string? emotionLineId = null, bool videoAnnouncement = false, bool gameReaction = false)
         {
+            _gameReactionShowing = gameReaction;
+            if (gameReaction) _gameReactionLength = text.Length;
             _videoAnnouncementShowing = videoAnnouncement;
             if (videoAnnouncement) _videoAnnouncementLength = text.Length;
             ResetIdleTimer();
