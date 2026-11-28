@@ -175,6 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CoreSettings.Current.AutoPerformanceMode = ChkAutoPerformance.IsChecked ?? true;
             Log.Information("Auto performance mode set to {Enabled}", CoreSettings.Current.AutoPerformanceMode);
             CoreSettings.Save();
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
         }
 
         private void ChkUnifiedOverlay_Changed(object? sender, RoutedEventArgs e)
