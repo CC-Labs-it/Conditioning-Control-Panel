@@ -381,6 +381,12 @@ public sealed class WebAssetServer : IDisposable
     /// null = the prefix is not served.</summary>
     public Func<string?>? AssetsRoot { get; init; }
 
+    /// <summary>WPF's <c>https://ccp.expo/</c> (TcHostService.Expo.cs:335): the ready Llama Expo the T&amp;C window
+    /// serves (GameWindow.Tc.Expo.cs), read-only, same token rule. <see cref="ExpoFolder"/> null = not served.</summary>
+    public const string ExpoPrefix = "ccp.expo/";
+    internal static volatile string? ExpoFolder;
+    public string ExpoBase => $"http://127.0.0.1:{Port}/{ExpoPrefix}";
+
     /// <summary>Downloaded audio-web mirror; read on every request so a pack installed during a run is available.</summary>
     public Func<string?>? ContentRoot { get; init; }
 
@@ -441,13 +447,21 @@ public sealed class WebAssetServer : IDisposable
                 || (rel.Split('/', '\\').Any(seg => seg.StartsWith('.')) && !IsRemoteCopy(rel))
                 || HoldsUserData(root)) return null;
         }
+        bool expo = !art && rel.StartsWith(ExpoPrefix, StringComparison.Ordinal);
+        if (expo)
+        {
+            if (ExpoFolder is not { Length: > 0 } pack) return null;
+            root = Path.GetFullPath(pack).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            rel = rel[ExpoPrefix.Length..];
+            if (rel.Split('/', '\\').Any(seg => seg.StartsWith('.'))) return null;
+        }
         if (rel.Length == 0 || rel.EndsWith('/')) rel += "index.html";
         if (rel.Contains('\0')) return null;
         var full = Path.GetFullPath(Path.Combine(root, rel));
         if (!Inside(full, root)) return null;
         if (!File.Exists(full))
         {
-            if (art || asset || whisper || !ContentLocator.IsIntakeWebAudio(rel) || ContentRoot?.Invoke() is not { Length: > 0 } content)
+            if (art || asset || whisper || expo || !ContentLocator.IsIntakeWebAudio(rel) || ContentRoot?.Invoke() is not { Length: > 0 } content)
                 return null;
             root = Path.GetFullPath(content).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             if (HoldsUserData(root)) return null;

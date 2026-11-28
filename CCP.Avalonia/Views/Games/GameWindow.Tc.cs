@@ -5,10 +5,11 @@
 // waits for init with no timeout). Hard exits (panic, title-bar X, a dead page, the watchdog) close the window at once;
 // the page's own exit ends on its exit-done or at 800 ms. Escape is its pause (GameWindow.Escape.cs); panic closes it
 // with every other game (PanicSurfaces "games"). Not on this head yet, so the init does not offer them: pictures and
-// the Sparkles medal (s20-tc-media), toy pulses and live settings (s20-tc-feel), the save carry (s20-tc-save) and
-// the Llama Expo (s20-tc-expo). Their frames are refused here with a log line.
+// the Sparkles medal (s20-tc-media), toy pulses and live settings (s20-tc-feel) and the save carry (s20-tc-save).
+// Their frames are refused here with a log line. The Llama Expo download is GameWindow.Tc.Expo.cs.
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -75,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_tcOpen) return;
             _tcOpen = true;
             _tcEdition = TcReadEdition();
+            TcExpoOnLaunch();
             _tcFocusHeld = false;
             _tcCloseAskedUtc = null;
             _tcLastAnyUtc = _tcLastBeatUtc = DateTime.UtcNow;
@@ -96,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { _tcWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { _tcCloseClock?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _tcWatch = _tcCloseClock = null;
+            CloseTcExpo();   // the partial stays for the next press
             _tcCloseAskedUtc = null;
             Activated -= OnTcActivated;
             // Post() drops frames once closing; this one goes straight to the page, as WPF posts it before Dispose.
@@ -115,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 var s = CoreSettings.Current;
-                var caps = TcRules.Caps(_tcEdition, saveSlot: false);   // no save carry on this head yet (s20-tc-save)
+                var caps = TcRules.Caps(_tcEdition, saveSlot: false, TcExpoCap());   // no save carry on this head yet (s20-tc-save)
                 Post(TcHostRules.InitFrame(LocalizationManager.Instance.CurrentLanguage, s.MotionLevel, GentleVisuals.On, CoreMods.ActiveModId, caps,
                     picturesOn: false, sparkles: false, toys: false, toysConnected: false, ownMedia: false));
             }
@@ -143,6 +146,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         // Every ready, the first and each Main-menu reload, gets a fresh init (15d5a5e50a).
                         IsReady = true;
                         _tcLastBeatUtc = _tcLastAnyUtc;
+                        // WPF OnPageReady: with no Expo size yet, wait for the manifest read, at most 1.5 s from open.
+                        if (TcExpoInitHold() is var hold && hold > TimeSpan.Zero && _tcExpoSizeRead is { } read)
+                        {
+                            _ = Task.WhenAny(read, Task.Delay(hold)).ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+                            {
+                                if (_tcOpen && !_closing) PostTcInit();
+                            }), TaskScheduler.Default);
+                            break;
+                        }
                         PostTcInit();
                         break;
                     case "heartbeat":
@@ -162,6 +174,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         break;
                     case "open-url":
                         if (!TcOpenUrl(f.Url!)) Log.Debug("Tc: open-url not opened");
+                        break;
+                    case "expo-fetch":
+                        OnTcExpoFetch();   // the page sends it only from a press
+                        break;
+                    case "expo-cancel":
+                        StopTcExpo();
                         break;
                     case "nudge":
                         OpenTcTierCard();   // desktop: every nudge is the tier compare card (Contract v2)

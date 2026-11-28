@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel;
@@ -22,8 +23,17 @@ public sealed partial class GameWindowTests
     private static void RunTc(string edition, Action<MainShellWindow, GameWindow, List<JObject>> body) => Run((shell, launcher) =>
     {
         var (oldTree, oldEdition, oldOpen) = (GameWindow.TcTreePresent, GameWindow.TcReadEdition, GameWindow.TcOpenUrl);
+        var (oldHandler, oldRoot) = (GameWindow.TcExpoHandler, GameWindow.TcExpoContentRoot);
         try
         {
+            // The Expo never reaches the network or the real profile: a fake handler, a pack root in the test sandbox
+            // with a cached manifest (so the init never waits on a size read).
+            TcFake = new TcExpoFake();
+            GameWindow.TcExpoHandler = () => TcFake;
+            TcRoot = Path.Combine(TestUserDataProfile.Root, "tc-expo-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(TcExpoPackRules.Root(TcRoot));
+            File.WriteAllText(TcExpoPackRules.CachePath(TcRoot), TcManifest(131_367_569, new string('a', 64)));
+            GameWindow.TcExpoContentRoot = () => TcRoot;
             GameWindow.TcTreePresent = () => true;
             GameWindow.TcReadEdition = () => edition;
             launcher.Hide();
@@ -34,7 +44,11 @@ public sealed partial class GameWindowTests
             w.Posted += json => sent.Add(JObject.Parse(json));
             body(shell, w, sent);
         }
-        finally { (GameWindow.TcTreePresent, GameWindow.TcReadEdition, GameWindow.TcOpenUrl) = (oldTree, oldEdition, oldOpen); }
+        finally
+        {
+            (GameWindow.TcTreePresent, GameWindow.TcReadEdition, GameWindow.TcOpenUrl) = (oldTree, oldEdition, oldOpen);
+            (GameWindow.TcExpoHandler, GameWindow.TcExpoContentRoot) = (oldHandler, oldRoot);
+        }
     });
 
     [Fact]
@@ -75,7 +89,8 @@ public sealed partial class GameWindowTests
         Assert.Equal(edition, (string?)caps["edition"]);
         Assert.Equal("desktop", (string?)caps["platform"]);
         Assert.False((bool)caps["saveSlot"]!);
-        Assert.Null(caps["expo"]);
+        if (edition == "full") Assert.Equal("{\"state\":\"absent\",\"mb\":131}", caps["expo"]!.ToString(Newtonsoft.Json.Formatting.None));   // the cached size
+        else Assert.Null(caps["expo"]);
         Assert.Null(caps["ownMedia"]);   // this head cannot answer own-media-list yet (s20-tc-media)
         Assert.False((bool)caps["toys"]!);
         Assert.False((bool)caps["sparkles"]!);
