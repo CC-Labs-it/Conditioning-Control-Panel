@@ -168,6 +168,29 @@ public sealed partial class GameWindowTests
         });
     }
 
+    // WPF ArcademyHostService.cs:4446-4460: the deadline races the whole flow; one that ignores the token still ends cancelled, and its late finish is not answered.
+    [Fact]
+    public void Arcademy_LinkDiscordDeadlineOutlastsAFlowThatIgnoresCancellation()
+    {
+        var never = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var oldDeadline = GameWindow.ArcademyLinkDeadline;
+        try
+        {
+            GameWindow.ArcademyLinkDeadline = TimeSpan.FromMilliseconds(200);
+            RunStudentId(false, (_, _) => never.Task, (w, frames, _, setLinked) =>
+            {
+                w.HandleMessage("{\"type\":\"link-discord\"}");
+                Settle(w.ArcademyLastLink);
+                Assert.Equal(new string?[] { "cancelled" }, LinkResults(frames));
+                setLinked(true); never.SetResult();
+                for (int i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(10); }
+                Assert.Equal(new string?[] { "cancelled" }, LinkResults(frames));
+                Assert.Equal("username", CoreSettings.Current.ArcademyPresenceShare);
+            });
+        }
+        finally { GameWindow.ArcademyLinkDeadline = oldDeadline; never.TrySetResult(); }
+    }
+
     // WPF ArcademyHostService.cs:4460-4491: a thrown flow is failed, a flow that links nothing is cancelled, success is linked.
     [Fact]
     public void Arcademy_LinkDiscordFailureAndSuccessReplies()

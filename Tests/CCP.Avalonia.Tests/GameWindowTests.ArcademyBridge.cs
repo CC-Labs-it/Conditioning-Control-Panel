@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Newtonsoft.Json.Linq;
@@ -103,7 +105,23 @@ public sealed partial class GameWindowTests
             w.HandleMessage("{\"type\":\"local-sample-request\",\"reqId\":\"p\",\"kind\":\"loop\",\"tag\":\"noise\",\"presetId\":\"p1\"}");
             Settle(w.ArcademyLastLocalSample);
             var urls = ((JArray)frames.Last(f => (string?)f["reqId"] == "p")["urls"]!).Select(r => ((string?)r["url"], (string?)r["src"])).OrderBy(r => r.Item1).ToArray();
-            Assert.Equal(new[] { ("/ccp.assets/images/pile/deep/b.gif", "preset:p1"), ("/ccp.assets/videos/v.mp4", "preset:p1") }, urls);
+            Assert.Equal(new[] { ("/ccp.assets/images/pile/deep/b.gif?ccp_preset=p1", "preset:p1"), ("/ccp.assets/videos/v.mp4?ccp_preset=p1", "preset:p1") }, urls);
+            // off.png is out of the current selection but in p1's: the server serves the preset's own sample (WPF ccp.assets serves the folder).
+            w.HandleMessage("{\"type\":\"local-sample-request\",\"reqId\":\"o\",\"kind\":\"still\",\"tag\":\"noise\",\"presetId\":\"p1\"}");
+            Settle(w.ArcademyLastLocalSample);
+            var off = (string)Assert.Single((JArray)frames.Last(f => (string?)f["reqId"] == "o")["urls"]!)["url"]!;
+            Assert.Equal("/ccp.assets/images/off.png?ccp_preset=p1", off);
+            var web = Directory.CreateTempSubdirectory("arc-web-").FullName;
+            try
+            {
+                using var server = new WebAssetServer(web) { AssetsRoot = () => lib };
+                using var http = new System.Net.Http.HttpClient();
+                HttpStatusCode Get(string path) => http.GetAsync($"http://127.0.0.1:{server.Port}{path}&ccp_t={server.Token}").GetAwaiter().GetResult().StatusCode;
+                Assert.Equal(HttpStatusCode.OK, Get(off));
+                Assert.Equal(HttpStatusCode.NotFound, Get("/ccp.assets/images/off.png?x=1"));   // the current selection still holds
+                Assert.Equal(HttpStatusCode.NotFound, Get("/ccp.assets/images/pile/a.png?ccp_preset=p1"));   // and p1 its own
+            }
+            finally { Directory.Delete(web, true); }
         }
         finally { w.Close(); (CorePaths.EffectiveAssetsProvider, s.DisabledAssetPaths, s.AssetPresets) = old; Directory.Delete(lib, true); }
     });

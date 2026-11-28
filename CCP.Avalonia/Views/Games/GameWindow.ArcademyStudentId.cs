@@ -80,7 +80,11 @@ internal sealed partial class GameWindow
             string result;
             try
             {
-                await ArcademyDiscordSignIn(open, cts.Token);
+                // WPF :4446-4460 races the whole flow, not only the browser wait, and ignores a late finish.
+                var flow = ArcademyDiscordSignIn(open, cts.Token);
+                _ = flow.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                if (await Task.WhenAny(flow, Task.Delay(Timeout.Infinite, cts.Token)) != flow) { Answer("cancelled"); return; }
+                await flow;
                 // Core's SignInAsync returns without linking while another flow runs (IsVerifying).
                 result = ArcademyDiscordLinked() ? "linked" : "cancelled";
             }
