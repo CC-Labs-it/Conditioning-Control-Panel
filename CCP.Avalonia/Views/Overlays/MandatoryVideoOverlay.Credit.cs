@@ -38,10 +38,12 @@ internal sealed partial class MandatoryVideoOverlay
     internal static ScrolllerCreditBadge CreditFor(string path, Func<string, ScrolllerCacheMeta?>? lookup = null)
     {
         var credit = new ScrolllerCreditBadge();
-        var meta = (lookup ?? ScrolllerItemIndex.MetaFor)(path);
-        credit.SetShown(ScrolllerCreditRules.IsScrolllerMedia(path) || ScrolllerCreditRules.LinkFor(meta?.Sub) != null);
+        credit.SetShown(HasCredit(path, lookup));
         return credit;
     }
+
+    internal static bool HasCredit(string path, Func<string, ScrolllerCacheMeta?>? lookup = null) =>
+        ScrolllerCreditRules.IsScrolllerMedia(path) || ScrolllerCreditRules.LinkFor((lookup ?? ScrolllerItemIndex.MetaFor)(path)?.Sub) != null;
 
     private bool CreditLinkAllowed() => !(_strict || Scheduler.IsStrict) && ScrolllerCreditRules.CanOpenLink(
         CoreSettings.Current?.StrictLockEnabled == true, global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.LockdownActive,
