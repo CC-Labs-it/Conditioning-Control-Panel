@@ -61,7 +61,7 @@ internal static class X11ActiveWindow
     private static IntPtr _display;
     private static bool _tried;
     private static IntPtr _root, _active, _netWmName, _utf8, _wmName, _netWmPid, _cardinal,
-        _windowType, _typeDesktop, _typeDock, _frameExtents, _wmState, _wmAbove, _wmFullscreen;
+        _windowType, _typeDesktop, _typeDock, _frameExtents;
 
     /// <summary>Set once by the test assembly's module initializer: no test may read the real desktop.</summary>
     internal static bool Disabled;
@@ -87,19 +87,6 @@ internal static class X11ActiveWindow
         return CreateSample(window, ReadTitle(window), ReadProcessName(window), shell, !shell && CoversMonitor(window));
     }, null);
 
-    // Tube-only: preserve the awareness probe's geometry semantics while requiring EWMH above or fullscreen.
-    internal static ForegroundSample? ReadTubeSample() => ReadActive<ForegroundSample?>(window =>
-    {
-        if (!TubeTopmost(ReadCardinals(window, _wmState, 256, IntPtr.Zero), unchecked((uint)_wmAbove.ToInt64()), unchecked((uint)_wmFullscreen.ToInt64()))) return null;
-        var types = ReadCardinals(window, _windowType, 32, IntPtr.Zero);
-        bool shell = Array.IndexOf(types, unchecked((uint)_typeDesktop.ToInt64())) >= 0 || Array.IndexOf(types, unchecked((uint)_typeDock.ToInt64())) >= 0;
-        return CreateSample(window, ReadTitle(window), ReadProcessName(window), shell, !shell && CoversMonitor(window));
-    }, null);
-    // EWMH keeps _NET_WM_STATE_FULLSCREEN and _NET_WM_STATE_ABOVE separate; either is the X11 twin of
-    // WPF's popup+topmost exclusive check (Windowing.cs:419-431). A borderless window with neither is skipped.
-    internal static bool TubeTopmost(uint[] states, uint above, uint fullscreen) =>
-        (above != 0 && Array.IndexOf(states, above) >= 0) || (fullscreen != 0 && Array.IndexOf(states, fullscreen) >= 0);
-
     // One owned connection and the swapped-in error handler around every read of the active window.
     private static T ReadActive<T>(Func<IntPtr, T> read, T none)
     {
@@ -123,9 +110,6 @@ internal static class X11ActiveWindow
                 _typeDesktop = XInternAtom(_display, "_NET_WM_WINDOW_TYPE_DESKTOP", false);
                 _typeDock = XInternAtom(_display, "_NET_WM_WINDOW_TYPE_DOCK", false);
                 _frameExtents = XInternAtom(_display, "_NET_FRAME_EXTENTS", false);
-                _wmState = XInternAtom(_display, "_NET_WM_STATE", false);
-                _wmAbove = XInternAtom(_display, "_NET_WM_STATE_ABOVE", false);
-                _wmFullscreen = XInternAtom(_display, "_NET_WM_STATE_FULLSCREEN", false);
             }
             if (_display == IntPtr.Zero) return none;
 

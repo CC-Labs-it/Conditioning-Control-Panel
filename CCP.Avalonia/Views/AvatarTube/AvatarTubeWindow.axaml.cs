@@ -328,7 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
             InitTakeoverCountdownBar();
             StartFloatingAnimation(); // WPF xaml.cs:614 and Windowing.cs:1481
-            StartFullscreenDetection(); // WPF xaml.cs:629
+            // Part B: WPF StartFullscreenDetection.
             ScheduleGreeting();         // WPF xaml.cs:343-353
             if (_randomBubbleTimer == null) StartRandomBubbleTimer(); // WPF xaml.cs:362
         }
@@ -364,7 +364,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _idleTimer?.Stop();
             _speechTimer?.Stop();
             _greetingTimer?.Stop();
-            StopFullscreenDetection();
             StopRandomBubbles();
             DetachTriggerSettings();
             ClearSpeechQueue();
