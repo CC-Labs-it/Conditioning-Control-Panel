@@ -122,7 +122,7 @@ public sealed partial class FriendsDrawer : Border
         if (!asPage) LeashSection = new Tabs.LeashTabView(() => Platform.LeashHead.Service, asDrawer: true);
         var (scroll, top, line) = (new ScrollViewer { Content = LeashSection == null ? _list : new StackPanel { Children = { LeashSection, _list } }, Padding = new Thickness(6, 4, 6, 8), MinHeight = 120 }, new Thickness(0, 1, 0, 0), Line);
         (_head.Background, _head.CornerRadius, _head.BorderBrush, _head.BorderThickness, _head.Padding) = (Raised, new CornerRadius(15, 15, 0, 0), line, new Thickness(0, 0, 0, 1), new Thickness(12, 12, 12, 10));
-        (_addBox.IsVisible, _addBox.Padding, _addBox.BorderBrush, _addBox.BorderThickness) = (false, new Thickness(10, 8, 10, 8), line, top);
+        (_addBox.IsVisible, _addBox.Tag, _addBox.Padding, _addBox.BorderBrush, _addBox.BorderThickness) = (false, "friends-add-box", new Thickness(10, 8, 10, 8), line, top);
         (_foot.Background, _foot.BorderBrush, _foot.BorderThickness, _foot.CornerRadius, _foot.Padding) = (Foot, line, top, new CornerRadius(0, 0, 15, 15), new Thickness(8));
         Grid.SetRow(_ask, 1);
         Grid.SetRow(scroll, 2);
@@ -197,6 +197,7 @@ public sealed partial class FriendsDrawer : Border
         if (_svc?.Available == true) _ = SafeRefreshAsync();
         try { if (_svc?.Available == true) StartTables(); } catch { }
         Render();
+        PlayEntrance();   // WPF FriendsDrawer.cs:197
         Dispatcher.UIThread.Post(() => Focus());
     }
     public void OnClosed()
@@ -204,6 +205,7 @@ public sealed partial class FriendsDrawer : Border
         try { _svc?.SetDrawerOpen(false); } catch { }
         Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes); also stops the tables poll
         FeedFolded();
+        StopAmbient();
         LeashSection?.SetDrawerOpen(false);
         (_isOpen, _openId, _confirm, _picker, _addBox.IsVisible) = (false, null, null, null, false);
     }
@@ -222,7 +224,6 @@ public sealed partial class FriendsDrawer : Border
         _subscribed = false;
         StopTables();
     }
-    private void OnSnapshot(FriendsSnapshot _) => Render();
     private async Task SafeRefreshAsync()
     {
         try { if (_svc != null) await _svc.RefreshAsync(); }
@@ -232,9 +233,11 @@ public sealed partial class FriendsDrawer : Border
     {
         var snap = FriendsSnapshot.Empty;
         try { if (_svc?.Available == true) snap = _svc.Snapshot ?? FriendsSnapshot.Empty; } catch { }
+        _last = snap;
         RenderHead();
         RenderAsk();
         RenderList(snap);
+        StartAmbient();
         RenderFoot(snap);
     }
     private bool Shared() { try { return _svc?.Available == true && _svc.PresenceShared; } catch { return false; } }
@@ -319,6 +322,8 @@ public sealed partial class FriendsDrawer : Border
     private void RenderList(FriendsSnapshot snap)
     {
         _list.Children.Clear();
+        _rows.Clear();
+        _avatars.Clear();
         if (_svc?.Available != true)
         {
             var box = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(18, 28, 18, 28) };
@@ -385,7 +390,7 @@ public sealed partial class FriendsDrawer : Border
         bool open = _openId == f.Id;
         var table = TableFor(f);
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto") };
-        var avatar = Avatar(f.Name, 38, f.Online || table != null, f.Look, f.AvatarUrl);   // WPF FriendsDrawer.cs:538
+        var avatar = _avatars[f.Id] = Avatar(f.Name, 38, f.Online || table != null, f.Look, f.AvatarUrl);   // WPF FriendsDrawer.cs:538
         if (!f.Online && table == null) avatar.Opacity = 0.55;
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
@@ -429,6 +434,7 @@ public sealed partial class FriendsDrawer : Border
         };
         if (table != null && !open) DressHostingRow(row);
         AttachHover(row, open);
+        _rows[f.Id] = row;
         // A click on the row (not inside the open card) opens or folds its card.
         row.PointerReleased += (_, e) =>
         {
@@ -467,6 +473,8 @@ public sealed partial class FriendsDrawer : Border
         _openId = _openId == friendId ? null : friendId;
         (_confirm, _picker) = (null, null);
         Render();
+        // WPF FriendsDrawer.cs:1201, Juice.cs:59-63: the card that just opened grows in under its row.
+        if (_openId != null && FeedMotionAmount > 0 && _rows.TryGetValue(_openId, out var row)) StaggerIn(new[] { row });
     }
 
     /// <summary>The open card: the menu one press away, or the Remove / Block question.</summary>
@@ -519,7 +527,7 @@ public sealed partial class FriendsDrawer : Border
         var items = new List<Control>();
         foreach (var id in FriendsDrawerRules.MenuItems(f.Squelched))
         {
-            if (id == null) { items.Add(new Separator()); continue; }
+            if (id == null) { items.Add(new Separator { Background = Line }); continue; }
             var mi = MenuItem(id);
             if (id == "report")
             {
@@ -535,12 +543,18 @@ public sealed partial class FriendsDrawer : Border
             else mi.Click += async (_, _) => await RunMenuAsync(f, id);
             items.Add(mi);
         }
-        return new ContextMenu { ItemsSource = items, Tag = "friends-menu:" + f.Id };
+        return SkinnedMenu(items, "friends-menu:" + f.Id);
     }
+    /// <summary>WPF BuildMenu (FriendsDrawer.Pickers.cs:325-370) and BuildRequestMenu (.Honesty.cs:80-90) skin.</summary>
+    private static ContextMenu SkinnedMenu(IEnumerable<Control> items, string tag) => new()
+    {
+        ItemsSource = items, Tag = tag, Background = new SolidColorBrush(Color.FromRgb(0x22, 0x16, 0x41)),
+        BorderBrush = Line2, Foreground = Text, FontFamily = Display, FontSize = 13.5,
+    };
     private static MenuItem MenuItem(string id) => new()
     {
         Header = new TextBlock { Text = Loc.Get("friends_menu_" + id) }, Tag = "friends-menu-item:" + id,
-        Foreground = id is "block" or "report" ? Red : null,
+        Foreground = id is "block" or "report" ? Red : Text, Background = Brushes.Transparent,
     };
 
     internal async Task RunMenuAsync(Friend f, string what)
@@ -619,7 +633,7 @@ public sealed partial class FriendsDrawer : Border
             // Drawn in an open drawer: the one who asked may hear it was seen (once per request).
             if (_isOpen) FriendsSeen.Shared.RequestSeen(_svc, r);
             var accept = Pill(Loc.Get("friends_request_accept"), Mint, MintInk, "friends-accept");
-            accept.Click += async (_, _) => await AnswerRequestAsync(r, "accept");
+            accept.Click += async (_, _) => await AnswerRequestAsync(r, "accept", accept);
             var decline = Pill(Loc.Get("friends_request_decline"), Raised, Text, "friends-decline");
             decline.Margin = new Thickness(6, 0, 0, 0);
             decline.Click += async (_, _) => await AnswerRequestAsync(r, "decline");
@@ -667,9 +681,10 @@ public sealed partial class FriendsDrawer : Border
             Background = Brushes.Transparent, // WPF FriendsDrawer.cs:752: padding participates in hit testing.
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
-            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null, r.Look, r.AvatarUrl), mid, buttons } },
+            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null, r.Look, r.AvatarUrl), mid, buttons } },   // WPF FriendsDrawer.cs:760
         };
         AttachHover(row, false);
+        _rows[rowId] = row;
         return row;
     }
 
@@ -746,7 +761,7 @@ public sealed partial class FriendsDrawer : Border
         }
         var report = MenuItem("report");
         report.ItemsSource = subs;
-        return new ContextMenu { ItemsSource = new[] { block, report }, Tag = "friends-request-menu:" + r.Id };
+        return SkinnedMenu(new[] { block, report }, "friends-request-menu:" + r.Id);
     }
 
     private void RememberBlock(string id, string name)
@@ -772,7 +787,7 @@ public sealed partial class FriendsDrawer : Border
         return result;
     }
 
-    internal async Task<ActResult> AnswerRequestAsync(FriendRequest r, string what)
+    internal async Task<ActResult> AnswerRequestAsync(FriendRequest r, string what, Control? from = null)
     {
         if (_svc == null) return ActResult.TryLater;
         FriendsSfx.Click();   // WPF FriendsDrawer.Honesty.cs:52-74: click, then accepted / sink / denied
@@ -791,7 +806,11 @@ public sealed partial class FriendsDrawer : Border
         if (res == ActResult.Done && what == "accept" && !_isOpen) Say(Loc.Get("friends_add_accepted"), true);
         if (res == ActResult.Done)
         {
-            if (what == "accept") FriendsSfx.Accepted();
+            if (what == "accept")
+            {
+                if (from != null) PlayLinkFx(from, true);   // WPF FriendsDrawer.Honesty.cs:69
+                FriendsSfx.Accepted();
+            }
             else FriendsSfx.Dismiss();
         }
         else ShowActResult((what == "cancel" ? "out:" : "in:") + r.Id, res);
@@ -851,11 +870,24 @@ public sealed partial class FriendsDrawer : Border
         add.IsEnabled = _svc?.Available == true;
         add.Click += (_, _) => ToggleAddBox(!_addBox.IsVisible);
         Grid.SetColumn(add, 1);
-        var buttons = new Grid
+        var left = new StackPanel { Orientation = Orientation.Horizontal, Children = { settings, bell, blocked } };
+        // WPF FriendsDrawer.cs:909-922: Add friend keeps its words while they fit beside the left buttons.
+        // In a longer language it is the glyph alone, the words its tooltip and accessible name.
+        double PillWidth(Button b)
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Children = { new StackPanel { Orientation = Orientation.Horizontal, Children = { settings, bell, blocked } }, add },
-        };
+            var content = (Control)b.Content!;
+            content.Measure(Size.Infinity);
+            return content.DesiredSize.Width + b.Padding.Left + b.Padding.Right + b.BorderThickness.Left + b.BorderThickness.Right + b.Margin.Left + b.Margin.Right;
+        }
+        if (PillWidth(settings) + PillWidth(bell) + PillWidth(blocked) + PillWidth(add) > DrawerWidth - BorderThickness.Left - BorderThickness.Right - _foot.Padding.Left - _foot.Padding.Right
+            && add.Content is StackPanel addParts)
+        {
+            addParts.Children[0].Margin = default;
+            addParts.Children[1].IsVisible = false;
+            ToolTip.SetTip(add, Loc.Get("friends_add_title"));
+            AutomationProperties.SetName(add, Loc.Get("friends_add_title"));
+        }
+        var buttons = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Children = { left, add } };
         var foot = new StackPanel();
         if (!string.IsNullOrEmpty(snap.MyCode))
         {
@@ -870,6 +902,7 @@ public sealed partial class FriendsDrawer : Border
             {
                 try { await (TopLevel.GetTopLevel(this)?.Clipboard?.SetTextAsync(code) ?? Task.CompletedTask); } catch { return; }
                 FriendsSfx.Click();   // WPF FriendsDrawer.cs:980 CopyCode
+                PlayLinkFx(copy, false);   // WPF FriendsDrawer.cs:995: the lilac pop
                 copied.Text = Loc.Get("friends_copied");
                 copied.Foreground = Mint;
                 _copyReset?.Dispose();
@@ -898,7 +931,7 @@ public sealed partial class FriendsDrawer : Border
         _addResult.Text = Loc.Get(FriendsDrawerRules.AddResultKey(r));
         _addResult.Foreground = good ? Mint : Gold;
         // WPF FriendsDrawer.cs:1120-1130: accepted on a good result, denied otherwise.
-        if (good) { FriendsSfx.Accepted(); _codeBox.Text = ""; }
+        if (good) { PlayLinkFx(_addGo, true); FriendsSfx.Accepted(); _codeBox.Text = ""; }   // WPF FriendsDrawer.cs:1122
         else { FriendsSfx.Denied(); _addGo.IsEnabled = FriendsDrawerRules.NormaliseCode(_codeBox.Text).Length == FriendsDrawerRules.CodeLength; }
         await SafeRefreshAsync();
         return r;
@@ -936,7 +969,7 @@ public sealed partial class FriendsDrawer : Border
     internal void ToggleAddBox(bool show)
     {
         _addBox.IsVisible = show;
-        if (show) { _addResult.Text = ""; _inviteLine.IsVisible = OffersInviteLink(); _codeBox.Focus(); }
+        if (show) { _addResult.Text = ""; _inviteLine.IsVisible = OffersInviteLink(); _codeBox.Focus(); StaggerIn(new[] { _addBox }); }   // WPF FriendsDrawer.cs:458
     }
 
     internal bool AddBoxOpen => _addBox.IsVisible;
@@ -1022,11 +1055,14 @@ public sealed partial class FriendsDrawer : Border
                     Margin = new Thickness(-(frame - size) / 2), IsHitTestVisible = false, Tag = "friends-frame" });
             }
         }
+        // WPF FriendsLook.cs:226-243: at least 10 px, tagged, a mint glow when online.
         if (dot is bool on)
             g.Children.Add(new Ellipse
             {
-                Width = size * 0.3, Height = size * 0.3, Fill = on ? Mint : OfflineDot, Stroke = Foot, StrokeThickness = 2,
-                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
+                Width = Math.Max(10, size * 0.3), Height = Math.Max(10, size * 0.3), Fill = on ? Mint : OfflineDot, Stroke = Foot, StrokeThickness = 2,
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -1, -1),
+                Tag = on ? "friends-dot-on" : "friends-dot-off",
+                Effect = on ? new DropShadowEffect { Color = ((ISolidColorBrush)Mint).Color, BlurRadius = 8, Opacity = 0.9, OffsetX = 0, OffsetY = 0 } : null,
             });
         if (!string.IsNullOrEmpty(url) && g.Children[0] is Border face) _ = PaintPhotoAsync(face, url);
         return g;
