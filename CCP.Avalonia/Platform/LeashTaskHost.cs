@@ -71,7 +71,10 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     internal static void OnPanicPress(MainShellWindow? shell, bool panicRuns = true, bool fromKey = false)
     {
         if (!PaletteTakesPress(fromKey, SettingsPaletteWindow.IsOpen, LockCardWindow.IsAnyOpen(), CoreSettings.Current?.PanicKey))
+        {
             LeashHelpButton.CloseBadgedForPanic();
+            Views.Controls.FriendLeashOffer.StopForPanic();
+        }
         var r = Runner;
         shell ??= MainShellWindow.Current;
         var gateUp = !panicRuns && shell?.LeashGate?.IsUp == true;

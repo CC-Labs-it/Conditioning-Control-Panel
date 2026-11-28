@@ -16,6 +16,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Leash;
@@ -103,6 +104,8 @@ public sealed class FriendLeashOfferTests
         Assert.Empty(sent);
         Assert.False(Button(card, "leash-offer").IsEnabled);
         Assert.Equal(Loc.Get("leash_res_failed"), ((StackPanel)Button(card, "leash-offer").Content!).Children.OfType<TextBlock>().Single().Text);
+        // No local Opacity, so the drawer's Pill:disabled style fades the error pill (WPF FriendsLook.cs:135).
+        Assert.False(Button(card, "leash-offer").IsSet(Visual.OpacityProperty));
     });
     [Fact]
     public void SentReceiptAndHoldingStatesAreShown() => AvaloniaTestDispatcher.Run(() =>
@@ -194,6 +197,22 @@ public sealed class FriendLeashOfferTests
             Assert.Equal(22, help.Width); Assert.Equal(22, help.Height); Assert.Equal(FriendsDrawer.Lilac, help.Foreground);
             Click(card, "leash-offer-help"); Assert.NotNull(card.Intro); Assert.Equal(0, wire.Calls); card.Intro!.Close();
         }
+    });
+
+    [Fact]
+    public void PanicStopsOfferMotion() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); var settings = CoreSettings.Current; var old = settings.MotionLevel;
+        try
+        {
+            settings.MotionLevel = MotionLevel.Full;
+            var card = new FriendLeashOffer(Friend(), new LeashService(new Wire(), () => "me"), new HashSet<string>());
+            card.Pop(Button(card, "leash-offer")); card.AdvancePop(100);
+            var scale = Assert.IsType<ScaleTransform>(card.PopScale); Assert.True(scale.ScaleX > 1);
+            PanicSurfaces.All.Single(x => x.Id == "leash-task").Stop(null);
+            Assert.Equal(1, scale.ScaleX); card.AdvancePop(100); Assert.Equal(1, scale.ScaleX);
+        }
+        finally { settings.MotionLevel = old; }
     });
 
     [Fact]

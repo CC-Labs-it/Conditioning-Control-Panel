@@ -25,6 +25,8 @@ internal sealed class FriendLeashOffer : StackPanel
     private readonly HashSet<string> _pending;
     private readonly Action? _refresh;
     private bool _sending;
+    private static readonly HashSet<FriendLeashOffer> Popping = new();
+    internal static void StopForPanic() { foreach (var offer in Popping.ToArray()) offer.StopPop(); }
     private BeatLoop? _pop;
     private ScaleTransform? _popScale;
     internal ScaleTransform? PopScale => _popScale;
@@ -33,6 +35,7 @@ internal sealed class FriendLeashOffer : StackPanel
     {
         _pop?.Stop(); _pop = null;
         if (_popScale != null) _popScale.ScaleX = _popScale.ScaleY = 1;
+        _popScale = null; Popping.Remove(this);
     }
     internal void Pop(Button chip)
     {
@@ -43,6 +46,7 @@ internal sealed class FriendLeashOffer : StackPanel
         chip.RenderTransform = _popScale = new ScaleTransform(1, 1);
         _pop = new BeatLoop(chip, seconds => AdvancePop(seconds * 1000));
         _pop.OnParked = StopPop;
+        Popping.Add(this);
         _pop.Start();
     }
     internal void AdvancePop(double ms)
