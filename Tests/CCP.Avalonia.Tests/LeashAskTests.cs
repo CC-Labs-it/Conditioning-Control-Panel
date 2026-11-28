@@ -373,6 +373,21 @@ public sealed class LeashAskTests
         });
 
     [Fact]
+    public void ManualLookBeforeServiceRebindThenDeclineDoesNotQueueTheSameOffer() =>
+        Run((shell, page, wire, _) =>
+        {
+            wire.Reply = new JObject { ["ok"] = true, ["status"] = "declined" };
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            shell.RebindLeashAsks();
+            LeashGateCardTests.Click(Tagged<Button>(LeashAskWindow.Current!.Card, "leash-ask-no"));
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
         Run((shell, page, wire, _) =>
         {

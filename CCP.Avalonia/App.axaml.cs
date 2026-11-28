@@ -946,6 +946,7 @@ namespace ConditioningControlPanel.Avalonia
 
         public override void OnFrameworkInitializationCompleted()
         {
+            BillboardServices.BoardPng.Install();
 #if DEBUG
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime preview && TryStartFirstShowPreview(preview))
             {

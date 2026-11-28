@@ -43,11 +43,22 @@ public class LockdownDoseEngineTests
             try
             {
                 Assert.Contains("starts or restarts the engine", LockdownTabView.LockdownWarning(20, s, false));
+                // Isolate the real kickoff: countdown ticks can otherwise restart the engine after
+                // four ticks and mask a broken kickoff while this test waits on a busy dispatcher.
+                var countdown = typeof(LockdownService).GetField("CountdownTick",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.NotNull(countdown);
+                countdown.SetValue(ld, null);
                 ld.Activate(TimeSpan.FromMinutes(20));
                 Assert.False(CoreEngine.IsRunning);
-                var elapsed = System.Diagnostics.Stopwatch.StartNew();
-                while (!CoreEngine.IsRunning && elapsed.Elapsed < TimeSpan.FromSeconds(15))
-                    await Task.Delay(50); // Wait for the real 2 second dispatcher kickoff under load.
+                var timer = Assert.IsType<DispatcherTimer>(typeof(MainShellWindow).GetField("_doseEngineKickoff",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell));
+                Assert.Equal(TimeSpan.FromSeconds(2), timer.Interval);
+                // Exercise the real two-second kickoff without assuming the dispatcher gets a
+                // time slice within one extra second on a loaded CI runner.
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (!CoreEngine.IsRunning && deadline.Elapsed < TimeSpan.FromSeconds(30))
+                    await Task.Delay(100);
                 Assert.True(CoreEngine.IsRunning);
                 Assert.Equal(count, s.TotalSessions); // system starts are not user sessions
                 ld.Deactivate();

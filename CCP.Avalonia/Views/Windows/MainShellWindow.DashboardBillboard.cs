@@ -3,6 +3,7 @@
 // in AppSettings and runs a card's button. The rules are Core DashboardBillboard/BillboardDeck, the
 // drawing is Controls/Billboard/BillboardCardHost. Providers so far: the house cards and the Prime
 // tips, Core's Waiting/Resume/Event adapters over this head's services, and the premium showcase.
+// Live waits on a Lobby service (none on this head); Board uses the marquee feed.
 
 using System;
 using System.Collections.Generic;
@@ -98,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _ = ShowcaseArt.Value;
             var providers = new IBillboardProvider[]
             {
-                new HouseProvider(), MakeShowcase(), new WaitingProvider(head), new ResumeProvider(head), new EventProvider(head), new TipCardsProvider(),
+                new HouseProvider(), new ConditioningControlPanel.Avalonia.BillboardServices.BoardProvider(), MakeShowcase(), new WaitingProvider(head), new ResumeProvider(head), new EventProvider(head), new TipCardsProvider(),
             };
             foreach (var p in providers)
                 p.Changed += (_, _) => Dispatcher.UIThread.Post(() => Shell()?._billboardHost?.MarkDirty());
