@@ -34,6 +34,9 @@ public sealed class MandatoryVideoToyInputTests
             using var p = new ButtonProvider();
             h.DeviceManager.Register(p);
             var o = MandatoryVideoOverlay.Instance;
+            var emi = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+            var oldEngine = emi.LineEngine;
+            emi.LineEngine = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.FromJson(System.IO.File.ReadAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "emi", "desk-lines.json")));
             var old = (CoreHaptics.Service, CoreProgression.AddXPProvider, CoreDispatch.PostProvider, o.Scheduler);
             var pending = new Queue<Action>();
             CoreDispatch.PostProvider = pending.Enqueue;
@@ -52,13 +55,17 @@ public sealed class MandatoryVideoToyInputTests
                 Assert.True(o.Scheduler.Trigger(false, "toy-test.mp4"));   // playing; the pre-roll never fires
                 o.Spawn(0);
                 Assert.Equal(1, o.LiveTargets);
+                Assert.True(emi.LineEngine.HoldActive);
+                Assert.Null(emi.LineEngine.Draw("resized"));
                 p.Press("a"); p.Press("b"); Drain();
                 Assert.Equal(0, o.LiveTargets);
+                Assert.False(emi.LineEngine.HoldActive);
                 Assert.Equal(1, o.Scheduler.AttentionHits);
                 Assert.Equal(15, xp);
 
                 o.Spawn(0);
                 o.Step(CoreSettings.Current.AttentionLifespan + 1, 0);
+                Assert.False(emi.LineEngine.HoldActive);
                 p.Press("expired"); Drain();
                 Assert.Equal(1, o.Scheduler.AttentionHits);
                 Assert.Equal(0, o.LiveTargets);
@@ -66,6 +73,7 @@ public sealed class MandatoryVideoToyInputTests
                 o.Spawn(0);
                 p.Press("queued-before-panic");
                 o.Scheduler.Stop(); Drain();   // engine stop / panic -> ForceCleanup -> host CloseAll
+                Assert.False(emi.LineEngine.HoldActive);
                 Assert.False(o.Scheduler.IsPlaying);
                 Assert.Equal(1, o.Scheduler.AttentionHits);
                 Assert.Empty(o.Windows);
@@ -73,6 +81,7 @@ public sealed class MandatoryVideoToyInputTests
             finally
             {
                 o.CloseAll();
+                emi.LineEngine = oldEngine;
                 (CoreHaptics.Service, CoreProgression.AddXPProvider, CoreDispatch.PostProvider, o.Scheduler) = old;
             }
             return Task.CompletedTask;
