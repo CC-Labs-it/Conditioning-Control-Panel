@@ -64,6 +64,9 @@ public sealed class WebAssetServer : IDisposable
         lock (_sharedLock) return _shared != null && LocalPagePolicy.AllowsMicrophone(uri, _shared);
     }
 
+    // The local page origin, without starting a server (WebHost's banked-deny repair).
+    internal static string? SharedOrigin { get { lock (_sharedLock) return _shared == null ? null : $"http://127.0.0.1:{_shared.Port}"; } }
+
     readonly SemaphoreSlim _inFlight = new(16);
 
     static readonly Dictionary<string, string> Types = new(StringComparer.OrdinalIgnoreCase)

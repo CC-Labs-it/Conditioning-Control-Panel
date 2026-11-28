@@ -37,4 +37,15 @@ public sealed class PulseMicSourceTests
         }
         finally { System.IO.Directory.Delete(dir, true); }
     }
+
+    /// <summary>WPF App.xaml.cs:527: on Windows the quest probe counts waveIn devices instead of asking pactl,
+    /// and a throw still reaches the gate's CachedProbe (fail open there, not absent here).</summary>
+    [Fact]
+    public void Windows_quest_microphone_probe_counts_wavein_devices()
+    {
+        Assert.False(PulseMicSource.QuestMicrophoneProbe(true, () => 0)());
+        Assert.True(PulseMicSource.QuestMicrophoneProbe(true, () => 1)());
+        Assert.Throws<System.InvalidOperationException>(() =>
+            PulseMicSource.QuestMicrophoneProbe(true, () => throw new System.InvalidOperationException("winmm"))());
+    }
 }

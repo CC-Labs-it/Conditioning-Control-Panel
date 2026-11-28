@@ -72,9 +72,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             get
             {
                 if (!OperatingSystem.IsWindows()) return 0;
-                try { return (int)waveInGetNumDevs(); } catch { return 0; }
+                try { return StrictDeviceCount(); } catch { return 0; }
             }
         }
+
+        /// <summary>The quest probe's count: a winmm failure throws instead of reading as no microphone.</summary>
+        internal static int StrictDeviceCount() => (int)waveInGetNumDevs();
 
         private static string NameOf(int i)
         {
