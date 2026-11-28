@@ -1458,8 +1458,12 @@ public class QuestService : IDisposable
     /// </summary>
     public void TrackSessionCompleted()
     {
+        _lockdownSession.SessionCredited(DateTime.UtcNow);
         UpdateQuestProgress(QuestCategory.Session, 1);
     }
+
+    /// <summary>Remembers the last preset-session credit so a lockdown around it does not credit again (#1737).</summary>
+    private readonly LockdownSessionCredit _lockdownSession = new();
 
     /// <summary>
     /// Track lock card completed
@@ -1520,6 +1524,13 @@ public class QuestService : IDisposable
             served.TotalMinutes, counts ? "counts" : "is too short to count", LockdownQuestMinimum.TotalMinutes);
         if (!counts) return;
         UpdateQuestProgress(QuestCategory.Lockdown, 1);
+
+        // ccp-bugs #1737: a counted lockdown is also one session for Daily/Weekly Devotion, unless a
+        // preset session already credited one inside this lockdown (same sitting, one credit).
+        if (_lockdownSession.LockdownEarnsSession(served, DateTime.UtcNow))
+            UpdateQuestProgress(QuestCategory.Session, 1);
+        else
+            Log.Information("Quest: lockdown not counted as a session, a preset session inside it already was");
     }
 
     /// <summary>

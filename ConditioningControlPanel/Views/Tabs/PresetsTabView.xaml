@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
     <!--
@@ -42,6 +43,18 @@
 
         SPOILERS STAY OPT-IN. The "mystery experience" veil and its explicit Reveal button are
         a product decision, not an oversight. Do not auto-expand SessionSpoilerPanel.
+
+        7.4.1 LIFT (2026-11-25, ccp-bugs #1743): the readable-rows look the owner approved for
+        option rows, and presets kept apart from sessions. A tester saved a session where they
+        meant a preset, so each zone now wears its OWN hue (Presets the Studio pink, Sessions the
+        blue of SectionHueNotifications) on its frame, its Fredoka title, its rule, its rows and
+        the detail rows it opens; the session doors (Recent, New session, Export session) moved
+        into the Sessions zone and the session floor, and the Sessions zone says in one line that
+        a session switches off what it does not use. Import sits beside Export on the preset
+        floor and feeds MainWindow.HandlePresetDrop, so a picked file and a dropped file are one
+        path. The two label inks (SdPresetInk / SdSessionInk, 70% TextLight + 30% hue, the
+        RowLabel mix) are brushes this view computes in code-behind, so a mod retheme re-mixes
+        them when the tab is shown again.
     -->
     <UserControl.Resources>
 
@@ -61,6 +74,38 @@
             <Setter Property="Height" Value="1"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,0,12,0"/>
+        </Style>
+        <!-- The two main zones' titles (7.4.1): the fold-header face of Readable Rows, Fredoka 22
+             SemiBold, in the zone's own hue (Foreground set per zone). Mixed case on purpose: the
+             old uppercase Consolas tag (still on Takeaway) read as furniture, not as a name. -->
+        <Style x:Key="SdZoneTitle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Fredoka}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,12,0"/>
+        </Style>
+        <Style x:Key="SdZoneEmblem" TargetType="rows:OptionEmblem">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Margin" Value="0,0,9,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- One line under a zone title saying what the zone holds. -->
+        <Style x:Key="SdZoneWhat" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <!-- The small doors on a zone header line (Recent, New session). -->
+        <Style x:Key="SdZoneButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+            <Setter Property="Padding" Value="11,5"/>
+            <Setter Property="Margin" Value="7,0,0,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
         </Style>
         <Style x:Key="SdZoneHint" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
@@ -86,7 +131,8 @@
              full-width row inside a ScrollViewer clips silently without it.
              ========================================================================= -->
         <Style x:Key="SdSessionRow" TargetType="Border">
-            <Setter Property="Height" Value="44"/>
+            <!-- 48, not 44 (7.4.1): room for the 16 px Nunito name of Readable Rows. -->
+            <Setter Property="Height" Value="48"/>
             <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -121,15 +167,18 @@
         <!-- The session's own glyph. The old 52x38 art plate is gone - at 44px a plate ate a
              third of the row for a border around one emoji. -->
         <Style x:Key="SdRackIcon" TargetType="helpers:EmojiTextBlock">
-            <Setter Property="Width" Value="28"/>
-            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="FontSize" Value="18"/>
             <Setter Property="TextAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <!-- The session's name in the row-label face of Readable Rows: 16 Bold Nunito in the
+             Sessions ink (70% TextLight + 30% the zone hue, painted by the code-behind). -->
         <Style x:Key="SdRowTitle" TargetType="helpers:EmojiTextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource SdSessionInk}"/>
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="16"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
@@ -137,7 +186,7 @@
              TextBlock's job; the full text is on the row's ToolTip. -->
         <Style x:Key="SdRowBlurb" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="Margin" Value="10,0,0,0"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
@@ -147,7 +196,7 @@
         <Style x:Key="SdRackMeta" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="FontFamily" Value="Consolas, Courier New"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="Margin" Value="10,0,0,0"/>
@@ -338,12 +387,13 @@
              1px accent stroke, exactly what SdSessionRowSelected does. A 2px selected stroke on
              a pill re-flows its content by a pixel on every click, which reads as a twitch. -->
         <Style x:Key="SdPresetChip" TargetType="Border">
-            <Setter Property="Height" Value="34"/>
-            <Setter Property="CornerRadius" Value="17"/>
-            <Setter Property="Padding" Value="11,0"/>
+            <!-- 38 / r19 since the 7.4.1 lift: the name went to 16 px Nunito. -->
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="CornerRadius" Value="19"/>
+            <Setter Property="Padding" Value="13,0"/>
             <!-- Right AND bottom margin: on a WrapPanel the bottom one is the gap between wrapped
                  rows, and it doubles as headroom for the 1.02 hover lift. -->
-            <Setter Property="Margin" Value="0,0,7,6"/>
+            <Setter Property="Margin" Value="0,0,7,7"/>
             <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -383,9 +433,10 @@
         <!-- The preset's name, on the chip's one line. MaxWidth is set per chip in code - a Style
              cannot know how much room the glyphs in front of it took. -->
         <Style x:Key="SdPresetChipName" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource SdPresetInk}"/>
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="16"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
@@ -560,32 +611,37 @@
             <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="Padding" Value="6,9"/>
         </Style>
+        <!-- Caption over a number, the unit face of Readable Rows (11 Bold Nunito, muted), and the
+             number in the value face (19 ExtraBold Nunito). Reward and Grade keep the colour
+             SessionIO paints on them. -->
         <Style x:Key="SdMedLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
-            <Setter Property="FontFamily" Value="Consolas, Courier New"/>
-            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="11"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
         </Style>
         <Style x:Key="SdMedValue" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="FontSize" Value="19"/>
+            <Setter Property="FontWeight" Value="ExtraBold"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="0,3,0,0"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
 
         <!-- ============================ detail chrome ============================ -->
-        <Style x:Key="SdDetailLabel" TargetType="helpers:EmojiTextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="12.5"/>
-            <Setter Property="Margin" Value="0,0,0,4"/>
+        <!-- A detail row: RowLabel (emblem + 16 Bold Nunito in the zone hue, inherited from the
+             scroller's RowHue.Hue) over the summary line, which starts under the label's text. -->
+        <Style x:Key="SdDetailRow" TargetType="rows:RowLabel">
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="Margin" Value="0,0,0,1"/>
         </Style>
         <Style x:Key="SdDetailValue" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
-            <Setter Property="FontSize" Value="11.5"/>
-            <Setter Property="Margin" Value="0,0,0,13"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Margin" Value="44,0,0,12"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
     </UserControl.Resources>
@@ -638,21 +694,9 @@
                     <TextBlock Style="{StaticResource Type.PageSubtitle}" Text="{loc:Str sd_page_sub}" Margin="0,3,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Recent sessions. Moved up out of the Sessions zone header, where it was a
-                         second competing action next to the zone tag. -->
-                    <Button x:Name="BtnSessionHistory" Click="BtnSessionHistory_Click"
-                            ToolTip="{loc:Str tooltip_recent_sessions}"
-                            Style="{StaticResource OutlineButton}"
-                            Padding="12,7" Margin="0,0,7,0" FontSize="11.5" Cursor="Hand">
-                        <helpers:EmojiTextBlock Text="{loc:Str btn_recent_sessions}" FontWeight="SemiBold"/>
-                    </Button>
-                    <!-- Was the right-hand "Session Editor" placeholder box. -->
-                    <Button x:Name="BtnCreateSession" Content="{loc:Str btn_create_new}"
-                            Click="BtnCreateSession_Click"
-                            Style="{StaticResource PinkButton}"
-                            Padding="14,7" FontSize="11.5" FontWeight="SemiBold" Cursor="Hand"/>
-                </StackPanel>
+                <!-- Recent and Create New used to sit at the right of this band. A page-wide
+                     "+ Create New" beside a Presets zone read as "new preset" (ccp-bugs #1743), so
+                     both went down into the Sessions zone header in the 7.4.1 lift. -->
             </Grid>
         </Border>
 
@@ -678,27 +722,39 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- ============================ ZONE: PRESETS ============================ -->
-                <Border Grid.Row="0" Style="{StaticResource SectionPanel}" Margin="5,8,5,0" Padding="14,12">
+                <!-- ============================ ZONE: PRESETS ============================
+                     7.4.1: the zone wears the Studio pink on its frame, title, rule and chip
+                     names (RowHue.Hue is inherited by the emblem), and leads with the scope line,
+                     so "what a preset is" is read before the chips. -->
+                <Border Grid.Row="0" x:Name="PresetsZone" Style="{StaticResource SectionPanel}" Margin="5,8,5,0" Padding="14,12"
+                        BorderBrush="{DynamicResource SectionHueStudioBorderBrush}"
+                        rows:RowHue.Hue="{DynamicResource SectionHueStudio}">
                     <StackPanel>
-                        <Grid Margin="0,0,0,10">
+                        <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Style="{StaticResource SdZoneTag}" Text="{loc:Str sd_zone_presets}"/>
-                            <Border Grid.Column="1" Style="{StaticResource SdZoneRule}">
+                            <rows:OptionEmblem Grid.Column="0" Kind="Layers" Style="{StaticResource SdZoneEmblem}"/>
+                            <TextBlock Grid.Column="1" Style="{StaticResource SdZoneTitle}" Text="{loc:Str sd_head_presets}"
+                                       Foreground="{DynamicResource SectionHueStudioBrush}"/>
+                            <Border Grid.Column="2" Style="{StaticResource SdZoneRule}">
                                 <Border.Background>
                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                        <GradientStop Color="{DynamicResource PinkColor}" Offset="0"/>
+                                        <GradientStop Color="{DynamicResource SectionHueStudio}" Offset="0"/>
                                         <GradientStop Color="Transparent" Offset="1"/>
                                     </LinearGradientBrush>
                                 </Border.Background>
                             </Border>
-                            <Button Grid.Column="2" x:Name="HelpBtnPresets" x:FieldModifier="internal"
+                            <Button Grid.Column="3" x:Name="HelpBtnPresets" x:FieldModifier="internal"
                                     Style="{StaticResource HelpButtonStyle}" Tag="Presets"/>
                         </Grid>
+
+                        <!-- ccp-bugs #1427: says what a preset carries (Models/Preset.cs) and what
+                             it leaves alone. PresetScopeLineTests keeps the sentence honest. -->
+                        <TextBlock Text="{loc:Str sd_presets_scope}" Style="{StaticResource SdZoneWhat}"/>
 
                         <!-- THE RAIL. A WrapPanel, not a horizontal ScrollViewer: presets wrap onto
                              a second line rather than paginate off the right edge, and the whole
@@ -718,20 +774,15 @@
                                     MouseLeftButtonUp="BtnNewPreset_Click"
                                     ToolTip="{loc:Str tooltip_create_a_new_preset_from_current_settings}">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="+" FontSize="15" FontWeight="Bold"
+                                    <TextBlock Text="+" FontSize="17" FontWeight="Bold"
                                                VerticalAlignment="Center" Margin="0,0,6,0"
-                                               Foreground="{DynamicResource PinkBrush}"/>
-                                    <TextBlock Text="{loc:Str label_new}" FontSize="10" FontWeight="Bold"
-                                               FontFamily="Consolas, Courier New" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                               Foreground="{DynamicResource SectionHueStudioBrush}"/>
+                                    <TextBlock Text="{loc:Str label_new}" FontSize="15" FontWeight="Bold"
+                                               FontFamily="{x:Static rows:RowFonts.Nunito}" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource SectionHueStudioBrush}"/>
                                 </StackPanel>
                             </Border>
                         </WrapPanel>
-                        <!-- ccp-bugs #1427: says what a preset carries (Models/Preset.cs) and what
-                             it leaves alone. PresetScopeLineTests keeps the sentence honest. -->
-                        <TextBlock Text="{loc:Str sd_presets_scope}" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11"
-                                   Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
 
@@ -754,26 +805,38 @@
                      Rows carry the session id in Tag. That is contractual - SessionCard_Click,
                      FindSelectedCard and RevealSessionInLibrary all match on it.
                      ======================================================================= -->
-                <Border Grid.Row="1" Style="{StaticResource SectionPanel}" Margin="5,8,5,0" Padding="14,12">
+                <!-- 7.4.1: its own hue (SectionHueNotifications blue) so it never reads as the
+                     preset zone above; the session doors (Recent, New session) sit on its header
+                     line, and one line under the title says what a session does to the effects
+                     that are on (the #1743 mix-up: a session switches off what it does not use). -->
+                <Border Grid.Row="1" x:Name="SessionsZone" Style="{StaticResource SectionPanel}" Margin="5,8,5,0" Padding="14,12"
+                        BorderBrush="{DynamicResource SectionHueNotificationsBorderBrush}"
+                        rows:RowHue.Hue="{DynamicResource SectionHueNotifications}">
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <Grid Grid.Row="0" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Style="{StaticResource SdZoneTag}" Text="{loc:Str sd_zone_sessions}"/>
-                            <Border Grid.Column="1" Style="{StaticResource SdZoneRule}">
+                            <rows:OptionEmblem Grid.Column="0" Kind="Often" Value="0.3" Style="{StaticResource SdZoneEmblem}"/>
+                            <TextBlock Grid.Column="1" Style="{StaticResource SdZoneTitle}" Text="{loc:Str sd_head_sessions}"
+                                       Foreground="{DynamicResource SectionHueNotificationsBrush}"/>
+                            <Border Grid.Column="2" Style="{StaticResource SdZoneRule}">
                                 <Border.Background>
                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                        <GradientStop Color="{DynamicResource PinkColor}" Offset="0"/>
+                                        <GradientStop Color="{DynamicResource SectionHueNotifications}" Offset="0"/>
                                         <GradientStop Color="Transparent" Offset="1"/>
                                     </LinearGradientBrush>
                                 </Border.Background>
@@ -782,11 +845,27 @@
                                  gone: the toolbar's source chips say the same thing and carry a
                                  live count each, so the caption was a legend for a colour code
                                  that did not exist yet. -->
-                            <TextBlock Grid.Column="2" x:Name="TxtRackCount" x:FieldModifier="internal"
+                            <TextBlock Grid.Column="3" x:Name="TxtRackCount" x:FieldModifier="internal"
                                        Style="{StaticResource SdZoneHint}" Text=""/>
-                            <Button Grid.Column="3" x:Name="HelpBtnSessions" x:FieldModifier="internal"
+                            <!-- Recent sessions. Back on this line since the 7.4.1 lift (it sat in
+                                 the page header band from 08-13): it is a session door. -->
+                            <Button Grid.Column="4" x:Name="BtnSessionHistory" Click="BtnSessionHistory_Click"
+                                    ToolTip="{loc:Str tooltip_recent_sessions}"
+                                    Style="{StaticResource SdZoneButton}" Margin="0">
+                                <helpers:EmojiTextBlock Text="{loc:Str btn_recent_sessions}" FontWeight="SemiBold"/>
+                            </Button>
+                            <!-- Was the right-hand "Session Editor" placeholder box, then a page-wide
+                                 "+ Create New" in the header band; it names its object now. -->
+                            <Button Grid.Column="5" x:Name="BtnCreateSession" Content="{loc:Str sd_btn_new_session}"
+                                    Click="BtnCreateSession_Click"
+                                    Style="{StaticResource PinkButton}"
+                                    Padding="13,5" Margin="7,0,10,0" FontSize="12" FontWeight="SemiBold"
+                                    VerticalAlignment="Center" Cursor="Hand"/>
+                            <Button Grid.Column="6" x:Name="HelpBtnSessions" x:FieldModifier="internal"
                                     Style="{StaticResource HelpButtonStyle}" Tag="Sessions"/>
                         </Grid>
+
+                        <TextBlock Grid.Row="1" Text="{loc:Str sd_sessions_what}" Style="{StaticResource SdZoneWhat}"/>
 
                         <!-- ============================ THE RACK TOOLBAR ============================
                              28px, one line, and every control here is a VIEW over the same list -
@@ -805,7 +884,7 @@
                              purpose: a filter you cannot see the cause of, restored a week later,
                              reads as "my sessions are gone".
                              ==================================================================== -->
-                        <Grid Grid.Row="1" Height="28" Margin="0,0,0,9">
+                        <Grid Grid.Row="2" Height="28" Margin="0,0,0,9">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -852,7 +931,7 @@
                             </Grid>
                         </Grid>
 
-                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
                             <!-- ONE panel. RepaintSessionRack clears and refills it; nothing else
                                  may add a child, or the FX sweep in
                                  MainWindow.TabFxPresetsQuestsAchievements (which walks Borders
@@ -931,22 +1010,9 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Export of the SELECTED session. Rehomed from the catalogue banner
-                                 with its handler and its enable-on-select contract intact
-                                 (MainWindow.SessionIO.SelectSession flips IsEnabled). It sits on
-                                 this strip rather than in the header band because it acts on the
-                                 rack's selection, not on the page.
-
-                                 #961: it says "Export session", not "Export". Sharing a strip with
-                                 the Takeaway chips made a bare "Export" read as "export this
-                                 takeaway" - which it can never do, because a takeaway is a JustDrop
-                                 order code (replayed on click, shared with the link chip), not a
-                                 session file. Naming the object is the whole fix. -->
-                            <Button DockPanel.Dock="Right" x:Name="BtnExportSession" x:FieldModifier="internal"
-                                    Content="{loc:Str btn_export_session}" Click="BtnExportSession_Click"
-                                    IsEnabled="False" Style="{StaticResource OutlineButton}"
-                                    Padding="12,5" FontSize="11" Margin="0,0,7,0" VerticalAlignment="Center"
-                                    ToolTip="{loc:Str tooltip_export_session}"/>
+                            <!-- Export session used to sit here (#961). It moved to the session
+                                 floor under Start in the 7.4.1 lift: on this strip it sat closer to
+                                 the takeaways than to the session it exports. -->
 
                             <!-- Import ticker. Collapsed until ShowDropZoneStatus has something;
                                  it is the drag-drop system's only feedback surface, so it moved
@@ -1048,32 +1114,33 @@
 
                     <!-- ================== DETAIL: preset view ================== -->
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="16,14,16,0"
-                                  x:Name="PresetDetailScroller" x:FieldModifier="internal">
+                                  x:Name="PresetDetailScroller" x:FieldModifier="internal"
+                                  rows:RowHue.Hue="{DynamicResource SectionHueStudio}">
                         <StackPanel x:Name="DetailContentPanel">
-                            <helpers:EmojiTextBlock x:Name="TxtDetailFlashLabel" x:FieldModifier="internal"
-                                                    Style="{StaticResource SdDetailLabel}" Text="{loc:Str section_flash_images}"/>
+                            <rows:RowLabel x:Name="TxtDetailFlashLabel" x:FieldModifier="internal" Emblem="Many" Subject="Image" Value="3"
+                                                    Style="{StaticResource SdDetailRow}" Text="{loc:Str section_flash_images}"/>
                             <TextBlock x:Name="TxtDetailFlash" x:FieldModifier="internal"
                                        Style="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <helpers:EmojiTextBlock x:Name="TxtDetailVideoLabel" x:FieldModifier="internal"
-                                                    Style="{StaticResource SdDetailLabel}" Text="{loc:Str label_mandatory_videos}"/>
+                            <rows:RowLabel x:Name="TxtDetailVideoLabel" x:FieldModifier="internal" Emblem="Many" Subject="Video" Value="2"
+                                                    Style="{StaticResource SdDetailRow}" Text="{loc:Str label_mandatory_videos}"/>
                             <TextBlock x:Name="TxtDetailVideo" x:FieldModifier="internal"
                                        Style="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <helpers:EmojiTextBlock x:Name="TxtDetailSubLabel" x:FieldModifier="internal"
-                                                    Style="{StaticResource SdDetailLabel}" Text="{loc:Str section_subliminals_2}"/>
+                            <rows:RowLabel x:Name="TxtDetailSubLabel" x:FieldModifier="internal" Emblem="Words"
+                                                    Style="{StaticResource SdDetailRow}" Text="{loc:Str section_subliminals_2}"/>
                             <TextBlock x:Name="TxtDetailSubliminal" x:FieldModifier="internal"
                                        Style="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <helpers:EmojiTextBlock Style="{StaticResource SdDetailLabel}" Text="{loc:Str section_audio}"/>
+                            <rows:RowLabel Emblem="Loud" Style="{StaticResource SdDetailRow}" Text="{loc:Str section_audio}"/>
                             <TextBlock x:Name="TxtDetailAudio" x:FieldModifier="internal"
                                        Style="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <helpers:EmojiTextBlock Style="{StaticResource SdDetailLabel}" Text="{loc:Str label_overlays}"/>
+                            <rows:RowLabel Emblem="Spiral" Style="{StaticResource SdDetailRow}" Text="{loc:Str label_overlays}"/>
                             <TextBlock x:Name="TxtDetailOverlays" x:FieldModifier="internal"
                                        Style="{StaticResource SdDetailValue}" Text="—"/>
 
-                            <helpers:EmojiTextBlock Style="{StaticResource SdDetailLabel}" Text="{loc:Str label_advanced}"/>
+                            <rows:RowLabel Emblem="Layers" Style="{StaticResource SdDetailRow}" Text="{loc:Str label_advanced}"/>
                             <TextBlock x:Name="TxtDetailAdvanced" x:FieldModifier="internal"
                                        Style="{StaticResource SdDetailValue}" Text="—"/>
                         </StackPanel>
@@ -1081,7 +1148,8 @@
 
                     <!-- ================== DETAIL: session view (spoiler-free) ================== -->
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="16,14,16,0"
-                                  x:Name="SessionDetailScroller" x:FieldModifier="internal" Visibility="Collapsed">
+                                  x:Name="SessionDetailScroller" x:FieldModifier="internal" Visibility="Collapsed"
+                                  rows:RowHue.Hue="{DynamicResource SectionHueNotifications}">
                         <StackPanel x:Name="SessionDetailPanel">
 
                             <!-- The medallion row. Was two centred text pairs in a box plus a
@@ -1257,29 +1325,29 @@
                                                FontWeight="Bold" HorizontalAlignment="Center"/>
                                 </Border>
 
-                                <helpers:EmojiTextBlock x:Name="TxtSessionFlashLabel" x:FieldModifier="internal"
-                                                        Style="{StaticResource SdDetailLabel}" Text="{loc:Str section_flash_images}"/>
+                                <rows:RowLabel x:Name="TxtSessionFlashLabel" x:FieldModifier="internal" Emblem="Many" Subject="Image" Value="3"
+                                                    Style="{StaticResource SdDetailRow}" Text="{loc:Str section_flash_images}"/>
                                 <TextBlock x:Name="TxtSessionFlash" x:FieldModifier="internal"
                                            Style="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <helpers:EmojiTextBlock x:Name="TxtSessionSubLabel" x:FieldModifier="internal"
-                                                        Style="{StaticResource SdDetailLabel}" Text="{loc:Str section_subliminals_2}"/>
+                                <rows:RowLabel x:Name="TxtSessionSubLabel" x:FieldModifier="internal" Emblem="Words"
+                                                    Style="{StaticResource SdDetailRow}" Text="{loc:Str section_subliminals_2}"/>
                                 <TextBlock x:Name="TxtSessionSubliminal" x:FieldModifier="internal"
                                            Style="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <helpers:EmojiTextBlock Style="{StaticResource SdDetailLabel}" Text="{loc:Str section_audio}"/>
+                                <rows:RowLabel Emblem="Loud" Style="{StaticResource SdDetailRow}" Text="{loc:Str section_audio}"/>
                                 <TextBlock x:Name="TxtSessionAudio" x:FieldModifier="internal"
                                            Style="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <helpers:EmojiTextBlock Style="{StaticResource SdDetailLabel}" Text="{loc:Str label_overlays}"/>
+                                <rows:RowLabel Emblem="Spiral" Style="{StaticResource SdDetailRow}" Text="{loc:Str label_overlays}"/>
                                 <TextBlock x:Name="TxtSessionOverlays" x:FieldModifier="internal"
                                            Style="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <helpers:EmojiTextBlock Style="{StaticResource SdDetailLabel}" Text="{loc:Str label_extras}"/>
+                                <rows:RowLabel Emblem="Layers" Style="{StaticResource SdDetailRow}" Text="{loc:Str label_extras}"/>
                                 <TextBlock x:Name="TxtSessionExtras" x:FieldModifier="internal"
                                            Style="{StaticResource SdDetailValue}" Text="—"/>
 
-                                <helpers:EmojiTextBlock Style="{StaticResource SdDetailLabel}" Text="{loc:Str label_timeline}"/>
+                                <rows:RowLabel Emblem="When" Style="{StaticResource SdDetailRow}" Text="{loc:Str label_timeline}"/>
                                 <TextBlock x:Name="TxtSessionTimeline" x:FieldModifier="internal"
                                            Style="{StaticResource SdDetailValue}" Text="—"/>
                             </StackPanel>
@@ -1305,18 +1373,29 @@
                                     Style="{StaticResource OutlineButton}" Margin="3,0,0,0" Padding="10,8"
                                     Click="BtnDeletePreset_Click" IsEnabled="False" FontSize="12"/>
                         </Grid>
+                        <!-- Import (ccp-bugs #1743) beside Export: the same OpenFileDialog-then-
+                             HandlePresetDrop path as a file dropped on the window, so the two can
+                             never disagree. Never gated on a selection: it adds a preset, it does
+                             not act on one. -->
                         <Grid Margin="0,6,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Button x:Name="BtnExportPreset" x:FieldModifier="internal" Grid.Column="0" Content="{loc:Str btn_export_preset}"
-                                    Style="{StaticResource OutlineButton}" Margin="0,0,3,0" Padding="10,8"
+                            <Button x:Name="BtnImportPreset" x:FieldModifier="internal" Grid.Column="0" Content="{loc:Str sd_import}"
+                                    Style="{StaticResource OutlineButton}" Margin="0,0,3,0" Padding="4,8"
+                                    Click="BtnImportPreset_Click" FontSize="12"
+                                    ToolTip="{loc:Str sd_import_tip}"/>
+                            <Button x:Name="BtnExportPreset" x:FieldModifier="internal" Grid.Column="1" Content="{loc:Str btn_export_preset}"
+                                    Style="{StaticResource OutlineButton}" Margin="3,0,3,0" Padding="4,8"
                                     Click="BtnExportPreset_Click" IsEnabled="False" FontSize="12"/>
-                            <Button x:Name="BtnSharePreset" x:FieldModifier="internal" Grid.Column="1" Content="{loc:Str btn_share_to_catalogue}"
-                                    Style="{StaticResource OutlineButton}" Margin="3,0,0,0" Padding="10,8"
+                            <Button x:Name="BtnSharePreset" x:FieldModifier="internal" Grid.Column="2" Content="{loc:Str btn_share_to_catalogue}"
+                                    Style="{StaticResource OutlineButton}" Margin="3,0,0,0" Padding="4,8"
                                     Click="BtnSharePreset_Click" IsEnabled="False" FontSize="12"/>
                         </Grid>
+                        <TextBlock Text="{loc:Str sd_preset_drop_hint}" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,7,0,0"/>
                     </StackPanel>
 
                     <StackPanel Grid.Row="2" x:Name="SessionButtonsPanel" x:FieldModifier="internal"
@@ -1324,6 +1403,16 @@
                         <Button x:Name="BtnStartSession" x:FieldModifier="internal" Content="{loc:Str btn_start_session}"
                                 Style="{StaticResource PinkButton}"
                                 Padding="12,13" FontSize="14" Click="BtnStartSession_Click"/>
+                        <!-- Export of the SELECTED session, with its handler and its
+                             enable-on-select contract intact (MainWindow.SessionIO.SelectSession
+                             flips IsEnabled). It sat on the Takeaway strip until the 7.4.1 lift;
+                             here it sits with the session it exports. #961: it still says
+                             "Export session", never a bare "Export". -->
+                        <Button x:Name="BtnExportSession" x:FieldModifier="internal"
+                                Content="{loc:Str btn_export_session}" Click="BtnExportSession_Click"
+                                IsEnabled="False" Style="{StaticResource OutlineButton}"
+                                Padding="10,8" FontSize="12" Margin="0,7,0,0"
+                                ToolTip="{loc:Str tooltip_export_session}"/>
                     </StackPanel>
                 </Grid>
             </Border>

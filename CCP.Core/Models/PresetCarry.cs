@@ -58,6 +58,8 @@ namespace ConditioningControlPanel.Models
             nameof(AppSettings.WhirlpoolDragsWords),
             nameof(AppSettings.WhirlpoolSize),
             nameof(AppSettings.WhirlpoolStayCentred),
+            nameof(AppSettings.WhirlpoolSmallest),
+            nameof(AppSettings.WhirlpoolRestless),
             nameof(AppSettings.WhirlpoolNewEvery),
             nameof(AppSettings.MovingEffectsPop),
 
@@ -70,6 +72,8 @@ namespace ConditioningControlPanel.Models
             nameof(AppSettings.LightsDownReturnSpeed),
             nameof(AppSettings.LightsDownFollow),
             nameof(AppSettings.DeckFlips),
+            nameof(AppSettings.DeckFlipsFewest),
+            nameof(AppSettings.DeckFlipsMost),
             nameof(AppSettings.DeckBreakReach),
 
             // Afterglow

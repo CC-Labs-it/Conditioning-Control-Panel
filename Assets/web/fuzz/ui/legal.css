@@ -1,0 +1,109 @@
+/* The legal window: the owner's look for the contract, the update and the pictures card (handoff-1102/tc-intro-mockup.html).
+ * One look on purpose, whatever the page has turned into behind it. Everything is scoped to .tc so the game's own
+ * .opt, .bar and .card rules never meet it. */
+
+.tc {
+  --tc-win: #dedbd2;
+  --tc-paper: #f7f5ef;
+  --tc-ink: #1b1a17;
+  --tc-mute: #5c5a52;
+  --tc-edge: #77746a;
+  --tc-bar: #2c2b28;
+  --tc-pink: #d42f86;
+  --tc-legal: "Tinos", "Times New Roman", Times, serif;
+  --tc-ui: Tahoma, "Segoe UI", Verdana, system-ui, sans-serif;
+  position: fixed; inset: 0; z-index: 92; display: grid; place-items: center;
+  padding: 48px max(12px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  background: rgba(40, 38, 32, .34);
+  color: var(--tc-ink); font: 14px/1.35 var(--tc-ui);
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+}
+.tc.above { z-index: 96; }   /* opened from the pause card */
+.tc button { font: inherit; color: var(--tc-ink); touch-action: manipulation; }
+.tc button:focus-visible, .tc input:focus-visible, .tc .egg:focus-visible, .tc.kb #terms:focus-visible { outline: 2px solid var(--tc-pink); outline-offset: 2px; }
+.tc #terms:focus { outline: none; }   /* it takes focus on opening so the arrows scroll; the ring waits for a key (.kb) */
+.tc.kb #terms:focus-visible { outline: 2px solid var(--tc-pink); }
+
+.tc .win { width: 100%; max-width: 620px; max-height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--tc-win); border: 1px solid #111; box-shadow: 0 16px 44px rgba(0,0,0,.38); }
+.tc .win.small { max-width: 440px; }
+.tc .tbar { flex: none; display: flex; align-items: center; gap: 8px; padding: 5px 5px 5px 10px; background: var(--tc-bar); color: #fff; font-weight: 700; font-size: 13px; }
+.tc .tbar span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc .fakex { flex: none; width: 24px; height: 22px; padding: 0; background: #55534d; color: #bdbab0; border: 0; border-radius: 2px; font-size: 13px; cursor: not-allowed; }
+.tc .body { min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 9px; padding: 13px 14px 12px; overflow-y: auto; }
+.tc h1 { margin: 0; font: 700 25px/1.1 var(--tc-legal); }
+.tc .intro { margin: 0; font-size: 13.5px; line-height: 1.38; max-width: 62ch; }
+.tc .intro b { font-weight: 700; }
+
+.tc .termswrap { flex: 1 1 280px; min-height: 130px; position: relative; }
+.tc #terms { position: absolute; inset: 0; overflow-y: scroll; overscroll-behavior: contain; overflow-anchor: none; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 12px 14px 18px; background: var(--tc-paper); border: 1px solid var(--tc-edge); font-family: var(--tc-legal); scrollbar-width: auto; scrollbar-color: #77746a #e4e1d8; }
+.tc #terms::-webkit-scrollbar { width: 13px; }
+.tc #terms::-webkit-scrollbar-track { background: #e4e1d8; }
+.tc #terms::-webkit-scrollbar-thumb { background: #77746a; }
+.tc #terms p { margin: 0 0 .62em; line-height: 1.3; }
+.tc #terms .aside { font-style: italic; }
+.tc #terms b { font-weight: 700; }
+.tc #terms .again { color: var(--tc-mute); }
+.tc #jump { position: absolute; right: 22px; bottom: 10px; width: 36px; height: 36px; display: grid; place-items: center; padding: 0; background: var(--tc-bar); border: 0; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.tc #jump svg { width: 18px; height: 18px; display: block; }
+
+.tc .egg { cursor: pointer; }
+.tc .bar { background: #111; color: #111; padding-inline: 2px; }
+.tc .flip { display: block; transform: rotate(180deg); }
+.tc .ghost { color: var(--tc-paper); }
+.tc .opt { display: inline-flex; align-items: center; gap: .4em; cursor: pointer; }
+.tc .opt input { margin: 0; width: 1em; height: 1em; accent-color: var(--tc-pink); }
+
+.tc .read { flex: none; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--tc-mute); font-variant-numeric: tabular-nums; }
+.tc .track { flex: 1; min-width: 40px; height: 7px; background: #c0bdb3; border: 1px solid var(--tc-edge); }
+.tc #fill { width: 0; height: 100%; background: var(--tc-pink); }
+.tc .checks { flex: none; display: grid; gap: 5px; }
+.tc .checks label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+.tc .checks input { flex: none; width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--tc-pink); }
+.tc .checks label.off { color: #85827a; cursor: not-allowed; }
+.tc .foot { flex: none; display: grid; gap: 6px; justify-items: center; text-align: center; padding-top: 2px; }
+.tc .over { margin: 0; font: 700 16px/1.2 var(--tc-legal); text-wrap: balance; }
+.tc .status { margin: 0; min-height: 1.3em; font-size: 12px; color: var(--tc-mute); }
+.tc .btns { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
+.tc .plain { padding: 8px 26px; min-height: 40px; background: var(--tc-win); border: 2px solid; border-color: #fff var(--tc-edge) var(--tc-edge) #fff; font: 400 17px/1.2 var(--tc-legal); cursor: pointer; }
+.tc .plain:active:not(:disabled) { border-color: var(--tc-edge) #fff #fff var(--tc-edge); }
+.tc .plain:disabled { color: #8f8c82; cursor: not-allowed; }
+.tc .link { padding: 3px 4px; min-height: 32px; background: none; border: 0; color: var(--tc-mute); text-decoration: underline; font-size: 12.5px; cursor: pointer; }
+
+.tc .nudge { animation: tc-nudge .28s linear 1; }
+@keyframes tc-nudge { 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+@media (prefers-reduced-motion: reduce) { .tc .nudge { animation: none; } }
+
+.tc .tc-toast { position: fixed; z-index: 2; left: 50%; bottom: 12px; transform: translateX(-50%); width: min(92%, 440px); padding: 8px 12px; background: var(--tc-bar); color: #fff; font-size: 13px; text-align: center; border-radius: 3px; pointer-events: none; }
+.tc .tc-wake { position: fixed; z-index: 2; top: max(48px, calc(env(safe-area-inset-top, 0px) + 48px)); right: max(8px, env(safe-area-inset-right, 0px)); padding: 3px 8px; background: var(--tc-bar); color: #fff; font-size: 12px; border-radius: 3px; pointer-events: none; }
+
+/* The pictures card */
+.tc .src { display: grid; gap: 8px; }
+.tc .src [data-pick=none] { border:0; background:transparent; padding:4px 0; text-align:center; }
+.tc .src [data-pick=none] b { font-size:12px; text-decoration:underline; }
+.tc .src [data-pick=none] small { display:none; }
+.tc .src button:disabled { color:var(--tc-mute); cursor:default; }
+.tc .src button { display: block; width: 100%; padding: 9px 11px; text-align: left; background: var(--tc-paper); border: 1px solid var(--tc-edge); cursor: pointer; }
+.tc .src button:hover { border-color: var(--tc-ink); }
+.tc .src b { display: block; font-size: 14px; }
+.tc .src small { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.3; color: var(--tc-mute); }
+/* Standalone only: what a free account and Prime add, small print on the same paper. */
+.tc .perks { margin-top: 8px; padding: 6px 10px; border: 1px dashed var(--tc-edge); background: var(--tc-paper); }
+.tc .perks p { margin: 0; font-size: 11.5px; line-height: 1.35; color: var(--tc-mute); }
+.tc .perks p + p { margin-top: 3px; }
+.tc .tc-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+/* Folders (owner 2026-11-08): a small line under the choices, and the whole card takes a drop. */
+.tc .folder-row { margin: -2px 0 2px 12px; font-size: 12.5px; color: var(--tc-mute); }
+.tc .src .folder-row button { display: inline; width: auto; padding: 0; background: none; border: 0; color: var(--tc-ink); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.tc .win.dropping { outline: 3px dashed var(--tc-ink); outline-offset: -8px; }
+
+@media (max-width: 480px) {
+  .tc h1 { font-size: 22px; }
+  .tc .intro { font-size: 13px; }
+  .tc .body { padding: 10px 10px; gap: 7px; }
+  .tc #terms { padding: 10px 10px 14px; }
+}
+
+/* The page behind it, and the game's button once it has closed */
+#phrase { margin: 4px 0 0; font-size: 16px; line-height: 1.25; text-align: center; text-wrap: balance; }
+.pics-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
+.pics-row button { min-height: 36px; font-size: 14px; padding: 4px 10px; }

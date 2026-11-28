@@ -1,0 +1,264 @@
+[
+  {
+    "material": "stone",
+    "asset": "sandstone_cracks",
+    "source": "https://polyhaven.com/a/sandstone_cracks",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "stone-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sandstone_cracks/sandstone_cracks_diff_1k.jpg",
+        "source_md5": "94619de4f4d33ad9fe6711d3ad88ec4a",
+        "derivation": {
+          "operation": "Pillow ImageOps.grayscale then ImageOps.colorize",
+          "black": "#a89e8a",
+          "white": "#efe6d3",
+          "output": "RGB WebP, quality 90, method 6"
+        }
+      },
+      "normal": {
+        "file": "stone-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sandstone_cracks/sandstone_cracks_nor_gl_1k.jpg",
+        "source_md5": "e778ce4e2ecc6a2837800022196b4118"
+      },
+      "roughness": {
+        "file": "stone-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sandstone_cracks/sandstone_cracks_rough_1k.jpg",
+        "source_md5": "800ad67a79fb6f976b9aeba32d197260"
+      }
+    }
+  },
+  {
+    "material": "plaster",
+    "asset": "painted_plaster_wall",
+    "source": "https://polyhaven.com/a/painted_plaster_wall",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "plaster-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/painted_plaster_wall/painted_plaster_wall_diff_1k.jpg",
+        "source_md5": "15ba8c1f63a5ab412b1eabe31728540a"
+      },
+      "normal": {
+        "file": "plaster-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/painted_plaster_wall/painted_plaster_wall_nor_gl_1k.jpg",
+        "source_md5": "43fff290583dbdfc9bfa088a2750e840"
+      },
+      "roughness": {
+        "file": "plaster-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/painted_plaster_wall/painted_plaster_wall_rough_1k.jpg",
+        "source_md5": "e076a6360329a2bc18c7397dc50c074a"
+      }
+    }
+  },
+  {
+    "material": "wood",
+    "asset": "wood_table_worn",
+    "source": "https://polyhaven.com/a/wood_table_worn",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "wood-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_table_worn/wood_table_worn_diff_1k.jpg",
+        "source_md5": "8c71f701f70fef34b87fb7c8742ad0a5"
+      },
+      "normal": {
+        "file": "wood-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_table_worn/wood_table_worn_nor_gl_1k.jpg",
+        "source_md5": "d8e76d135e94e32bc81eedb3342c7614"
+      },
+      "roughness": {
+        "file": "wood-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_table_worn/wood_table_worn_rough_1k.jpg",
+        "source_md5": "1e068051a440933d9d054dc6614f950f"
+      }
+    }
+  },
+  {
+    "material": "brick",
+    "asset": "medieval_red_brick",
+    "source": "https://polyhaven.com/a/medieval_red_brick",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "brick-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/medieval_red_brick/medieval_red_brick_diff_1k.jpg",
+        "source_md5": "217f3e9db4fa2a89dfa49d5bf5e5bf97"
+      },
+      "normal": {
+        "file": "brick-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/medieval_red_brick/medieval_red_brick_nor_gl_1k.jpg",
+        "source_md5": "e4e1bde5cf80bd1aa9c4614d2d06ef53"
+      },
+      "roughness": {
+        "file": "brick-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/medieval_red_brick/medieval_red_brick_rough_1k.jpg",
+        "source_md5": "5af35ac7a1933a1f08fc5c83959b4edf"
+      }
+    }
+  },
+  {
+    "material": "floor",
+    "asset": "marble_mosaic_tiles",
+    "source": "https://polyhaven.com/a/marble_mosaic_tiles",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "floor-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/marble_mosaic_tiles/marble_mosaic_tiles_diff_1k.jpg",
+        "source_md5": "87d75615bfc7457462370045bfc946a7"
+      },
+      "normal": {
+        "file": "floor-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/marble_mosaic_tiles/marble_mosaic_tiles_nor_gl_1k.jpg",
+        "source_md5": "ee181f743b986c438726215c4c1e1bbd"
+      },
+      "roughness": {
+        "file": "floor-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/marble_mosaic_tiles/marble_mosaic_tiles_rough_1k.jpg",
+        "source_md5": "c79c365d5589c322f805defb8f319a9d"
+      }
+    }
+  },
+  {
+    "material": "terrazzo",
+    "asset": "terrazzo_tiles",
+    "source": "https://polyhaven.com/a/terrazzo_tiles",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "terrazzo-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/terrazzo_tiles/terrazzo_tiles_diff_2k.jpg",
+        "source_md5": "b4bfb01525c22e611d9a0651f372ae91",
+        "derivation": {
+          "operation": "Grayscale and colourise for a tintable museum material",
+          "endpoints": [
+            "#58515c",
+            "#d0c5ca"
+          ],
+          "output": "RGB WebP, quality 90, method 6"
+        }
+      },
+      "normal": {
+        "file": "terrazzo-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/terrazzo_tiles/terrazzo_tiles_nor_gl_2k.jpg",
+        "source_md5": "6fdd6cc116b9018108b91f3d5ddf1cff"
+      },
+      "roughness": {
+        "file": "terrazzo-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/terrazzo_tiles/terrazzo_tiles_rough_2k.jpg",
+        "source_md5": "f75be6541a4fa5c8197408224946efb3"
+      }
+    }
+  },
+  {
+    "material": "velour",
+    "asset": "velour_velvet",
+    "source": "https://polyhaven.com/a/velour_velvet",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "velour-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/velour_velvet/velour_velvet_diff_2k.jpg",
+        "source_md5": "8a177e9b50140fda3a46e1349b65473a",
+        "derivation": {
+          "operation": "Grayscale and colourise for a tintable museum material",
+          "endpoints": [
+            "#65616b",
+            "#f2e8ed"
+          ],
+          "output": "RGB WebP, quality 90, method 6"
+        }
+      },
+      "normal": {
+        "file": "velour-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/velour_velvet/velour_velvet_nor_gl_2k.jpg",
+        "source_md5": "9118512b61c6f1b074c747d7201fabee"
+      },
+      "roughness": {
+        "file": "velour-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/velour_velvet/velour_velvet_rough_2k.jpg",
+        "source_md5": "4553577d1d92669fd46534ee2ab55719"
+      }
+    }
+  },
+  {
+    "material": "leather",
+    "asset": "fabric_leather_02",
+    "source": "https://polyhaven.com/a/fabric_leather_02",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "leather-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/fabric_leather_02/fabric_leather_02_diff_2k.jpg",
+        "source_md5": "32b45ed7c13638babcb9802e0350a625"
+      },
+      "normal": {
+        "file": "leather-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/fabric_leather_02/fabric_leather_02_nor_gl_2k.jpg",
+        "source_md5": "3deeccfecf50c2d576e63523c7e7ef5c"
+      },
+      "roughness": {
+        "file": "leather-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/fabric_leather_02/fabric_leather_02_rough_2k.jpg",
+        "source_md5": "c93f8111ea81c285954d49134c00a766"
+      }
+    }
+  },
+  {
+    "material": "rubber",
+    "asset": "rubber_tiles",
+    "source": "https://polyhaven.com/a/rubber_tiles",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "rubber-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rubber_tiles/rubber_tiles_diff_2k.jpg",
+        "source_md5": "5bfab6657e8b95310d22cb40b81fe42e"
+      },
+      "normal": {
+        "file": "rubber-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rubber_tiles/rubber_tiles_nor_gl_2k.jpg",
+        "source_md5": "260d48a0422429cedb1eba6ee44b6c48"
+      },
+      "roughness": {
+        "file": "rubber-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rubber_tiles/rubber_tiles_rough_2k.jpg",
+        "source_md5": "46aff3216fd140ced87cd1eaf366410e"
+      }
+    }
+  },
+  {
+    "material": "environment",
+    "asset": "brown_photostudio_02",
+    "source": "https://polyhaven.com/a/brown_photostudio_02",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "studio-environment.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/HDRIs/extra/Tonemapped%20JPG/brown_photostudio_02.jpg",
+        "source_md5": "758095f7e1b2ab8e6f27e613a70707f1",
+        "output_sha256": "5810c95466b1fe8f41bf370caf9cfbb58ba88a50649c35c8a7a3c5671c4e9caa",
+        "derivation": {
+          "source_variant": "tonemapped",
+          "operation": "RGB conversion and Lanczos resize",
+          "size": [
+            1024,
+            512
+          ],
+          "output": "WebP, quality 88"
+        }
+      }
+    }
+  }
+]

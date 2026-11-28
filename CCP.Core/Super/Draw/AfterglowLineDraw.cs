@@ -52,6 +52,17 @@ public sealed class AfterglowLineDraw : IDisposable
     /// </summary>
     internal static float SpreadSlot(float slotX, float midX, float grow) => midX + (slotX - midX) * grow;
 
+    private static readonly SKTypeface StockFace = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold) ?? SKTypeface.Default;
+
+    /// <summary>The face the line's words are drawn in: the player's Subliminal Font once they picked one
+    /// (tier-2 report, 7.3.2: the setting did not reach V2), the stock Segoe UI Bold while it is on its default.</summary>
+    public static SKTypeface FaceFor(string? subliminalFont)
+    {
+        var name = subliminalFont?.Trim();
+        if (string.IsNullOrEmpty(name) || string.Equals(name, "Arial", StringComparison.OrdinalIgnoreCase)) return StockFace;
+        return ConditioningControlPanel.Services.Compositor.SubliminalLayer.ResolveFace(name);
+    }
+
     /// <summary>
     /// <paramref name="bounds"/> is the monitor on the canvas. (<paramref name="fromX"/>,
     /// <paramref name="fromY"/>) is where a word flashes: the middle of the monitor, or the eye of

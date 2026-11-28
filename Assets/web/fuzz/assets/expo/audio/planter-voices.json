@@ -1,0 +1,17 @@
+{
+  "planter_10": {
+    "subtitle": "Oh. You thought: I am so clever. I am going to break the game and jump down. You did not break the game. You are standing in a fern. There are stairs. They are very good stairs. Stay where you are and think about them.",
+    "seconds": 19.29,
+    "audio": "planter_10.mp3"
+  },
+  "planter_45": {
+    "subtitle": "Since we have the time. A small team built this place. They decided where the floor goes, where the stairs go, and where you go. Nobody decided the planter. Please use this moment to reflect on the importance of following the artistic direction and intended gameplay of independent games. You may stop pressing jump. Jump is how you got here.",
+    "seconds": 28.17,
+    "audio": "planter_45.mp3"
+  },
+  "planter_90": {
+    "subtitle": "That will do. The developer got stuck in this planter once. Nobody narrated it. He did not fix it. He recorded this instead. You may climb down now. The fern would like its place back.",
+    "seconds": 14.73,
+    "audio": "planter_90.mp3"
+  }
+}

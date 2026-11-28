@@ -89,7 +89,7 @@ public sealed class InviteRedeemBox : StackPanel
             _row.Visibility = Visibility.Collapsed;
             var settings = App.Settings?.Current;
             if (settings?.HasInviteGrant == true && settings.InviteGrantUntil is DateTime until)
-                Say(Loc.GetF("invites_redeem_ok", until.ToLocalTime().ToString("d MMM, HH:mm")), Good);
+                Say(Loc.GetF("invites_redeem_ok", Loc.Date(until.ToLocalTime(), "d MMM, HH:mm")), Good);
             else
             {
                 App.Logger?.Warning("[Invites] code accepted but no usable end date yet (sent: {Sent})", outcome.GrantUntilUtc.HasValue);
