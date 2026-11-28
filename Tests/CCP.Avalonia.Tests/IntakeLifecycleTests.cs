@@ -101,6 +101,56 @@ public sealed class IntakeLifecycleTests
     });
 
     [Fact]
+    public Task OwnerCascadeIsVetoedAndResyncsController() => WithCleanState(() =>
+    {
+        var get = NativeWindowOwner.HandleForTests;
+        var set = NativeWindowOwner.SetForTests;
+        var owners = new List<Window?>();
+        var table = Marshal.AllocHGlobal(5 * IntPtr.Size);
+        var controller = Marshal.AllocHGlobal(IntPtr.Size);
+        int calls = 0;
+        WebHost.WindowsVisibleSetter setter = (IntPtr ptr, int on) => { Assert.Equal(controller, ptr); Assert.Equal(1, on); calls++; return 0; };
+        Marshal.WriteIntPtr(table, 4 * IntPtr.Size, Marshal.GetFunctionPointerForDelegate(setter));
+        Marshal.WriteIntPtr(controller, table);
+        NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "HWND");
+        NativeWindowOwner.SetForTests = (_, owner) => { owners.Add(owner); return true; };
+        var main = new Window();
+        main.Show();
+        try
+        {
+            var intake = GradedIntakeTabView.OpenIntake(main, duckMain: false);
+            Dispatcher.UIThread.RunJobs();
+            intake.Web.WindowsRenderControllerForTests = () => controller;
+            bool handled = false;
+            intake.VetoOwnerCascade(IntPtr.Zero, 0x18, new IntPtr(1), new IntPtr(1), ref handled);
+            Assert.False(handled);
+            Assert.True(intake.IntakeOwnerLinked);
+            intake.VetoOwnerCascade(IntPtr.Zero, 0x18, IntPtr.Zero, new IntPtr(1), ref handled);
+            Assert.True(handled);
+            Assert.False(intake.IntakeOwnerLinked);
+            Assert.Null(owners.Last());
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, calls);
+            intake.Close();
+            handled = false;
+            intake.VetoOwnerCascade(IntPtr.Zero, 0x18, IntPtr.Zero, new IntPtr(1), ref handled);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(handled);
+            Assert.Equal(1, calls);
+        }
+        finally
+        {
+            main.Close();
+            NativeWindowOwner.HandleForTests = get;
+            NativeWindowOwner.SetForTests = set;
+            Marshal.FreeHGlobal(controller);
+            Marshal.FreeHGlobal(table);
+            GC.KeepAlive(setter);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task HealedWindowsCascadeRestoresWebViewControllerVisibility() => WithCleanState(() =>
     {
         var get = NativeWindowOwner.HandleForTests;
