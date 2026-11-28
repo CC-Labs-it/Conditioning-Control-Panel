@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Automation;
@@ -17,6 +18,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls.Dares;
 using ConditioningControlPanel.Controls.Dares;
 using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs.Dares;
 
@@ -165,6 +167,16 @@ internal static class DareSlipLook
 
     internal static void PopIn(Control el) => Run(el, 380, false, (0, 0.7), (0.4, 1.12), (1, 1.0));
     internal static void CardIn(Control el) => Run(el, 240, true, (0, 0.96), (1, 1.0));
+
+    // WPF DareLook.FadeOutThen (Controls/Dares/DareLook.cs:1168-1174): 160 ms fade, then close; motion off closes at once.
+    internal static async Task FadeOutThen(Window w, Action then)
+    {
+        if (Motion)
+            await new Animation { Duration = TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(160)), FillMode = FillMode.Forward,
+                Children = { new KeyFrame { Cue = new Cue(0), Setters = { new Setter(Visual.OpacityProperty, w.Opacity) } },
+                             new KeyFrame { Cue = new Cue(1), Setters = { new Setter(Visual.OpacityProperty, 0.0) } } } }.RunAsync(w);
+        then();
+    }
 
     private static void Run(Control el, int ms, bool fade, params (double Cue, double Scale)[] keys)
     {

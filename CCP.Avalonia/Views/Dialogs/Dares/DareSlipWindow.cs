@@ -70,9 +70,12 @@ public sealed class DareSlipWindow : Window
         if (owner is { IsVisible: true }) window.Show(owner); else window.Show();
     }
 
+    // WPF DareSlipWindow.cs:89: both closes fade out first.
+    private void Leave() => _ = FadeOutThen(this, Close);
+
     private void ShowComposer()
     {
-        _card.Child = new StackPanel { Children = { Slip(SlipHead(Loc.Get("dares_slip_title"), Close, "dares_help_numbers"), _sentence, out var paper), _tray } };
+        _card.Child = new StackPanel { Children = { Slip(SlipHead(Loc.Get("dares_slip_title"), Leave, "dares_help_numbers"), _sentence, out var paper), _tray } };
         _paper = paper; Render();
     }
 
@@ -229,7 +232,7 @@ public sealed class DareSlipWindow : Window
                 BorderBrush = Muted, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 7, 10, 7), Child = new TextBox { Text = command,
                     IsReadOnly = true, Tag = "dares-write-line", BorderThickness = default, Background = Brushes.Transparent, Foreground = Chalk, FontFamily = new FontFamily("monospace"), FontSize = 14 } } } });
         }
-        _tray.Children.Add(Chip(Loc.Get("dares_close"), null, "dares-done", Close).Also(d => d.Margin = new Thickness(0, 10, 0, 0)));
+        _tray.Children.Add(Chip(Loc.Get("dares_close"), null, "dares-done", Leave).Also(d => d.Margin = new Thickness(0, 10, 0, 0)));
     }
 
     private int? TierOf(string id) => _tiers != null && _tiers.TryGetValue(id, out var tier) ? tier : null;

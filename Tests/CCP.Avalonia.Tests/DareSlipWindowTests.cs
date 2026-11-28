@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using Avalonia.Automation;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -195,6 +196,39 @@ public sealed class DareSlipWindowTests
             }
         }
         finally { window.Close(); KnockCard.FetchPicture = previous; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task CloseFadesOutWithMotionAndClosesAtOnceWithout() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Init();
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var old = (s.MotionLevel, s.GentleVisuals, s.PerformanceMode);
+        var windows = new List<Window>();
+        try
+        {
+            (s.MotionLevel, s.GentleVisuals, s.PerformanceMode) = (ConditioningControlPanel.Models.MotionLevel.Off, false, false);
+            var still = new DareSlipWindow(new FakeService(), null, Array.Empty<DareFriend>(), null, true, () => { });
+            windows.Add(still); still.Show();
+            var stillClosed = false; still.Closed += (_, _) => stillClosed = true;
+            Click(still, "dares-close");
+            Assert.True(stillClosed); // WPF DareLook.cs:1170: no motion, close now
+
+            s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            var moving = new DareSlipWindow(new FakeService(), null, Array.Empty<DareFriend>(), null, true, () => { });
+            windows.Add(moving); moving.Show();
+            var closed = false; moving.Closed += (_, _) => closed = true;
+            Click(moving, "dares-close");
+            Assert.False(closed); // WPF DareLook.cs:1171-1173: fade 160 ms, then close
+            for (var i = 0; i < 30 && !closed; i++) { AvaloniaHeadlessPlatform.ForceRenderTimerTick(16); Dispatcher.UIThread.RunJobs(); }
+            Assert.True(closed);
+        }
+        finally
+        {
+            (s.MotionLevel, s.GentleVisuals, s.PerformanceMode) = old;
+            foreach (var w in windows) w.Close();
+        }
         return Task.CompletedTask;
     });
 
