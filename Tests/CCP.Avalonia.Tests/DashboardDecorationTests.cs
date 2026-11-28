@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.IO;
 using Path = System.IO.Path;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
@@ -135,12 +136,12 @@ public sealed class DashboardDecorationTests
         var oldId = CoreMods.ActiveModIdProvider;
         var oldArt = CoreModArt.OverridePathProvider;
         string key = "takeover", mod = "first";
-        var requests = new List<string>();
+        var requests = new ConcurrentQueue<string>(); // the shell's tabs warm art on pool threads through this provider
         try
         {
             CoreEntitlement.DailyFreeKeyProvider = () => key;
             CoreMods.ActiveModIdProvider = () => mod;
-            CoreModArt.OverridePathProvider = path => { requests.Add(path); return null; };
+            CoreModArt.OverridePathProvider = path => { requests.Enqueue(path); return null; };
             tab.ApplyDashboardDecoration(false, false);
             var art = tab.FindControl<Border>("MysteryRevealFace")!.GetLogicalDescendants()
                 .OfType<Border>().Select(b => b.Background).OfType<ImageBrush>().First();
@@ -208,13 +209,13 @@ public sealed class DashboardDecorationTests
         var scratch = Directory.CreateTempSubdirectory("ccp-mystery-box-");
         var path = Path.Combine(scratch.FullName, "box.png");
         using (var bitmap = new WriteableBitmap(new PixelSize(12, 6), new Vector(96, 96))) bitmap.Save(path);
-        var requests = new List<string>();
+        var requests = new ConcurrentQueue<string>(); // the shell's tabs warm art on pool threads through this provider
         try
         {
             string key = "voice";
             CoreEntitlement.DailyFreeKeyProvider = () => key;
             CoreMods.ActiveModIdProvider = () => ConditioningControlPanel.Models.BuiltInMods.DronificationId;
-            CoreModArt.OverridePathProvider = name => { requests.Add(name); return name == "features/mysterybox.png" ? path : null; };
+            CoreModArt.OverridePathProvider = name => { requests.Enqueue(name); return name == "features/mysterybox.png" ? path : null; };
             var art = tab.FindControl<Border>("MysteryRevealFace")!.GetLogicalDescendants()
                 .OfType<Border>().Select(b => b.Background).OfType<ImageBrush>().First();
             foreach (var current in new[] { "voice", "unknown" })
@@ -279,8 +280,8 @@ public sealed class DashboardDecorationTests
         CoreEntitlement.DailyFreeKeyProvider = () => "dtrh";
         CoreEntitlement.IsFreeTodayProvider = key => key is "takeover" or "awareness" or "dtrh";
         CoreEntitlement.HasPremiumProvider = () => false;
-        var artRequests = new List<string>();
-        CoreModArt.OverridePathProvider = path => { artRequests.Add(path); return null; };
+        var artRequests = new ConcurrentQueue<string>(); // the shell's tabs warm art on pool threads through this provider
+        CoreModArt.OverridePathProvider = path => { artRequests.Enqueue(path); return null; };
         tab.ApplyDashboardDecoration(false, false);
         Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
         var badge = tab.FindControl<TierBadge>("MysteryRevealBadge")!;
