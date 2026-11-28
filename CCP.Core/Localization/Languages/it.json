@@ -1,4 +1,5 @@
 {
+  "mod_art_frame_auto": "auto (ritaglio centrale) · nulla scritto in mod.json", "mod_art_frame_values": "centro {0}, {1}  ·  zoom {2}x",
   "chaos_no_focus_announce": "FOCUS INSUFFICIENTE PER DISINNESCARE",
   "chaos_unleashed_announce": "SCATENATA",
   "mod_art_frame_surface_railChip": "Riquadro laterale", "mod_art_frame_surface_railCard": "Avvio laterale", "mod_art_frame_surface_playCard": "Intestazione scheda", "mod_art_frame_surface_playCardTall": "Intestazione scheda (alta)", "mod_art_frame_surface_loomStrip": "Striscia Loom", "mod_art_frame_surface_playHero": "Banner principale di gioco", "mod_art_frame_surface_pageHeader": "Intestazione pagina", "mod_art_frame_surface_intakeStrip": "Striscia di ingresso",

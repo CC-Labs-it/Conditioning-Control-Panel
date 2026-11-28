@@ -260,7 +260,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     var box = ModArtFramingRegistry.ToViewbox(framing, aspect, surface.AspectRatio);
                     brush.SourceRect = new RelativeRect(box.X, box.Y, box.Width, box.Height, RelativeUnit.Relative);
-                    readout.Text = string.Format(CultureInfo.InvariantCulture, "{0:0.###}, {1:0.###}  /  {2:0.##}x", framing.CenterX, framing.CenterY, framing.Zoom);
+                    readout.Text = framing.IsDefault ? Loc.Get("mod_art_frame_auto") : Loc.GetF("mod_art_frame_values",
+                        framing.CenterX.ToString("0.###", CultureInfo.InvariantCulture), framing.CenterY.ToString("0.###", CultureInfo.InvariantCulture),
+                        framing.Zoom.ToString("0.##", CultureInfo.InvariantCulture));
                 }
                 void Reset() { framing.CenterX = .5; framing.CenterY = .5; framing.Zoom = 1; Refresh(); }
                 resets.Add(Reset);

@@ -90,12 +90,12 @@ public class ModCreatorArtFramingEditorTests
             Dispatcher.UIThread.RunJobs();
             var railCard = cards.Single(c => Equals(c.Tag, Rail));
             var readout = railCard.Children.OfType<TextBlock>().Last();
-            Assert.Contains("1.12x", readout.Text);
+            Assert.Equal("centre 0.5, 0.5  ·  zoom 1.12x", readout.Text);
             Click(railCard.Children.OfType<Button>().Single());
-            Assert.Contains("1x", readout.Text);
+            Assert.Equal("auto (centre crop) · nothing written to mod.json", readout.Text);
             dialog.MouseWheel(at, new Vector(0, 1));
             Click(dialog.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Content, "Reset all")));
-            Assert.Contains("1x", readout.Text);
+            Assert.Equal("auto (centre crop) · nothing written to mod.json", readout.Text);
             dialog.MouseWheel(at, new Vector(0, 1));
             Click(dialog.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Content, "Cancel")));
             Dispatcher.UIThread.RunJobs();

@@ -1,4 +1,5 @@
 {
+  "mod_art_frame_auto": "automático (corte central) · nada escrito em mod.json", "mod_art_frame_values": "centro {0}, {1}  ·  zoom {2}x",
   "chaos_no_focus_announce": "SEM FOCO PARA DESARMAR",
   "chaos_unleashed_announce": "LIBERADA",
   "mod_art_frame_surface_railChip": "Bloco lateral", "mod_art_frame_surface_railCard": "Atalho lateral", "mod_art_frame_surface_playCard": "Cabeçalho do cartão", "mod_art_frame_surface_playCardTall": "Cabeçalho do cartão (alto)", "mod_art_frame_surface_loomStrip": "Faixa Loom", "mod_art_frame_surface_playHero": "Banner principal de jogo", "mod_art_frame_surface_pageHeader": "Cabeçalho da página", "mod_art_frame_surface_intakeStrip": "Faixa de entrada",
