@@ -35,6 +35,7 @@ public sealed class ServerAnnouncementInboxTests
         }
         public TaskCompletionSource<bool>? AnnouncementRelease;
         public string AnnouncementId = "a1";
+        public string? Promo;   // the raw "promo" object, appended to the reply when set
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
@@ -44,6 +45,7 @@ public sealed class ServerAnnouncementInboxTests
                 ? "{\"enabled\":true,\"id\":\"a1\",\"title\":\"The Spiral is open\",\"message\":\"Come\\n\\n  in,   dear.\"}"
                 : "{}";
             body = body.Replace("\"id\":\"a1\"", "\"id\":\"" + AnnouncementId + "\"");
+            if (path == "/config/announcement" && Promo != null) body = body[..^1] + ",\"promo\":" + Promo + "}";
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
@@ -334,4 +336,62 @@ public sealed class ServerAnnouncementInboxTests
         finally { fake.AnnouncementRelease.TrySetResult(true); shell.Close(); }
     });
 
+    /// <summary>WPF MainWindow.Marquee.cs:944-967: a valid promo opens the promo card, nothing else, and an answered
+    /// card stays answered (WPF AnnouncementDismissal.Record: local slot plus the account record).</summary>
+    [Fact]
+    public Task AValidPromoOpensThePromoCardAndItsDismissalSticks() => Run(async fake =>
+    {
+        fake.Promo = "{\"layout\":\"tc-paper\",\"hook\":\"Half off\",\"rows\":[{\"label\":\"Super\",\"sub\":\"50% off\"}]}";
+        var opened = new List<AnnouncementPopup>();
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is AnnouncementPopup p) opened.Add(p); });
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            await shell.CheckServerAnnouncementAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(opened);
+            var card = Assert.Single(PromoCardWindow.OpenForTests);
+            Assert.Equal("Half off", card.Title);
+
+            Click(card.FindControl<Button>("BtnClose")!);
+            await Until(() => fake.Calls.Any(c => c.StartsWith("POST")));
+            for (var i = 0; i < 300 && PromoCardWindow.OpenForTests.Count > 0; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); } // the fade out
+            Assert.Empty(PromoCardWindow.OpenForTests);
+            Assert.Equal("a1", CoreSettings.Current.DismissedAnnouncementId);
+            Assert.Contains("POST /v2/announcement/dismiss {\"unified_id\":\"u1\",\"announcement_id\":\"a1\"}", fake.Calls);
+
+            // a new shell (the next launch) fetches the same promo and shows nothing
+            shell.Close();
+            shell = new MainShellWindow();
+            shell.Show();
+            await shell.CheckServerAnnouncementAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, fake.AnnouncementCalls.Length);
+            Assert.Empty(PromoCardWindow.OpenForTests);
+            Assert.Empty(opened);
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally { shell.Close(); PromoCardWindow.CloseForPanic(); foreach (var p in opened) p.Close(); }
+    });
+
+    /// <summary>WPF MainWindow.Marquee.cs:944-946, 965-967: a promo that breaks a limit (here no rows) is dropped and
+    /// the ordinary popup opens.</summary>
+    [Fact]
+    public Task AnInvalidPromoOpensTheOrdinaryPopup() => Run(async fake =>
+    {
+        fake.Promo = "{\"layout\":\"tc-paper\",\"rows\":[]}";
+        var opened = new List<AnnouncementPopup>();
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is AnnouncementPopup p) opened.Add(p); });
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            await shell.CheckServerAnnouncementAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(PromoCardWindow.OpenForTests);
+            Assert.Equal("The Spiral is open", Assert.Single(opened).FindControl<TextBlock>("TxtTitle")!.Text);
+        }
+        finally { shell.Close(); PromoCardWindow.CloseForPanic(); foreach (var p in opened) p.Close(); }
+    });
 }

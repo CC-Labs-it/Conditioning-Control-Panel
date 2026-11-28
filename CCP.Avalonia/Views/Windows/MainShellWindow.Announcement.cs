@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Announcements;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -59,13 +60,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                 _serverAnnouncementShownThisLaunch = true; // WPF Marquee.cs:913: claim even when parked.
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";
+                // WPF Marquee.cs:944-946: read once so a bad promo is logged once; re-checked at open.
+                var promo = PromoCardRules.TryRead(a.Promo, ServerClock.UtcNow, a.ExpiresAt);
+                if (a.Promo is { ValueKind: System.Text.Json.JsonValueKind.Object } && promo == null)
+                    Log.Information("Announcement {Id}: promo dropped (failed a limit), old popup", id);
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
                     Key = "announcement:" + id,
                     Glyph = "📣",
                     Title = title,
                     Summary = Summarise(message),
-                    Open = () => new AnnouncementPopup(id, title, message, a.ImageUrl, a.LinkUrl, a.Theme).Show(),
+                    Open = () =>
+                    {
+                        // WPF Marquee.cs:963-967: a promo that still holds gets the paper card; anything else the popup.
+                        var live = promo != null && !promo.HasEnded(ServerClock.UtcNow) ? promo : null;
+                        if (live != null && TryShowPromoCard(id, title, message, live)) return;
+                        new AnnouncementPopup(id, title, message, a.ImageUrl, a.LinkUrl, a.Theme).Show();
+                    },
                     Dismiss = () =>
                     {
                         CoreSettings.Current.DismissedAnnouncementId = id;
@@ -75,6 +86,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 });
             }
             catch (Exception ex) { Log.Debug("Failed to check server announcement: {Error}", ex.Message); }
+        }
+
+        /// <summary>WPF Marquee.cs TryShowPromoCard (:988): false means the caller shows the old popup.</summary>
+        private static bool TryShowPromoCard(string id, string title, string message, PromoCard promo)
+        {
+            try
+            {
+                PromoCardWindow.ShowFor(id, title, message, promo);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("Announcement {Id}: promo card failed, old popup: {Error}", id, ex.Message);
+                return false;
+            }
         }
 
         /// <summary>WPF AnnouncementPopup.RecordServerDismissal: the account half; fire-and-forget, never throws.</summary>

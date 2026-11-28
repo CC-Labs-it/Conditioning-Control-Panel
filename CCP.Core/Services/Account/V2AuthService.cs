@@ -903,6 +903,10 @@ namespace ConditioningControlPanel.Services
             [JsonProperty("image_url")] public string? ImageUrl { get; set; }
             [JsonProperty("link_url")] public string? LinkUrl { get; set; }
             [JsonProperty("theme")] public string? Theme { get; set; }
+            /// <summary>The paper promo card (WPF Marquee.cs AnnouncementResponse.promo), raw for PromoCardRules.TryRead.</summary>
+            [JsonIgnore] public System.Text.Json.JsonElement? Promo { get; set; }
+            /// <summary>Epoch ms; the server keeps it to itself today, read in case it ever sends it.</summary>
+            [JsonProperty("expires_at")] public long? ExpiresAt { get; set; }
         }
 
         /// <summary>
@@ -918,7 +922,15 @@ namespace ConditioningControlPanel.Services
                 using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));   // WPF's 10 s client
                 var response = await _http.GetAsync(url, cts.Token);
                 if (!response.IsSuccessStatusCode) return null;
-                var a = JsonConvert.DeserializeObject<ServerAnnouncement>(await response.Content.ReadAsStringAsync());
+                var json = await response.Content.ReadAsStringAsync();
+                var a = JsonConvert.DeserializeObject<ServerAnnouncement>(json);
+                // System.Text.Json, as WPF reads it: Newtonsoft would turn date-like strings into dates.
+                if (a != null)
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object && doc.RootElement.TryGetProperty("promo", out var promo))
+                        a.Promo = promo.Clone();
+                }
                 return a is { Enabled: true } && !string.IsNullOrWhiteSpace(a.Id) && !string.IsNullOrWhiteSpace(a.Title) ? a : null;
             }
             catch (Exception ex)
