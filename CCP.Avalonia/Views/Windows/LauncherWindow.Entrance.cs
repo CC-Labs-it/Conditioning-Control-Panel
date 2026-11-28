@@ -58,11 +58,14 @@ public partial class LauncherWindow
         }
     }
 
-    private static void HookPress(Button button)
+    private static void HookPress(Button button, ScaleTransform? scale = null)
     {
-        var scale = new ScaleTransform(1, 1);
+        if (scale == null)
+        {
+            scale = new ScaleTransform(1, 1);
+            button.RenderTransform = scale;
+        }
         button.RenderTransformOrigin = RelativePoint.Center;
-        button.RenderTransform = scale;
         void Set(bool down)
         {
             scale.Transitions = Env.AllowTransitions ? new Transitions
