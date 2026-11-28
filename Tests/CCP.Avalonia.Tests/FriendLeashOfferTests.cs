@@ -103,8 +103,8 @@ public sealed class FriendLeashOfferTests
         Click(card, "leash-offer");
         Assert.Empty(sent);
         Assert.False(Button(card, "leash-offer").IsEnabled);
-        Assert.Equal(Loc.Get("leash_res_failed"), Button(card, "leash-offer").GetLogicalDescendants().OfType<TextBlock>().Single().Text);
-        // No local Opacity, so the drawer's Pill:disabled style fades the error tile (WPF DareLook.Bare).
+        Assert.Equal(Loc.Get("leash_res_failed"), ((StackPanel)Button(card, "leash-offer").Content!).Children.OfType<TextBlock>().Single().Text);
+        // No local Opacity, so the drawer's Pill:disabled style fades the error pill (WPF FriendsLook.cs:135).
         Assert.False(Button(card, "leash-offer").IsSet(Visual.OpacityProperty));
     });
     [Fact]
@@ -116,9 +116,9 @@ public sealed class FriendLeashOfferTests
         service.OfferAsync("friend").GetAwaiter().GetResult();
         service.ApplyReceipts(new[] { new LeashReceipt("0123456789abcdef", LeashItemKind.Offer, "friend", "Mia", LeashStep.Seen, DateTimeOffset.UtcNow) });
         var offered = new FriendLeashOffer(Friend(), service, sent);
-        var step = Button(offered, "leash-offer").GetLogicalDescendants().OfType<TextBlock>().Single(t => (string?)t.Tag == "leash-offer-step:seen");
+        var step = ((StackPanel)Button(offered, "leash-offer").Content!).Children.OfType<TextBlock>().Single(t => (string?)t.Tag == "leash-offer-step:seen");
         Assert.Equal("  ·  " + Loc.Get("leash_step_seen"), step.Text);
-        Assert.Equal(Color.Parse("#4B1F45"), ((SolidColorBrush)step.Foreground!).Color);
+        Assert.Equal(FriendsDrawer.Lilac, step.Foreground);
         Assert.False(Button(offered, "leash-offer").IsEnabled);
         var held = new JObject
         {
@@ -128,7 +128,7 @@ public sealed class FriendLeashOfferTests
         };
         service.ApplyBlock(new JObject { ["holding"] = new JArray { held }, ["offers"] = new JArray(), ["events"] = new JArray() });
         var holding = new FriendLeashOffer(Friend(), service, sent);
-        Assert.Equal(Loc.Get("leash_offer_holding"), Button(holding, "leash-offer").GetLogicalDescendants().OfType<TextBlock>().Single().Text);
+        Assert.Equal(Loc.Get("leash_offer_holding"), ((StackPanel)Button(holding, "leash-offer").Content!).Children.OfType<TextBlock>().Single().Text);
         Assert.False(Button(holding, "leash-offer").IsEnabled);
     });
 
@@ -180,51 +180,23 @@ public sealed class FriendLeashOfferTests
     {
         Setup();
         var wire = new Wire(); var service = new LeashService(wire, () => "me");
-        foreach (var (friend, sent, state) in new[]
+        foreach (var (friend, sent, state, ink, border) in new[]
         {
-            (Friend(), false, "offer"), (Friend(), true, "sent"), (Friend(false), false, "greyed"),
+            (Friend(), false, "offer", FriendsDrawer.Gold, Color.FromRgb(0x6b, 0x53, 0x20)),
+            (Friend(), true, "sent", FriendsDrawer.Mint, Color.FromRgb(0x28, 0x5d, 0x4f)),
+            (Friend(false), false, "greyed", FriendsDrawer.Dim, Color.FromRgb(0x6b, 0x53, 0x20)),
         })
         {
             var card = new FriendLeashOffer(friend, service, sent ? new HashSet<string> { "friend" } : new HashSet<string>());
             var chip = Button(card, "leash-offer");
-            var face = chip.GetLogicalDescendants().OfType<Border>().Single(x => (string?)x.Tag == "leash-tile-face");
-            Assert.Equal(new CornerRadius(7), face.CornerRadius);
-            Assert.Equal(sent ? 3 : 0, ((TranslateTransform)face.RenderTransform!).Y);
-            Assert.Equal(sent, chip.IsSet(Visual.OpacityProperty)); Assert.Equal(1, chip.Opacity);
-            var content = chip.GetLogicalDescendants().OfType<StackPanel>().Single();
-            Assert.IsType<Border>(content.Children[0]);
-            Assert.Equal(FontWeight.Bold, ((TextBlock)content.Children[1]).FontWeight);
+            Assert.Equal(ink, chip.Foreground);
+            Assert.Equal(border, ((SolidColorBrush)chip.BorderBrush!).Color);
+            Assert.Equal(Color.FromArgb(0x22, 0xff, 0xcf, 0x6b), ((SolidColorBrush)chip.Background!).Color);
             Assert.Contains(card.GetLogicalDescendants().OfType<Grid>(), g => (string?)g.Tag == "leash-offer-chip:" + state);
             var help = Button(card, "leash-offer-help");
-            Assert.Equal(40, help.Width); Assert.Equal(new CornerRadius(7), help.GetLogicalDescendants().OfType<Border>().Single(x => (string?)x.Tag == "leash-tile-face").CornerRadius);
+            Assert.Equal(22, help.Width); Assert.Equal(22, help.Height); Assert.Equal(FriendsDrawer.Lilac, help.Foreground);
             Click(card, "leash-offer-help"); Assert.NotNull(card.Intro); Assert.Equal(0, wire.Calls); card.Intro!.Close();
         }
-    });
-
-    [Fact]
-    public void OfferTileMovesOnPointerPress() => AvaloniaTestDispatcher.Run(() =>
-    {
-        Setup(); var card = new FriendLeashOffer(Friend(), new LeashService(new Wire(), () => "me"), new HashSet<string>());
-        var window = new Window { Content = card, Width = 300, Height = 120 };
-        try
-        {
-            window.Show(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
-            var chip = Button(card, "leash-offer");
-            var face = chip.GetLogicalDescendants().OfType<Border>().Single(x => (string?)x.Tag == "leash-tile-face");
-            var move = (TranslateTransform)face.RenderTransform!; var rest = face.Background;
-            var point = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), window)!.Value;
-            window.MouseDown(point, MouseButton.Right); Assert.Equal(0, move.Y); window.MouseUp(point, MouseButton.Right);
-            window.MouseDown(point, MouseButton.Left); Assert.Equal(3, move.Y);
-            window.MouseUp(point, MouseButton.Left); Assert.Equal(0, move.Y);
-            Assert.Same(Brushes.Transparent, chip.Resources["ButtonBackgroundPointerOver"]); Assert.Same(Brushes.Transparent, chip.Resources["ButtonBackgroundPressed"]);
-            var help = Button(card, "leash-offer-help");
-            window.MouseMove(help.TranslatePoint(new Point(help.Bounds.Width / 2, help.Bounds.Height / 2), window)!.Value);
-            Assert.Same(rest, face.Background);
-            window.MouseMove(point); Assert.Same(Brushes.White, face.Background);
-            window.MouseMove(help.TranslatePoint(new Point(help.Bounds.Width / 2, help.Bounds.Height / 2), window)!.Value);
-            Assert.Same(rest, face.Background);
-        }
-        finally { card.Intro?.Close(); window.Close(); }
     });
 
     [Fact]
