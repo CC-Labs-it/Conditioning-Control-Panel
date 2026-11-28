@@ -149,6 +149,9 @@ public sealed class BrowserInitialHomeTests
         var plusRight = plus.TranslatePoint(new Point(plus.Bounds.Width, 0), page)!.Value.X;
         var foldLeft = fold.TranslatePoint(default, page)!.Value.X;
         Assert.True(plusRight <= foldLeft, $"Zoom ends at {plusRight}, fold starts at {foldLeft}");
+        var plusTop = plus.TranslatePoint(default, page)!.Value.Y;
+        var foldBottom = fold.TranslatePoint(new Point(0, fold.Bounds.Height), page)!.Value.Y;
+        Assert.True(foldBottom <= plusTop, $"Fold ends at {foldBottom}, zoom starts at {plusTop}");
     });
 
     [Fact]
