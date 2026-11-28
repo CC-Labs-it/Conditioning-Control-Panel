@@ -147,6 +147,36 @@ public sealed class DareSlipWindowTests
     });
 
     [Fact]
+    public Task CameraExplanationShowsSampledTicksAndPassLabel() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Init();
+        var window = new DareSlipWindow(new FakeService(), new DareFriend("friend", "Friend", null), Array.Empty<DareFriend>(), null, true, () => { });
+        try
+        {
+            foreach (var tag in new[] { "dares-tile:cant", "dares-tile:pics", "dares-target:100", "dares-when:today",
+                "dares-stake:sp", "dares-amount:50", "dares-stake:sp", "dares-amount:50" }) Click(window, tag);
+            var box = Assert.IsType<Grid>(Find(window, "dares-camera-how"));
+            var ticks = Assert.IsType<global::Avalonia.Controls.Primitives.UniformGrid>(Find(window, "dares-camera-ticks"));
+            Assert.Equal(30, ticks.Columns);
+            Assert.Equal(30, ticks.Children.Count);
+            Assert.Equal(16, ticks.Height);
+            var missed = new[] { 4, 11, 12, 20, 27 };
+            for (int i = 0; i < ticks.Children.Count; i++)
+            {
+                var tick = Assert.IsType<Border>(ticks.Children[i]);
+                if (missed.Contains(i)) Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(tick.Background).Color);
+                else Assert.Equal(Color.FromRgb(0x2F, 0xD3, 0x9A), Assert.IsAssignableFrom<ISolidColorBrush>(tick.Background).Color);
+                Assert.Equal(new Thickness(missed.Contains(i) ? 1 : 0), tick.BorderThickness);
+            }
+            Assert.Contains(box.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("dares_cam_pass"));
+            Assert.Contains(box.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("dares_cam_look"));
+            Assert.Contains(box.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("dares_cam_local"));
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task HeaderNumbersHelpCanBePinned() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Init();

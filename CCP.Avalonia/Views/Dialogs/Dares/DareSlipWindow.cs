@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -171,10 +173,40 @@ public sealed class DareSlipWindow : Window
             case DareStep.Camera:
                 foreach (var on in new[] { true, false }) tiles.Children.Add(Tile(on ? DareTone.CameraOn : DareTone.CameraOff, Loc.Get(on ? "dares_tile_camera_on" : "dares_tile_camera_off"),
                     on ? "dares_tip_camera_on" : "dares_tip_camera_off", null, _draft.Camera == on, on ? "dares-camera:on" : "dares-camera:off", () => Press(() => DareSlipRules.SetCamera(_draft, on))));
-                foreach (var (key, icon) in new[] { ("dares_cam_look", IconKind.Eye), ("dares_cam_pass", IconKind.CheckmarkCircle), ("dares_cam_local", IconKind.Desktop) })
-                    _tray.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 6, 0, 0), Children = { Icon(icon, 22, Chalk), Words(Loc.Get(key), 18, Chalk, wrap: true) } });
+                _tray.Children.Add(CameraHow());
                 break;
         }
+    }
+
+    // WPF DareSlipWindow.cs:252-267 and DareLook.cs:633-685: each tick represents a camera sample.
+    private static Control CameraHow()
+    {
+        var ticks = new UniformGrid { Tag = "dares-camera-ticks", Rows = 1, Columns = 30, Height = 16,
+            MinWidth = 150, VerticalAlignment = VerticalAlignment.Center };
+        var missed = new HashSet<int> { 4, 11, 12, 20, 27 };
+        for (var i = 0; i < 30; i++)
+        {
+            var miss = missed.Contains(i);
+            ticks.Children.Add(new Border { Margin = new Thickness(1, 0, 1, 0), CornerRadius = new CornerRadius(2),
+                Background = miss ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(0x2F, 0xD3, 0x9A)),
+                BorderBrush = Muted, BorderThickness = new Thickness(miss ? 1 : 0) });
+        }
+        var pass = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        pass.Children.Add(ticks);
+        var label = Words(Loc.Get("dares_cam_pass"), 18, Chalk).Also(t => t.Margin = new Thickness(10, 0, 0, 0));
+        Grid.SetColumn(label, 1); pass.Children.Add(label);
+        Control Row(IconKind icon, string key)
+        {
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+            row.Children.Add(Icon(icon, 24, Chalk).Also(i => i.Margin = new Thickness(0, 0, 10, 0)));
+            var text = Words(Loc.Get(key), 18, Chalk, wrap: true); Grid.SetColumn(text, 1); row.Children.Add(text);
+            return row;
+        }
+        var rows = new StackPanel { Margin = new Thickness(14, 12, 14, 12), Spacing = 10,
+            Children = { Row(IconKind.Eye, "dares_cam_look"), pass, Row(IconKind.Desktop, "dares_cam_local") } };
+        return new Grid { Tag = "dares-camera-how", MaxWidth = 540, HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 6, 0, 0), Children = { new Rectangle { Fill = new SolidColorBrush(Color.FromArgb(0x33, 0, 0, 0)),
+                Stroke = Muted, StrokeThickness = 1, StrokeDashArray = new() { 4, 3 }, RadiusX = 10, RadiusY = 10 }, rows } };
     }
 
     private void AddRow(string tag, IEnumerable<Button> chips)
